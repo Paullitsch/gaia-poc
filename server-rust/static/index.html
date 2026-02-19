@@ -319,7 +319,7 @@ function renderWorkers(ws){
   const showOffline=document.getElementById('show-offline').checked;
   const on=ws.filter(w=>(Date.now()-new Date(w.last_heartbeat))/1000<60);
   const off=ws.filter(w=>(Date.now()-new Date(w.last_heartbeat))/1000>=60);
-  document.getElementById('worker-count').textContent=on.length+(off.length?' / '+off.length+' offline':'');
+  document.getElementById('worker-count').textContent=on.length+' online'+(showOffline&&off.length?' · '+off.length+' offline':'');
   const visible=showOffline?ws:on;
   if(!visible.length){el.innerHTML=on.length===0&&off.length===0?'<div class="empty">No workers<br><code style="font-size:.7rem;color:var(--text2)">gaia-worker --server URL --token TOKEN</code></div>':'<div class="empty">All workers offline'+(!showOffline?' — enable "Offline" to show':'')+'</div>';return}
   let h='<div class="worker-grid">';
