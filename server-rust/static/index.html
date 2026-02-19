@@ -64,6 +64,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 .badge-completed{background:rgba(34,197,94,.12);color:var(--green)}
 .badge-failed{background:rgba(239,68,68,.12);color:var(--red)}
 .badge-timed_out{background:rgba(249,115,22,.12);color:var(--orange)}
+.badge-cancelled{background:rgba(136,136,160,.12);color:var(--text2)}
 
 /* Worker cards */
 .worker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
@@ -148,6 +149,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
   <div class="tabs">
     <div class="tab active" data-tab="overview">Overview</div>
     <div class="tab" data-tab="charts">Charts & Analysis</div>
+    <div class="tab" data-tab="debug">Debug</div>
     <div class="tab" data-tab="export">Export</div>
   </div>
 
@@ -218,6 +220,20 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
           <button class="btn-sm" onclick="exportChart('dist-canvas','gaia-distribution.png')">📷 PNG</button>
         </div>
         <div class="card-body"><div class="chart-wrap" style="height:260px"><canvas id="dist-canvas"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Debug -->
+  <div class="tab-content" id="tab-debug">
+    <div class="grid">
+      <div class="card full-width">
+        <div class="card-header"><h2>🔍 Live Stream</h2><div class="toolbar"><button class="btn-sm" onclick="debugLog.length=0;renderDebug()">Clear</button><label style="font-size:.7rem;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="debug-autoscroll" checked style="accent-color:var(--accent)"> Auto-scroll</label></div></div>
+        <div class="card-body"><div id="debug-log" style="max-height:500px;overflow-y:auto;font-family:monospace;font-size:.7rem;white-space:pre-wrap;color:var(--text2)">Waiting for data…</div></div>
+      </div>
+      <div class="card full-width">
+        <div class="card-header"><h2>📡 Raw API Status</h2><button class="btn-sm" onclick="refreshDebugRaw()">Refresh</button></div>
+        <div class="card-body"><pre id="debug-raw" style="max-height:400px;overflow:auto;font-size:.7rem;color:var(--text2)">Click Refresh…</pre></div>
       </div>
     </div>
   </div>
@@ -329,7 +345,10 @@ function renderWorkers(ws){
     const isOffline=age>=60;
     const sc=isOffline?'offline':w.status==='busy'?'busy':'idle';
     const gpu=w.gpu&&typeof w.gpu==='object'?w.gpu.name:(w.gpu||'CPU');
-    h+=`<div class="worker-card ${sc}" style="${isOffline?'opacity:.5':''}"><div class="worker-name"><span><span class="pulse ${pc}"></span> ${esc(w.name)}</span><span class="badge badge-${sc}">${sc}</span></div><div class="worker-details"><span>GPU:</span><span class="v">${esc(gpu)}</span><span>HB:</span><span class="v">${timeSince(w.last_heartbeat)}</span><span>Up:</span><span class="v">${timeSince(w.registered_at)}</span>${w.current_job?'<span>Job:</span><span class="v" style="color:var(--cyan)">'+w.current_job.slice(0,8)+'</span>':''}</div></div>`;
+    const disabled=w.enabled===false;
+    const opacity=isOffline||disabled?'opacity:.5':'';
+    const statusLabel=disabled?'disabled':sc;
+    h+=`<div class="worker-card ${sc}" style="${opacity}"><div class="worker-name"><span><span class="pulse ${pc}"></span> ${esc(w.name)}</span><div style="display:flex;gap:4px;align-items:center"><span class="badge badge-${sc}">${statusLabel}</span><button class="btn-sm" onclick="toggleWorker('${w.id}')" title="${disabled?'Enable':'Disable'} worker">${disabled?'▶':'⏸'}</button></div></div><div class="worker-details"><span>GPU:</span><span class="v">${esc(gpu)}</span><span>HB:</span><span class="v">${timeSince(w.last_heartbeat)}</span><span>Up:</span><span class="v">${timeSince(w.registered_at)}</span>${w.current_job?'<span>Job:</span><span class="v" style="color:var(--cyan)">'+w.current_job.slice(0,8)+'</span>':''}</div></div>`;
   }
   el.innerHTML=h+'</div>';
 }
@@ -338,10 +357,10 @@ function renderWorkers(ws){
 function renderJobs(jobs){
   const el=document.getElementById('jobs-body');
   document.getElementById('job-count').textContent=jobs.length;
-  const run=jobs.filter(j=>j.status==='running'),que=jobs.filter(j=>j.status==='queued'),done=jobs.filter(j=>['completed','failed','timed_out'].includes(j.status));
+  const run=jobs.filter(j=>j.status==='running'),que=jobs.filter(j=>j.status==='queued'),done=jobs.filter(j=>['completed','failed','timed_out','cancelled'].includes(j.status));
   let h='';
-  if(run.length){h+='<div class="job-section"><span style="color:var(--cyan)">▶</span> Running</div>';for(const j of run)h+=`<div class="job-item" style="border-left:2px solid var(--cyan)"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span></div><span style="color:var(--text2);font-size:.75rem">${dur(j.started_at)}</span></div>`}
-  if(que.length){h+=`<div class="job-section"><span style="color:var(--accent2)">⏳</span> Queue (${que.length})</div>`;for(const j of que)h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span></div><span class="badge badge-queued">queued</span></div>`}
+  if(run.length){h+='<div class="job-section"><span style="color:var(--cyan)">▶</span> Running</div>';for(const j of run)h+=`<div class="job-item" style="border-left:2px solid var(--cyan)"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span></div><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--text2);font-size:.75rem">${dur(j.started_at)}</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}
+  if(que.length){h+=`<div class="job-section"><span style="color:var(--accent2)">⏳</span> Queue (${que.length})</div>`;for(const j of que)h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span></div><div style="display:flex;align-items:center;gap:6px"><span class="badge badge-queued">queued</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}
   if(done.length){h+='<div class="job-section">✓ History</div>';for(const j of done.slice(0,8))h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span><span style="color:var(--text2);font-size:.7rem">${dur(j.started_at,j.completed_at)}</span></div><span class="badge badge-${j.status}">${j.status}</span></div>`;if(done.length>8)h+=`<div style="font-size:.7rem;color:var(--text2);text-align:center">+${done.length-8} more</div>`}
   if(!jobs.length)h='<div class="empty">No jobs</div>';
   h+=`<div class="submit-form"><select id="method-select"><option value="cma_es">CMA-ES</option><option value="openai_es">OpenAI-ES</option><option value="hybrid_cma_ff">Hybrid CMA+FF</option><option value="curriculum">Curriculum</option><option value="indirect_encoding">Indirect Encoding</option></select><input type="number" id="max-evals-input" value="5000" min="100" step="1000" style="width:80px"><button onclick="submitJob()">Submit ⚡</button></div>`;
@@ -771,6 +790,63 @@ async function submitJob(){
     if(r.ok){addLog('📤 Submitted: <b>'+esc(method)+'</b> ('+maxEvals+' evals)');refresh()}
   }catch(e){addLog('❌ Submit failed')}
 }
+
+// Cancel job
+async function cancelJob(jobId){
+  if(!confirm('Cancel job '+jobId.slice(0,8)+'?'))return;
+  try{
+    await fetch(`/api/jobs/cancel/${jobId}`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});
+    addLog('🚫 Cancelled job <b>'+jobId.slice(0,8)+'</b>');
+    refresh();
+  }catch(e){addLog('❌ Cancel failed')}
+}
+
+// Toggle worker enabled/disabled
+async function toggleWorker(workerId){
+  try{
+    const r=await fetch(`/api/workers/${workerId}/enable`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});
+    const d=await r.json();
+    addLog(d.enabled?'▶️ Worker enabled':'⏸ Worker disabled');
+    refresh();
+  }catch(e){addLog('❌ Toggle failed')}
+}
+
+// Debug tab
+const debugLog=[];
+const MAX_DEBUG=500;
+function addDebug(msg){debugLog.push({time:new Date().toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit',fractionalSecondDigits:1}),msg});if(debugLog.length>MAX_DEBUG)debugLog.shift()}
+function renderDebug(){
+  const el=document.getElementById('debug-log');
+  if(!el)return;
+  if(!debugLog.length){el.textContent='Waiting for data…';return}
+  el.innerHTML=debugLog.map(e=>`<span style="color:var(--text2)">${e.time}</span> ${e.msg}`).join('\n');
+  if(document.getElementById('debug-autoscroll')?.checked)el.scrollTop=el.scrollHeight;
+}
+async function refreshDebugRaw(){
+  try{
+    const r=await fetch('/api/status',{headers:{'Authorization':'Bearer '+TOKEN}});
+    const d=await r.json();
+    document.getElementById('debug-raw').textContent=JSON.stringify(d,null,2);
+  }catch(e){document.getElementById('debug-raw').textContent='Error: '+e}
+}
+
+// Hook into refresh to feed debug log
+const _origRefresh=refresh;
+refresh=async function(){
+  await _origRefresh();
+  // Feed debug with latest results for running jobs
+  for(const[id,d]of Object.entries(allJobData)){
+    if(d.status!=='running'||!d.points.length)continue;
+    const last=d.points[d.points.length-1];
+    const key='debug_'+id+'_'+last.gen;
+    if(!window._debugSeen)window._debugSeen=new Set();
+    if(!window._debugSeen.has(key)){
+      window._debugSeen.add(key);
+      addDebug(`<span style="color:var(--cyan)">[${d.method}]</span> Gen ${last.gen} | best: ${last.best_ever.toFixed(1)} | mean: ${last.mean.toFixed(1)} | σ: ${last.sigma.toFixed(4)} | evals: ${last.evals}`);
+    }
+  }
+  if(document.getElementById('tab-debug')?.classList.contains('active'))renderDebug();
+};
 
 window.addEventListener('resize',()=>{if(document.getElementById('tab-charts').classList.contains('active'))drawAllCharts()});
 </script>

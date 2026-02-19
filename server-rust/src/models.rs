@@ -11,7 +11,11 @@ pub struct Worker {
     pub last_heartbeat: DateTime<Utc>,
     pub status: WorkerStatus,
     pub current_job: Option<String>,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
 }
+
+fn default_true() -> bool { true }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -48,6 +52,7 @@ pub enum JobStatus {
     Completed,
     Failed,
     TimedOut,
+    Cancelled,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

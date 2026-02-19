@@ -24,6 +24,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/results/complete", post(complete_job))
         .route("/api/results/:job_id", get(get_results))
         .route("/api/results/:job_id/csv", get(get_results_csv))
+        .route("/api/jobs/cancel/:job_id", post(cancel_job))
+        .route("/api/workers/:worker_id/enable", post(toggle_worker))
         .route("/api/status", get(status))
         .with_state(state)
 }
@@ -59,6 +61,7 @@ async fn register_worker(
         last_heartbeat: now,
         status: WorkerStatus::Idle,
         current_job: None,
+        enabled: true,
     };
     state.workers.write().await.insert(id.clone(), worker);
     tracing::info!(worker_id = %id, "Worker registered");
@@ -87,13 +90,21 @@ async fn next_job(
 ) -> Result<Json<Value>, StatusCode> {
     check_auth(&state, &headers)?;
 
-    // Update heartbeat (acquire and release immediately)
-    {
+    // Update heartbeat + check enabled (acquire and release immediately)
+    let is_enabled = {
         let mut workers = state.workers.write().await;
         if let Some(w) = workers.get_mut(&worker_id) {
             w.last_heartbeat = Utc::now();
+            w.enabled
+        } else {
+            return Err(StatusCode::NOT_FOUND);
         }
-    } // lock released
+    }; // lock released
+
+    // Disabled workers don't get jobs
+    if !is_enabled {
+        return Err(StatusCode::NO_CONTENT);
+    }
 
     // Pop next queued job (acquire and release immediately)
     let job_id = {
@@ -262,6 +273,64 @@ async fn get_results_csv(
         csv.push_str(&format!("{},{}\n", row.generation, vals.join(",")));
     }
     Ok(csv)
+}
+
+async fn cancel_job(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path(job_id): Path<String>,
+) -> Result<Json<Value>, StatusCode> {
+    check_auth(&state, &headers)?;
+
+    let (was_queued, assigned_worker) = {
+        let mut jobs = state.jobs.write().await;
+        if let Some(job) = jobs.get_mut(&job_id) {
+            let was_queued = job.status == JobStatus::Queued;
+            let worker = job.assigned_to.clone();
+            job.status = JobStatus::Cancelled;
+            job.completed_at = Some(Utc::now());
+            job.error = Some("Cancelled by user".into());
+            (was_queued, worker)
+        } else {
+            return Err(StatusCode::NOT_FOUND);
+        }
+    };
+
+    // Remove from queue if queued
+    if was_queued {
+        let mut queue = state.job_queue.write().await;
+        queue.retain(|id| id != &job_id);
+    }
+
+    // Free worker if running
+    if let Some(wid) = assigned_worker {
+        let mut workers = state.workers.write().await;
+        if let Some(w) = workers.get_mut(&wid) {
+            w.status = WorkerStatus::Idle;
+            w.current_job = None;
+        }
+    }
+
+    let _ = storage::save_state(&state).await;
+    tracing::info!(job_id = %job_id, "Job cancelled");
+    Ok(Json(json!({ "status": "cancelled" })))
+}
+
+async fn toggle_worker(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path(worker_id): Path<String>,
+) -> Result<Json<Value>, StatusCode> {
+    check_auth(&state, &headers)?;
+    let mut workers = state.workers.write().await;
+    if let Some(w) = workers.get_mut(&worker_id) {
+        w.enabled = !w.enabled;
+        let enabled = w.enabled;
+        tracing::info!(worker_id = %worker_id, enabled = enabled, "Worker toggled");
+        Ok(Json(json!({ "enabled": enabled })))
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
 }
 
 async fn status(
