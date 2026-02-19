@@ -155,7 +155,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
   <div class="tab-content active" id="tab-overview">
     <div class="grid">
       <div class="card">
-        <div class="card-header"><h2>⚡ Workers</h2><span id="worker-count" class="badge badge-idle">0</span></div>
+        <div class="card-header"><h2>⚡ Workers</h2><div class="toolbar"><label style="font-size:.7rem;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="show-offline" onchange="refresh()" style="accent-color:var(--accent)"> Offline</label><span id="worker-count" class="badge badge-idle">0</span></div></div>
         <div class="card-body" id="workers-body"><div class="empty">No workers connected</div></div>
       </div>
       <div class="card">
@@ -316,16 +316,20 @@ async function refresh(){
 // ======= RENDER: Workers =======
 function renderWorkers(ws){
   const el=document.getElementById('workers-body');
+  const showOffline=document.getElementById('show-offline').checked;
   const on=ws.filter(w=>(Date.now()-new Date(w.last_heartbeat))/1000<60);
-  document.getElementById('worker-count').textContent=on.length+'/'+ws.length;
-  if(!ws.length){el.innerHTML='<div class="empty">No workers<br><code style="font-size:.7rem;color:var(--text2)">gaia-worker --server URL --token TOKEN</code></div>';return}
+  const off=ws.filter(w=>(Date.now()-new Date(w.last_heartbeat))/1000>=60);
+  document.getElementById('worker-count').textContent=on.length+(off.length?' / '+off.length+' offline':'');
+  const visible=showOffline?ws:on;
+  if(!visible.length){el.innerHTML=on.length===0&&off.length===0?'<div class="empty">No workers<br><code style="font-size:.7rem;color:var(--text2)">gaia-worker --server URL --token TOKEN</code></div>':'<div class="empty">All workers offline'+(!showOffline?' — enable "Offline" to show':'')+'</div>';return}
   let h='<div class="worker-grid">';
-  for(const w of ws){
+  for(const w of visible){
     const age=(Date.now()-new Date(w.last_heartbeat))/1000;
     const pc=age<15?'live':age<60?'stale':'dead';
-    const sc=w.status==='busy'?'busy':'idle';
+    const isOffline=age>=60;
+    const sc=isOffline?'offline':w.status==='busy'?'busy':'idle';
     const gpu=w.gpu&&typeof w.gpu==='object'?w.gpu.name:(w.gpu||'CPU');
-    h+=`<div class="worker-card ${sc}"><div class="worker-name"><span><span class="pulse ${pc}"></span> ${esc(w.name)}</span><span class="badge badge-${sc}">${sc}</span></div><div class="worker-details"><span>GPU:</span><span class="v">${esc(gpu)}</span><span>HB:</span><span class="v">${timeSince(w.last_heartbeat)}</span><span>Up:</span><span class="v">${timeSince(w.registered_at)}</span>${w.current_job?'<span>Job:</span><span class="v" style="color:var(--cyan)">'+w.current_job.slice(0,8)+'</span>':''}</div></div>`;
+    h+=`<div class="worker-card ${sc}" style="${isOffline?'opacity:.5':''}"><div class="worker-name"><span><span class="pulse ${pc}"></span> ${esc(w.name)}</span><span class="badge badge-${sc}">${sc}</span></div><div class="worker-details"><span>GPU:</span><span class="v">${esc(gpu)}</span><span>HB:</span><span class="v">${timeSince(w.last_heartbeat)}</span><span>Up:</span><span class="v">${timeSince(w.registered_at)}</span>${w.current_job?'<span>Job:</span><span class="v" style="color:var(--cyan)">'+w.current_job.slice(0,8)+'</span>':''}</div></div>`;
   }
   el.innerHTML=h+'</div>';
 }
