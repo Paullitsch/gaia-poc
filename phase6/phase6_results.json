@@ -1,0 +1,44 @@
+{
+  "neuromod_v2": {
+    "method": "Neuromod_v2_5sig",
+    "best_ever": 42.56824215650981,
+    "final_mean": -67.56462492122263,
+    "final_std": 95.13153795262596,
+    "total_evals": 13600,
+    "time": 371.75891065597534,
+    "params": 23556,
+    "generations": 80,
+    "pop_size": 50
+  },
+  "neuromod_temporal": {
+    "method": "Neuromod_Temporal",
+    "best_ever": 57.81149119151301,
+    "final_mean": -53.4758099449508,
+    "final_std": 142.5273858378554,
+    "total_evals": 13600,
+    "time": 379.3755922317505,
+    "params": 23556,
+    "generations": 80,
+    "pop_size": 50
+  },
+  "neuromod_predcod": {
+    "method": "Neuromod_PredCoding",
+    "best_ever": 47.41459167900773,
+    "final_mean": -32.35889979065147,
+    "final_std": 118.50712324283089,
+    "total_evals": 13600,
+    "time": 403.39276480674744,
+    "params": 44228,
+    "generations": 80,
+    "pop_size": 50
+  },
+  "ppo": {
+    "method": "PPO",
+    "best_eval": 264.82347076811817,
+    "final_mean": 228.79982276616812,
+    "final_std": 63.631509705788744,
+    "steps": 200000,
+    "time": 125.2151894569397,
+    "params": 35973
+  }
+}
