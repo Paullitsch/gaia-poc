@@ -74,8 +74,12 @@ pub async fn self_update(
     }
 
     // Replace current binary
+    // On Linux, /proc/self/exe follows renames, so save path BEFORE rename
     let current_exe = std::env::current_exe().context("Cannot determine current exe path")?;
-    let backup = current_exe.with_extension("bak");
+    let exe_path = current_exe.to_path_buf();
+    // Save for restart BEFORE any renames
+    std::env::set_var("GAIA_RESTART_EXE", exe_path.as_os_str());
+    let backup = exe_path.with_extension("bak");
 
     // On Unix: write to temp, rename old → .bak, rename new → current
     #[cfg(unix)]
@@ -110,7 +114,10 @@ pub async fn self_update(
 
 /// Restart the current process with the same arguments
 pub fn restart() -> ! {
-    let exe = std::env::current_exe().expect("Cannot determine exe path");
+    // Prefer stored path from update, fall back to current_exe
+    let exe = std::env::var("GAIA_RESTART_EXE")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::env::current_exe().expect("Cannot determine exe path"));
     let args: Vec<String> = std::env::args().skip(1).collect();
     tracing::info!("Restarting: {:?} {:?}", exe, args);
 
