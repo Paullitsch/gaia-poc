@@ -158,9 +158,22 @@ async fn main() -> Result<()> {
         match client.fetch_job(&worker_id).await {
             Ok(Some(job)) => {
                 tracing::info!(job_id = %job.id, method = %job.method, "Got job");
+                // Send heartbeats during job execution (every 15s)
+                let hb_client = client::ServerClient::new(&cfg);
+                let hb_wid = worker_id.clone();
+                let hb_handle = tokio::spawn(async move {
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+                    loop {
+                        interval.tick().await;
+                        if let Err(e) = hb_client.heartbeat(&hb_wid).await {
+                            tracing::debug!("Background heartbeat failed: {e}");
+                        }
+                    }
+                });
                 if let Err(e) = worker::execute_job(&client, &cfg, &worker_id, job).await {
                     tracing::error!("Job execution error: {e}");
                 }
+                hb_handle.abort();
             }
             Ok(None) => {
                 // No job available, wait
