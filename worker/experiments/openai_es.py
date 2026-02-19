@@ -11,6 +11,8 @@ Based on: Salimans et al. (2017) "Evolution Strategies as a Scalable Alternative
 """
 
 import numpy as np
+import multiprocessing as mp
+import os
 import gymnasium as gym
 import time
 import json
@@ -66,6 +68,7 @@ def run(params=None, device="cpu", callback=None):
     lr = params.get("lr", 0.01)
     noise_std = params.get("noise_std", 0.02)
     eval_episodes = params.get("eval_episodes", 5)
+    n_workers = params.get("n_workers", min(os.cpu_count() or 1, 16))
     hidden1 = params.get("hidden1", 64)
     hidden2 = params.get("hidden2", 32)
 
@@ -86,10 +89,21 @@ def run(params=None, device="cpu", callback=None):
         rewards_pos = np.zeros(pop_size)
         rewards_neg = np.zeros(pop_size)
 
-        # Evaluate mirrored perturbations (antithetic sampling)
-        for i in range(pop_size):
-            rewards_pos[i] = evaluate(policy, theta + noise_std * noise[i], eval_episodes)
-            rewards_neg[i] = evaluate(policy, theta - noise_std * noise[i], eval_episodes)
+        # Evaluate mirrored perturbations (antithetic sampling) in parallel
+        if n_workers > 1:
+            args = []
+            for i in range(pop_size):
+                args.append((policy, theta + noise_std * noise[i], eval_episodes))
+                args.append((policy, theta - noise_std * noise[i], eval_episodes))
+            with mp.Pool(n_workers) as pool:
+                results = pool.starmap(evaluate, args)
+            for i in range(pop_size):
+                rewards_pos[i] = results[2*i]
+                rewards_neg[i] = results[2*i+1]
+        else:
+            for i in range(pop_size):
+                rewards_pos[i] = evaluate(policy, theta + noise_std * noise[i], eval_episodes)
+                rewards_neg[i] = evaluate(policy, theta - noise_std * noise[i], eval_episodes)
         total_evals += 2 * pop_size * eval_episodes
 
         # Combine rewards

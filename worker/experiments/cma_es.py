@@ -11,6 +11,8 @@ NO BACKPROPAGATION. NO GRADIENTS. Pure search with learned structure.
 import numpy as np
 import gymnasium as gym
 import time
+import multiprocessing as mp
+import os
 
 try:
     import torch
@@ -194,6 +196,8 @@ def run(params=None, device="cpu", callback=None):
     eval_episodes = params.get("eval_episodes", 5)
     hidden1 = params.get("hidden1", 64)
     hidden2 = params.get("hidden2", 32)
+    n_workers = params.get("n_workers", min(os.cpu_count() or 1, 16))
+    print(f"Parallel workers: {n_workers}")
 
     policy = PolicyNetwork(hidden1=hidden1, hidden2=hidden2)
     print(f"Network: {policy.n_params} parameters")
@@ -211,12 +215,13 @@ def run(params=None, device="cpu", callback=None):
     while total_evals < max_evals:
         candidates = cma.ask()
 
-        # Evaluate all candidates
-        fitnesses = []
-        for c in candidates:
-            f = evaluate(policy, c, n_episodes=eval_episodes)
-            fitnesses.append(f)
-        fitnesses = np.array(fitnesses)
+        # Evaluate all candidates in parallel
+        if n_workers > 1:
+            with mp.Pool(n_workers) as pool:
+                fitnesses = pool.starmap(evaluate, [(policy, c, eval_episodes) for c in candidates])
+            fitnesses = np.array(fitnesses)
+        else:
+            fitnesses = np.array([evaluate(policy, c, n_episodes=eval_episodes) for c in candidates])
         total_evals += len(candidates) * eval_episodes
 
         cma.tell(candidates, fitnesses)

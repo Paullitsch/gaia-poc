@@ -9,6 +9,8 @@ import numpy as np
 import gymnasium as gym
 import time
 import json
+import multiprocessing as mp
+import os
 
 
 class PolicyNetwork:
@@ -83,6 +85,7 @@ def run(params=None, device="cpu", callback=None):
     params = params or {}
     max_evals = params.get("max_evals", 100000)
     eval_episodes = params.get("eval_episodes", 5)
+    n_workers = params.get("n_workers", min(os.cpu_count() or 1, 16))
 
     policy = PolicyNetwork()
     print(f"Curriculum CMA-ES: {policy.n_params} params")
@@ -105,11 +108,12 @@ def run(params=None, device="cpu", callback=None):
         difficulty = 0.3 + 0.7 * progress
 
         candidates = cma.ask()
-        fitnesses = []
-        for c in candidates:
-            f = evaluate_shaped(policy, c, eval_episodes, difficulty)
-            fitnesses.append(f)
-        fitnesses = np.array(fitnesses)
+        if n_workers > 1:
+            with mp.Pool(n_workers) as pool:
+                fitnesses = pool.starmap(evaluate_shaped, [(policy, c, eval_episodes, difficulty) for c in candidates])
+            fitnesses = np.array(fitnesses)
+        else:
+            fitnesses = np.array([evaluate_shaped(policy, c, eval_episodes, difficulty) for c in candidates])
         total_evals += len(candidates) * eval_episodes
 
         cma.tell(candidates, fitnesses)
