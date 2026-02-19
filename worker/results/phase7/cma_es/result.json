@@ -1,8 +1,12 @@
 {
   "method": "CMA-ES",
-  "best_ever": -43.31048162209804,
-  "final_mean": -118.27301478913355,
-  "final_std": 1.4210854715202004e-14,
-  "total_evals": 2025,
-  "generations": 15,
-  "n_params": 
+  "best_ever": -5.690633925841051,
+  "final_mean": -39.59266708401708,
+  "final_std": 0.0,
+  "total_evals": 540,
+  "generations": 4,
+  "n_params": 2788,
+  "elapsed_seconds": 1.9,
+  "solved": false,
+  "wall_time": 1.9
+}

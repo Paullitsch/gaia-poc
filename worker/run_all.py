@@ -60,9 +60,16 @@ def run_experiment(name, label, module, params, results_dir):
     result = module.run(params=params, callback=callback)
     result["wall_time"] = round(time.time() - start, 1)
 
-    # Save result
+    # Save result (convert numpy types for JSON)
+    import numpy as np
+    def convert(obj):
+        if isinstance(obj, (np.integer,)): return int(obj)
+        if isinstance(obj, (np.floating,)): return float(obj)
+        if isinstance(obj, (np.bool_,)): return bool(obj)
+        if isinstance(obj, np.ndarray): return obj.tolist()
+        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
     with open(method_dir / "result.json", "w") as f:
-        json.dump(result, f, indent=2)
+        json.dump(result, f, indent=2, default=convert)
 
     print(f"\n{'='*70}")
     print(f"{'✅ SOLVED!' if result.get('solved') else '❌ Not solved'} — {label}")
@@ -205,13 +212,20 @@ def main():
         print(f"{label:<25} {r.get('best_ever', 0):>10.1f} {r.get('final_mean', 0):>12.1f} {solved:>8} {r.get('wall_time', 0):>7.0f}s")
 
     # Save summary
+    import numpy as np
+    def _conv(obj):
+        if isinstance(obj, (np.integer,)): return int(obj)
+        if isinstance(obj, (np.floating,)): return float(obj)
+        if isinstance(obj, (np.bool_,)): return bool(obj)
+        if isinstance(obj, np.ndarray): return obj.tolist()
+        raise TypeError(f"Not JSON serializable: {type(obj)}")
     with open(results_dir / "summary.json", "w") as f:
         json.dump({
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "total_time": round(total_time, 1),
             "params": params,
             "results": all_results,
-        }, f, indent=2)
+        }, f, indent=2, default=_conv)
 
     if not args.no_plots:
         generate_plots(results_dir)

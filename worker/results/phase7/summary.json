@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-02-19T20:14:44.432491+00:00",
+  "total_time": 1.9,
+  "params": {
+    "max_evals": 500,
+    "eval_episodes": 5
+  },
+  "results": {
+    "cma_es": {
+      "method": "CMA-ES",
+      "best_ever": -5.690633925841051,
+      "final_mean": -39.59266708401708,
+      "final_std": 0.0,
+      "total_evals": 540,
+      "generations": 4,
+      "n_params": 2788,
+      "elapsed_seconds": 1.9,
+      "solved": false,
+      "wall_time": 1.9
+    }
+  }
+}

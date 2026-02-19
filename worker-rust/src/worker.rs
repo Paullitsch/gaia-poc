@@ -37,6 +37,7 @@ pub async fn execute_job(
     cmd.arg(script)
         .arg("--method").arg(&job.method)
         .arg("--max-evals").arg(max_evals.to_string())
+        .arg("--no-plots")
         .current_dir(&exp_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -77,32 +78,42 @@ pub async fn execute_job(
         lines
     });
 
-    // Read stdout, parse CSV-like output, stream results
-    let mut csv_headers: Option<Vec<String>> = None;
+    // Read stdout, parse generation output, stream results
     let mut generation: u64 = 0;
     let mut reader = BufReader::new(stdout).lines();
 
     while let Ok(Some(line)) = reader.next_line().await {
         // Log interesting lines
-        if line.contains("Gen ") || line.contains("SOLVED") || line.contains("Result:") {
+        if line.contains("Gen ") || line.contains("SOLVED") || line.contains("Result:")
+            || line.contains("Best:") || line.contains("SUMMARY") {
             tracing::info!(job_id = %job_id, "{line}");
         }
 
-        // Try to detect CSV header
-        if csv_headers.is_none() && line.contains(',') && !line.contains(' ') {
-            csv_headers = Some(line.split(',').map(|s| s.trim().to_string()).collect());
-            continue;
-        }
-        
-        // Parse CSV data rows
-        if let Some(ref headers) = csv_headers {
-            let vals: Vec<&str> = line.split(',').collect();
-            if vals.len() == headers.len() {
-                let row: HashMap<String, String> = headers
-                    .iter()
-                    .zip(vals.iter())
-                    .map(|(k, v)| (k.clone(), v.trim().to_string()))
-                    .collect();
+        // Parse formatted generation lines:
+        // Gen    1 | Best:   -104.4 | Ever:   -104.4 | Mean:   -417.6 | σ: 0.4984 | Evals:    135 |    0.5s
+        if line.trim_start().starts_with("Gen ") && line.contains('|') {
+            let mut row: HashMap<String, String> = HashMap::new();
+            for part in line.split('|') {
+                let part = part.trim();
+                if part.starts_with("Gen") {
+                    if let Some(v) = part.split_whitespace().nth(1) {
+                        row.insert("generation".into(), v.to_string());
+                    }
+                } else if let Some(rest) = part.strip_prefix("Best:") {
+                    row.insert("best".into(), rest.trim().to_string());
+                } else if let Some(rest) = part.strip_prefix("Ever:") {
+                    row.insert("best_ever".into(), rest.trim().to_string());
+                } else if let Some(rest) = part.strip_prefix("Mean:") {
+                    row.insert("mean".into(), rest.trim().to_string());
+                } else if let Some(rest) = part.strip_prefix("σ:") {
+                    row.insert("sigma".into(), rest.trim().to_string());
+                } else if let Some(rest) = part.strip_prefix("Evals:") {
+                    row.insert("evals".into(), rest.trim().to_string());
+                } else if part.ends_with('s') && part.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+                    row.insert("time".into(), part.trim_end_matches('s').trim().to_string());
+                }
+            }
+            if !row.is_empty() {
                 generation += 1;
                 if let Err(e) = client.stream_result(&job_id, worker_id, generation, &row).await {
                     tracing::warn!("Failed to stream result: {e}");
