@@ -23,14 +23,19 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from experiments import cma_es, openai_es, hybrid_ff, curriculum, indirect
+from experiments import bipedal_cma, bipedal_es
 
 
 METHODS = {
+    # Phase 7 — LunarLander
     "cma_es": ("CMA-ES", cma_es),
     "openai_es": ("OpenAI ES", openai_es),
     "hybrid_cma_ff": ("Hybrid CMA+FF", hybrid_ff),
     "curriculum": ("Curriculum CMA-ES", curriculum),
     "indirect_encoding": ("Indirect Encoding", indirect),
+    # Phase 8 — BipedalWalker
+    "bipedal_cma": ("BipedalWalker CMA-ES", bipedal_cma),
+    "bipedal_es": ("BipedalWalker OpenAI-ES", bipedal_es),
 }
 
 
@@ -171,7 +176,7 @@ def main():
     print(f"""
 ╔══════════════════════════════════════════════════════╗
 ║           GAIA Phase 7: The Final Push               ║
-║        Solve LunarLander WITHOUT Backpropagation     ║
+║    Gradient-Free RL: LunarLander + BipedalWalker     ║
 ╠══════════════════════════════════════════════════════╣
 ║  Budget: {args.max_evals:>8} evaluations per method            ║
 ║  Methods: {len(METHODS) if not args.method else 1:>2}                                          ║
