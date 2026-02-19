@@ -1,0 +1,18 @@
+# GAIA Worker Configuration
+worker:
+  name: "paul-rtx5070"
+  device: "auto"  # auto | cuda | cpu
+
+server:
+  host: "0.0.0.0"
+  port: 7433  # GAIA worker port
+
+vps:
+  host: ""  # VPS IP — wird bei Verbindung gesetzt
+  port: 7434  # VPS orchestrator port
+  token: ""  # Shared secret für Auth
+
+compute:
+  max_parallel_jobs: 1
+  gpu_memory_limit: null  # null = use all available
+  log_interval: 10  # Log every N generations
