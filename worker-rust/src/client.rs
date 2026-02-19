@@ -117,4 +117,17 @@ impl ServerClient {
         }
         Ok(())
     }
+
+    pub async fn check_job_cancelled(&self, job_id: &str) -> bool {
+        let url = format!("{}/api/results/{}", self.base_url, job_id);
+        let resp = match self.auth(self.http.get(&url)).send().await {
+            Ok(r) => r,
+            Err(_) => return false,
+        };
+        if let Ok(data) = resp.json::<serde_json::Value>().await {
+            data["job"]["status"].as_str() == Some("cancelled")
+        } else {
+            false
+        }
+    }
 }

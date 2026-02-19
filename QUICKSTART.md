@@ -146,9 +146,36 @@ cd ..
 
 Worker options:
 - `--poll-interval 5` — Seconds between job polls (default: 5)
-- `--experiments-dir ../experiments` — Path to experiment scripts
+- `--experiments-dir ./worker` — Path to experiment scripts
 - `--python python3` — Python binary
 - `--job-timeout 3600` — Max job runtime in seconds
+
+---
+
+## Update Worker
+
+To update the worker binary and experiment code:
+
+```bash
+cd gaia-poc
+
+# Update experiment code
+git pull
+
+# Download latest worker binary (replaces old one)
+curl -L -o gaia-worker https://github.com/Paullitsch/gaia-poc/releases/latest/download/gaia-worker-linux-x86_64
+chmod +x gaia-worker
+
+# Restart worker
+./gaia-worker --server https://your-vps:7434 --token mysecret --name my-worker --experiments-dir ./worker
+```
+
+On Windows (WSL): same commands. On native Windows PowerShell:
+```powershell
+git pull
+Invoke-WebRequest -Uri "https://github.com/Paullitsch/gaia-poc/releases/latest/download/gaia-worker-windows-x86_64.exe" -OutFile gaia-worker.exe
+.\gaia-worker.exe --server https://your-vps:7434 --token mysecret --name my-worker --experiments-dir .\worker
+```
 
 ---
 

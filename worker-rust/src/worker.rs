@@ -118,6 +118,15 @@ pub async fn execute_job(
                 if let Err(e) = client.stream_result(&job_id, worker_id, generation, &row).await {
                     tracing::warn!("Failed to stream result: {e}");
                 }
+                // Check for cancellation every 10 generations
+                if generation % 10 == 0 {
+                    if client.check_job_cancelled(&job_id).await {
+                        tracing::info!(job_id = %job_id, "Job cancelled by server, killing subprocess");
+                        let _ = child.kill().await;
+                        let _ = stderr_task.await;
+                        return Ok(());
+                    }
+                }
             }
         }
     }
