@@ -7,16 +7,38 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Tag to release (e.g. v0.1.0). Leave empty for build-only.'
+        description: 'Tag to release (e.g. v0.2.0). Leave empty for build-only.'
         required: false
         default: ''
 
 env:
   CARGO_TERM_COLOR: always
-  BINARY_NAME: gaia-worker
 
 jobs:
-  build:
+  build-server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server-rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            server-rust/target
+          key: server-linux-cargo-${{ hashFiles('server-rust/Cargo.lock') }}
+          restore-keys: server-linux-cargo-
+      - run: cargo build --release
+      - run: cp target/release/gaia-server gaia-server-linux-x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gaia-server-linux-x86_64
+          path: server-rust/gaia-server-linux-x86_64
+
+  build-worker:
     strategy:
       matrix:
         include:
@@ -28,22 +50,16 @@ jobs:
             os: windows-latest
             artifact: gaia-worker-windows-x86_64
             ext: ".exe"
-
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: worker-rust
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
-      - name: Cache cargo
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -51,36 +67,24 @@ jobs:
             worker-rust/target
           key: ${{ matrix.target }}-cargo-${{ hashFiles('worker-rust/Cargo.lock') }}
           restore-keys: ${{ matrix.target }}-cargo-
-
-      - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Package binary
-        shell: bash
-        run: |
-          src="target/${{ matrix.target }}/release/${BINARY_NAME}${{ matrix.ext }}"
-          dst="${{ matrix.artifact }}${{ matrix.ext }}"
-          cp "$src" "$dst"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - run: cargo build --release --target ${{ matrix.target }}
+      - shell: bash
+        run: cp "target/${{ matrix.target }}/release/gaia-worker${{ matrix.ext }}" "${{ matrix.artifact }}${{ matrix.ext }}"
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: worker-rust/${{ matrix.artifact }}${{ matrix.ext }}
 
   release:
-    needs: build
+    needs: [build-server, build-worker]
     runs-on: ubuntu-latest
-    # Release on tag push OR manual dispatch with a tag specified
     if: >-
       startsWith(github.ref, 'refs/tags/v') || 
       (github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag != '')
     permissions:
       contents: write
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Determine tag
         id: tag
         shell: bash
@@ -90,44 +94,40 @@ jobs:
           else
             echo "tag=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
           fi
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
-
-      - name: List artifacts
-        run: find artifacts -type f
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
-          name: "GAIA Worker ${{ steps.tag.outputs.tag }}"
+          name: "GAIA ${{ steps.tag.outputs.tag }}"
           body: |
-            ## GAIA Worker ${{ steps.tag.outputs.tag }}
+            ## GAIA ${{ steps.tag.outputs.tag }}
             
             ### Downloads
-            | Platform | Binary |
-            |----------|--------|
-            | Linux x86_64 | `gaia-worker-linux-x86_64` |
-            | Windows x86_64 | `gaia-worker-windows-x86_64.exe` |
+            | Binary | Platform | Description |
+            |--------|----------|-------------|
+            | `gaia-server-linux-x86_64` | Linux | Central server (run on VPS) |
+            | `gaia-worker-linux-x86_64` | Linux | Worker (connects to server) |
+            | `gaia-worker-windows-x86_64.exe` | Windows | Worker (connects to server) |
             
             ### Quick Start
             ```bash
-            # Linux
-            chmod +x gaia-worker-linux-x86_64
-            ./gaia-worker-linux-x86_64 --help
+            # On VPS:
+            ./gaia-server-linux-x86_64 --token mysecret
             
-            # Windows (PowerShell)
-            .\gaia-worker-windows-x86_64.exe --help
+            # On worker machine:
+            ./gaia-worker-linux-x86_64 --server https://your-vps:7434 --token mysecret --name my-gpu
+            
+            # Submit a job:
+            curl -X POST https://your-vps:7434/api/jobs/submit \
+              -H "Authorization: Bearer mysecret" \
+              -H "Content-Type: application/json" \
+              -d '{"method": "cma_es", "max_evals": 100000}'
             ```
-            
-            Python is still needed for running experiments (`worker/run_all.py`).
-            The Rust binary handles job orchestration, GPU detection, and result streaming.
-            
-            See [worker-rust/README.md](worker-rust/README.md) for full docs.
           files: |
+            artifacts/gaia-server-linux-x86_64/gaia-server-linux-x86_64
             artifacts/gaia-worker-linux-x86_64/gaia-worker-linux-x86_64
             artifacts/gaia-worker-windows-x86_64/gaia-worker-windows-x86_64.exe
           draft: false

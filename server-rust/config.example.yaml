@@ -1,0 +1,4 @@
+# GAIA Server config (optional — CLI args or env vars work too)
+# port: 7434
+# token: mysecret
+# data_dir: ./server-data
