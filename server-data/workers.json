@@ -1,0 +1,47 @@
+{
+  "e84367b4-d242-4a9c-ad48-22e5aaeb4733": {
+    "id": "e84367b4-d242-4a9c-ad48-22e5aaeb4733",
+    "name": "vps-cpu-worker",
+    "gpu": {
+      "available": false,
+      "cuda_version": null,
+      "driver_version": null,
+      "memory_mb": null,
+      "name": null
+    },
+    "registered_at": "2026-02-19T19:56:12.138319095Z",
+    "last_heartbeat": "2026-02-19T19:58:14.238863731Z",
+    "status": "idle",
+    "current_job": null
+  },
+  "ba72fee6-af29-4b6e-97c8-7114cea8783f": {
+    "id": "ba72fee6-af29-4b6e-97c8-7114cea8783f",
+    "name": "vps-cpu-worker",
+    "gpu": {
+      "available": false,
+      "cuda_version": null,
+      "driver_version": null,
+      "memory_mb": null,
+      "name": null
+    },
+    "registered_at": "2026-02-19T19:55:08.148804864Z",
+    "last_heartbeat": "2026-02-19T19:55:48.165249215Z",
+    "status": "idle",
+    "current_job": null
+  },
+  "571ad7f5-98ba-4a9c-a89b-dd9815eb57e3": {
+    "id": "571ad7f5-98ba-4a9c-a89b-dd9815eb57e3",
+    "name": "vps-cpu-worker",
+    "gpu": {
+      "available": false,
+      "cuda_version": null,
+      "driver_version": null,
+      "memory_mb": null,
+      "name": null
+    },
+    "registered_at": "2026-02-19T19:58:25.419326484Z",
+    "last_heartbeat": "2026-02-19T19:58:45.426171121Z",
+    "status": "idle",
+    "current_job": null
+  }
+}

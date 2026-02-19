@@ -17,13 +17,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/", get(dashboard))
         .route("/api/workers/register", post(register_worker))
-        .route("/api/workers/heartbeat/{worker_id}", get(heartbeat))
-        .route("/api/jobs/next/{worker_id}", get(next_job))
+        .route("/api/workers/heartbeat/:worker_id", get(heartbeat))
+        .route("/api/jobs/next/:worker_id", get(next_job))
         .route("/api/jobs/submit", post(submit_job))
         .route("/api/results/stream", post(stream_result))
         .route("/api/results/complete", post(complete_job))
-        .route("/api/results/{job_id}", get(get_results))
-        .route("/api/results/{job_id}/csv", get(get_results_csv))
+        .route("/api/results/:job_id", get(get_results))
+        .route("/api/results/:job_id/csv", get(get_results_csv))
         .route("/api/status", get(status))
         .with_state(state)
 }
@@ -87,47 +87,58 @@ async fn next_job(
 ) -> Result<Json<Value>, StatusCode> {
     check_auth(&state, &headers)?;
 
-    // Update heartbeat
+    // Update heartbeat (acquire and release immediately)
     {
         let mut workers = state.workers.write().await;
         if let Some(w) = workers.get_mut(&worker_id) {
             w.last_heartbeat = Utc::now();
         }
-    }
+    } // lock released
 
-    // Pop next queued job
-    let job_id = state.job_queue.write().await.pop_front();
+    // Pop next queued job (acquire and release immediately)
+    let job_id = {
+        state.job_queue.write().await.pop_front()
+    }; // lock released
     let job_id = match job_id {
         Some(id) => id,
         None => return Err(StatusCode::NO_CONTENT),
     };
 
-    let mut jobs = state.jobs.write().await;
-    if let Some(job) = jobs.get_mut(&job_id) {
-        job.status = JobStatus::Running;
-        job.assigned_to = Some(worker_id.clone());
-        job.started_at = Some(Utc::now());
+    // Update job status (acquire and release)
+    let resp = {
+        let mut jobs = state.jobs.write().await;
+        if let Some(job) = jobs.get_mut(&job_id) {
+            job.status = JobStatus::Running;
+            job.assigned_to = Some(worker_id.clone());
+            job.started_at = Some(Utc::now());
+            Some(json!({
+                "id": job.id,
+                "method": job.method,
+                "params": job.params,
+                "script": job.script,
+                "max_evals": job.max_evals,
+            }))
+        } else {
+            None
+        }
+    }; // lock released
 
-        let resp = json!({
-            "id": job.id,
-            "method": job.method,
-            "params": job.params,
-            "script": job.script,
-            "max_evals": job.max_evals,
-        });
+    let resp = match resp {
+        Some(r) => r,
+        None => return Err(StatusCode::NO_CONTENT),
+    };
 
-        // Mark worker busy
+    // Mark worker busy (separate lock acquisition)
+    {
         let mut workers = state.workers.write().await;
         if let Some(w) = workers.get_mut(&worker_id) {
             w.status = WorkerStatus::Busy;
             w.current_job = Some(job_id.clone());
         }
+    } // lock released
 
-        let _ = storage::save_state(&state).await;
-        Ok(Json(resp))
-    } else {
-        Err(StatusCode::NO_CONTENT)
-    }
+    let _ = storage::save_state(&state).await;
+    Ok(Json(resp))
 }
 
 async fn submit_job(
@@ -185,23 +196,28 @@ async fn complete_job(
 ) -> Result<Json<Value>, StatusCode> {
     check_auth(&state, &headers)?;
 
-    let mut jobs = state.jobs.write().await;
-    if let Some(job) = jobs.get_mut(&req.job_id) {
-        job.status = match req.status.as_str() {
-            "completed" => JobStatus::Completed,
-            "timed_out" => JobStatus::TimedOut,
-            _ => JobStatus::Failed,
-        };
-        job.completed_at = Some(Utc::now());
-        job.error = req.error;
-    }
+    // Update job (acquire and release)
+    {
+        let mut jobs = state.jobs.write().await;
+        if let Some(job) = jobs.get_mut(&req.job_id) {
+            job.status = match req.status.as_str() {
+                "completed" => JobStatus::Completed,
+                "timed_out" => JobStatus::TimedOut,
+                _ => JobStatus::Failed,
+            };
+            job.completed_at = Some(Utc::now());
+            job.error = req.error.clone();
+        }
+    } // lock released
 
-    // Mark worker idle
-    let mut workers = state.workers.write().await;
-    if let Some(w) = workers.get_mut(&req.worker_id) {
-        w.status = WorkerStatus::Idle;
-        w.current_job = None;
-    }
+    // Mark worker idle (separate lock)
+    {
+        let mut workers = state.workers.write().await;
+        if let Some(w) = workers.get_mut(&req.worker_id) {
+            w.status = WorkerStatus::Idle;
+            w.current_job = None;
+        }
+    } // lock released
 
     let _ = storage::save_state(&state).await;
     tracing::info!(job_id = %req.job_id, status = %req.status, "Job completed");
@@ -253,16 +269,26 @@ async fn status(
     headers: HeaderMap,
 ) -> Result<Json<Value>, StatusCode> {
     check_auth(&state, &headers)?;
-    let workers = state.workers.read().await;
-    let jobs = state.jobs.read().await;
-    let results = state.results.read().await;
-    let queue = state.job_queue.read().await;
+
+    // Acquire each lock separately to avoid deadlocks
+    let workers_val: Vec<_> = {
+        state.workers.read().await.values().cloned().collect()
+    };
+    let jobs_val: Vec<_> = {
+        state.jobs.read().await.values().cloned().collect()
+    };
+    let results_len = {
+        state.results.read().await.len()
+    };
+    let queue_len = {
+        state.job_queue.read().await.len()
+    };
 
     Ok(Json(json!({
-        "workers": workers.values().collect::<Vec<_>>(),
-        "jobs": jobs.values().collect::<Vec<_>>(),
-        "queue_length": queue.len(),
-        "total_results": results.len(),
+        "workers": workers_val,
+        "jobs": jobs_val,
+        "queue_length": queue_len,
+        "total_results": results_len,
         "server_start_time": state.start_time,
     })))
 }

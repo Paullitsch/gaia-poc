@@ -1,0 +1,47 @@
+{
+  "8b6c63fb-fb4e-42f1-8aca-83f97decaec2": {
+    "id": "8b6c63fb-fb4e-42f1-8aca-83f97decaec2",
+    "method": "cma_es",
+    "params": {
+      "max_evals": 5000
+    },
+    "script": null,
+    "max_evals": 100,
+    "status": "failed",
+    "assigned_to": "e84367b4-d242-4a9c-ad48-22e5aaeb4733",
+    "created_at": "2026-02-19T19:56:34.262397383Z",
+    "started_at": "2026-02-19T19:56:37.148191369Z",
+    "completed_at": "2026-02-19T19:56:39.196861980Z",
+    "error": null
+  },
+  "45d8a00d-6b33-490e-9e6b-3fb3ebe94086": {
+    "id": "45d8a00d-6b33-490e-9e6b-3fb3ebe94086",
+    "method": "cma_es",
+    "params": {
+      "max_evals": 5000
+    },
+    "script": null,
+    "max_evals": 100,
+    "status": "failed",
+    "assigned_to": "ba72fee6-af29-4b6e-97c8-7114cea8783f",
+    "created_at": "2026-02-19T19:55:11.069185518Z",
+    "started_at": "2026-02-19T19:55:13.151029064Z",
+    "completed_at": "2026-02-19T19:55:13.152669073Z",
+    "error": "Spawn failed: No such file or directory (os error 2)"
+  },
+  "fa97e547-3c07-47a6-ad9e-8e236e22bd31": {
+    "id": "fa97e547-3c07-47a6-ad9e-8e236e22bd31",
+    "method": "cma_es",
+    "params": {
+      "max_evals": 2000
+    },
+    "script": null,
+    "max_evals": 100,
+    "status": "failed",
+    "assigned_to": "571ad7f5-98ba-4a9c-a89b-dd9815eb57e3",
+    "created_at": "2026-02-19T19:58:41.521815482Z",
+    "started_at": "2026-02-19T19:58:45.426173315Z",
+    "completed_at": "2026-02-19T19:58:52.972626099Z",
+    "error": "    o = _default(o)\n        ^^^^^^^^^^^\n  File \"/usr/lib/python3.11/json/encoder.py\", line 180, in default\n    raise TypeError(f'Object of type {o.__class__.__name__} '\nTypeError: Object of type int64 is not JSON serializable"
+  }
+}
