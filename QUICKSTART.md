@@ -71,37 +71,77 @@ Options:
 ```bash
 # Clone repo (for Python experiments)
 git clone https://github.com/Paullitsch/gaia-poc.git
-cd gaia-poc/worker
+cd gaia-poc
+
+# Download latest worker binary
+curl -L -o gaia-worker https://github.com/Paullitsch/gaia-poc/releases/latest/download/gaia-worker-linux-x86_64
+chmod +x gaia-worker
 
 # Python setup
+cd worker
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 pip install torch --index-url https://download.pytorch.org/whl/cu124
+cd ..
 
 # Start worker
-chmod +x gaia-worker-linux-x86_64
-./gaia-worker-linux-x86_64 \
+./gaia-worker \
   --server https://your-vps:7434 \
   --token mysecret \
-  --name paul-rtx5070
+  --name my-worker \
+  --experiments-dir ./worker
 ```
 
-### Windows
+### Windows (WSL)
+
+```bash
+git clone https://github.com/Paullitsch/gaia-poc.git
+cd gaia-poc
+
+# Download latest worker binary
+curl -L -o gaia-worker https://github.com/Paullitsch/gaia-poc/releases/latest/download/gaia-worker-linux-x86_64
+chmod +x gaia-worker
+
+# Python setup
+cd worker
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pip install torch --index-url https://download.pytorch.org/whl/cu124
+cd ..
+
+# Start worker
+./gaia-worker \
+  --server https://your-vps:7434 \
+  --token mysecret \
+  --name my-worker \
+  --experiments-dir ./worker
+```
+
+### Windows (native PowerShell)
 
 ```powershell
 git clone https://github.com/Paullitsch/gaia-poc.git
-cd gaia-poc\worker
+cd gaia-poc
 
+# Download latest worker binary
+Invoke-WebRequest -Uri "https://github.com/Paullitsch/gaia-poc/releases/latest/download/gaia-worker-windows-x86_64.exe" -OutFile gaia-worker.exe
+
+# Python setup
+cd worker
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 pip install torch --index-url https://download.pytorch.org/whl/cu124
+cd ..
 
-.\gaia-worker-windows-x86_64.exe `
+# Start worker
+.\gaia-worker.exe `
   --server https://your-vps:7434 `
   --token mysecret `
-  --name paul-rtx5070
+  --name my-worker `
+  --experiments-dir .\worker
 ```
 
 Worker options:
