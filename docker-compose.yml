@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  gaia-server:
+    build:
+      context: ./server-rust
+      dockerfile: Dockerfile
+    ports:
+      - "7434:7434"
+    volumes:
+      - gaia-data:/data
+    environment:
+      - GAIA_PORT=7434
+      - GAIA_TOKEN=${GAIA_TOKEN:-changeme}
+      - GAIA_DATA_DIR=/data
+    restart: unless-stopped
+
+volumes:
+  gaia-data:

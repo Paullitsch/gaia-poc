@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GAIA Mission Control</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0a0f;--surface:#12121a;--surface2:#1a1a26;--border:#2a2a3a;
+  --text:#e0e0e8;--text2:#8888a0;--accent:#6366f1;--accent2:#818cf8;
+  --green:#22c55e;--red:#ef4444;--yellow:#eab308;--blue:#3b82f6;
+  --orange:#f97316;--cyan:#06b6d4;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;line-height:1.5;min-height:100vh}
+a{color:var(--accent2)}
+
+/* Auth overlay */
+#auth-overlay{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+#auth-overlay.hidden{display:none}
+#auth-overlay h1{font-size:2rem;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+#auth-overlay input{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:1rem;width:300px;outline:none}
+#auth-overlay input:focus{border-color:var(--accent)}
+#auth-overlay button{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 32px;font-size:1rem;cursor:pointer}
+#auth-overlay button:hover{background:var(--accent2)}
+#auth-error{color:var(--red);font-size:.875rem;min-height:1.25rem}
+
+/* Layout */
+.container{max-width:1400px;margin:0 auto;padding:16px}
+
+/* Header */
+header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+.logo{display:flex;align-items:center;gap:12px}
+.logo svg{width:32px;height:32px}
+.logo h1{font-size:1.25rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header-right{display:flex;align-items:center;gap:20px;font-size:.875rem;color:var(--text2)}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.status-dot.online{background:var(--green);box-shadow:0 0 8px var(--green)}
+.status-dot.offline{background:var(--red);box-shadow:0 0 8px var(--red)}
+
+/* Grid */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.full-width{grid-column:1/-1}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h2{font-size:.875rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);font-weight:600}
+.card-body{padding:16px 20px}
+
+/* Badges */
+.badge{display:inline-block;padding:2px 10px;border-radius:9999px;font-size:.75rem;font-weight:600;text-transform:uppercase}
+.badge-idle{background:rgba(34,197,94,.15);color:var(--green)}
+.badge-busy{background:rgba(234,179,8,.15);color:var(--yellow)}
+.badge-offline{background:rgba(239,68,68,.15);color:var(--red)}
+.badge-queued{background:rgba(99,102,241,.15);color:var(--accent2)}
+.badge-running{background:rgba(6,182,212,.15);color:var(--cyan)}
+.badge-completed{background:rgba(34,197,94,.15);color:var(--green)}
+.badge-failed{background:rgba(239,68,68,.15);color:var(--red)}
+.badge-timed_out{background:rgba(249,115,22,.15);color:var(--orange)}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:.875rem}
+th{text-align:left;color:var(--text2);font-weight:500;padding:8px 0;border-bottom:1px solid var(--border)}
+td{padding:8px 0;border-bottom:1px solid rgba(42,42,58,.5)}
+tr:last-child td{border-bottom:none}
+
+/* Big numbers */
+.big-numbers{display:flex;gap:16px;flex-wrap:wrap}
+.big-num{flex:1;min-width:120px;background:var(--surface2);border-radius:8px;padding:16px;text-align:center}
+.big-num .value{font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums}
+.big-num .label{font-size:.75rem;color:var(--text2);margin-top:4px}
+.solved{color:var(--green) !important}
+
+/* Submit form */
+.submit-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.submit-form select,.submit-form input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;color:var(--text);font-size:.875rem;outline:none}
+.submit-form select:focus,.submit-form input:focus{border-color:var(--accent)}
+.submit-form button{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:.875rem;font-weight:500}
+.submit-form button:hover{background:var(--accent2)}
+
+/* Activity log */
+.activity-log{max-height:240px;overflow-y:auto;font-size:.8125rem;font-family:'SF Mono',Consolas,monospace}
+.activity-log .entry{padding:4px 0;border-bottom:1px solid rgba(42,42,58,.3);display:flex;gap:8px}
+.activity-log .time{color:var(--text2);white-space:nowrap;min-width:70px}
+.activity-log .msg{color:var(--text)}
+
+/* Chart */
+#chart-container{position:relative;width:100%;height:300px}
+#chart-container canvas{width:100%!important;height:100%!important}
+
+/* Buttons */
+.btn-sm{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 12px;color:var(--text2);cursor:pointer;font-size:.75rem}
+.btn-sm:hover{background:var(--border);color:var(--text)}
+
+/* Empty state */
+.empty{color:var(--text2);text-align:center;padding:24px;font-size:.875rem}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div id="auth-overlay">
+  <svg width="48" height="48" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="url(#g)" stroke-width="2"/><path d="M10 16l4 4 8-8" stroke="url(#g)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs></svg>
+  <h1>GAIA Mission Control</h1>
+  <input type="password" id="token-input" placeholder="Enter auth token" autofocus>
+  <div id="auth-error"></div>
+  <button onclick="authenticate()">Connect</button>
+</div>
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="url(#g2)" stroke-width="2"/><path d="M10 16l4 4 8-8" stroke="url(#g2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="g2" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs></svg>
+    <h1>GAIA Mission Control</h1>
+  </div>
+  <div class="header-right">
+    <span>Uptime: <strong id="uptime">—</strong></span>
+    <span><span class="status-dot" id="conn-dot"></span><span id="conn-text">Connecting…</span></span>
+  </div>
+</header>
+
+<div class="container">
+  <div class="grid">
+
+    <!-- Workers -->
+    <div class="card">
+      <div class="card-header"><h2>⚡ Workers</h2><span id="worker-count" class="badge badge-idle">0</span></div>
+      <div class="card-body" id="workers-body"><div class="empty">No workers connected</div></div>
+    </div>
+
+    <!-- Jobs -->
+    <div class="card">
+      <div class="card-header"><h2>🔬 Jobs</h2><span id="job-count" class="badge badge-queued">0</span></div>
+      <div class="card-body" id="jobs-body">
+        <div class="empty">No jobs yet</div>
+        <div class="submit-form">
+          <select id="method-select">
+            <option value="openai_es">OpenAI-ES</option>
+            <option value="cma_es">CMA-ES</option>
+            <option value="ga">GA</option>
+            <option value="pbt">PBT</option>
+            <option value="random_search">Random Search</option>
+          </select>
+          <input type="number" id="max-evals-input" value="100" min="1" max="10000" style="width:80px" placeholder="Evals">
+          <button onclick="submitJob()">+ Submit Job</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="card full-width">
+      <div class="card-header"><h2>📊 Results</h2></div>
+      <div class="card-body">
+        <div class="big-numbers" id="best-scores"></div>
+        <div id="chart-container" style="margin-top:16px"><canvas id="chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Activity Log -->
+    <div class="card full-width">
+      <div class="card-header"><h2>📋 Recent Activity</h2></div>
+      <div class="card-body"><div class="activity-log" id="activity-log"><div class="empty">Waiting for events…</div></div></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let TOKEN = '';
+let serverStart = null;
+const activityLog = [];
+const MAX_LOG = 50;
+
+function authenticate() {
+  TOKEN = document.getElementById('token-input').value.trim();
+  if (!TOKEN) { document.getElementById('auth-error').textContent = 'Token required'; return; }
+  fetch('/api/status', { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+    .then(r => { if (!r.ok) throw new Error('Invalid token'); return r.json(); })
+    .then(() => {
+      document.getElementById('auth-overlay').classList.add('hidden');
+      localStorage.setItem('gaia_token', TOKEN);
+      startPolling();
+    })
+    .catch(() => { document.getElementById('auth-error').textContent = 'Connection failed — check token'; });
+}
+
+// Auto-login from localStorage
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('gaia_token');
+  if (saved) { TOKEN = saved; document.getElementById('token-input').value = saved; authenticate(); }
+});
+
+function startPolling() { refresh(); setInterval(refresh, 5000); }
+
+function addActivity(msg) {
+  const now = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  activityLog.unshift({ time: now, msg });
+  if (activityLog.length > MAX_LOG) activityLog.pop();
+}
+
+let prevWorkerIds = new Set();
+let prevJobStatuses = {};
+
+async function refresh() {
+  try {
+    const r = await fetch('/api/status', { headers: { 'Authorization': 'Bearer ' + TOKEN } });
+    if (!r.ok) throw new Error('Failed');
+    const d = await r.json();
+
+    // Connection status
+    document.getElementById('conn-dot').className = 'status-dot online';
+    document.getElementById('conn-text').textContent = 'Connected';
+
+    // Uptime from server_start_time
+    if (d.server_start_time) {
+      serverStart = new Date(d.server_start_time);
+    }
+    if (serverStart) {
+      const diff = Math.floor((Date.now() - serverStart.getTime()) / 1000);
+      const h = Math.floor(diff / 3600), m = Math.floor((diff % 3600) / 60), s = diff % 60;
+      document.getElementById('uptime').textContent = `${h}h ${m}m ${s}s`;
+    }
+
+    // Activity detection
+    const currentWorkerIds = new Set((d.workers || []).map(w => w.id));
+    for (const w of (d.workers || [])) {
+      if (!prevWorkerIds.has(w.id)) addActivity(`Worker <strong>${esc(w.name)}</strong> connected`);
+    }
+    for (const id of prevWorkerIds) {
+      if (!currentWorkerIds.has(id)) addActivity(`Worker disconnected`);
+    }
+    prevWorkerIds = currentWorkerIds;
+
+    for (const j of (d.jobs || [])) {
+      const prev = prevJobStatuses[j.id];
+      if (!prev && j.status === 'queued') addActivity(`Job <strong>${j.id.slice(0,8)}</strong> submitted (${esc(j.method)})`);
+      if (prev !== j.status) {
+        if (j.status === 'running') addActivity(`Job <strong>${j.id.slice(0,8)}</strong> started on worker`);
+        if (j.status === 'completed') addActivity(`Job <strong>${j.id.slice(0,8)}</strong> completed ✓`);
+        if (j.status === 'failed') addActivity(`Job <strong>${j.id.slice(0,8)}</strong> failed ✗`);
+      }
+      prevJobStatuses[j.id] = j.status;
+    }
+
+    renderWorkers(d.workers || []);
+    renderJobs(d.jobs || [], d.queue_length || 0);
+    renderResults(d);
+    renderActivity();
+
+    // Fetch results for running/completed jobs for chart
+    await fetchAndRenderChart(d.jobs || []);
+
+  } catch(e) {
+    document.getElementById('conn-dot').className = 'status-dot offline';
+    document.getElementById('conn-text').textContent = 'Disconnected';
+  }
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+function timeSince(iso) {
+  if (!iso) return '—';
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  return Math.floor(s/3600) + 'h ago';
+}
+
+function renderWorkers(workers) {
+  const el = document.getElementById('workers-body');
+  document.getElementById('worker-count').textContent = workers.length;
+  if (!workers.length) { el.innerHTML = '<div class="empty">No workers connected</div>'; return; }
+  let html = '<table><tr><th>Name</th><th>GPU</th><th>Status</th><th>Heartbeat</th></tr>';
+  for (const w of workers) {
+    const gpu = typeof w.gpu === 'object' ? (w.gpu.name || JSON.stringify(w.gpu)) : (w.gpu || '—');
+    const st = w.status || 'idle';
+    html += `<tr><td>${esc(w.name)}</td><td>${esc(gpu)}</td><td><span class="badge badge-${st}">${st}</span></td><td>${timeSince(w.last_heartbeat)}</td></tr>`;
+  }
+  html += '</table>';
+  el.innerHTML = html;
+}
+
+function renderJobs(jobs, queueLen) {
+  const el = document.getElementById('jobs-body');
+  document.getElementById('job-count').textContent = jobs.length;
+  const running = jobs.filter(j => j.status === 'running');
+  const queued = jobs.filter(j => j.status === 'queued');
+  const done = jobs.filter(j => ['completed','failed','timed_out'].includes(j.status));
+
+  let html = '';
+  if (running.length) {
+    html += '<div style="margin-bottom:12px"><strong style="color:var(--cyan)">▶ Active</strong></div>';
+    html += '<table><tr><th>ID</th><th>Method</th><th>Evals</th><th>Elapsed</th><th>Worker</th></tr>';
+    for (const j of running) {
+      const elapsed = j.started_at ? timeSince(j.started_at).replace(' ago','') : '—';
+      html += `<tr><td>${j.id.slice(0,8)}…</td><td>${esc(j.method)}</td><td>${j.max_evals}</td><td>${elapsed}</td><td>${(j.assigned_to||'').slice(0,8)}</td></tr>`;
+    }
+    html += '</table>';
+  }
+  if (queued.length) {
+    html += `<div style="margin:12px 0 8px"><strong style="color:var(--accent2)">⏳ Queue (${queued.length})</strong></div>`;
+    for (const j of queued) html += `<div style="font-size:.8125rem;color:var(--text2);padding:2px 0">${j.id.slice(0,8)}… — ${esc(j.method)} (${j.max_evals} evals)</div>`;
+  }
+  if (done.length) {
+    html += '<div style="margin:12px 0 8px"><strong style="color:var(--text2)">✓ Completed</strong></div>';
+    html += '<table><tr><th>ID</th><th>Method</th><th>Status</th><th>Actions</th></tr>';
+    for (const j of done) {
+      html += `<tr><td>${j.id.slice(0,8)}…</td><td>${esc(j.method)}</td><td><span class="badge badge-${j.status}">${j.status}</span></td><td><button class="btn-sm" onclick="downloadCSV('${j.id}')">CSV ↓</button></td></tr>`;
+    }
+    html += '</table>';
+  }
+  if (!running.length && !queued.length && !done.length) html = '<div class="empty">No jobs yet</div>';
+
+  html += `<div class="submit-form">
+    <select id="method-select"><option value="openai_es">OpenAI-ES</option><option value="cma_es">CMA-ES</option><option value="ga">GA</option><option value="pbt">PBT</option><option value="random_search">Random Search</option></select>
+    <input type="number" id="max-evals-input" value="100" min="1" max="10000" style="width:80px" placeholder="Evals">
+    <button onclick="submitJob()">+ Submit Job</button>
+  </div>`;
+  el.innerHTML = html;
+}
+
+function renderActivity() {
+  const el = document.getElementById('activity-log');
+  if (!activityLog.length) { el.innerHTML = '<div class="empty">Waiting for events…</div>'; return; }
+  el.innerHTML = activityLog.map(e => `<div class="entry"><span class="time">${e.time}</span><span class="msg">${e.msg}</span></div>`).join('');
+}
+
+// Chart
+const COLORS = ['#6366f1','#06b6d4','#22c55e','#eab308','#ef4444','#f97316','#ec4899'];
+let chartData = {}; // { jobId: { method, points: [{gen, score}] } }
+
+async function fetchAndRenderChart(jobs) {
+  const interesting = jobs.filter(j => j.status === 'running' || j.status === 'completed');
+  for (const j of interesting) {
+    try {
+      const r = await fetch(`/api/results/${j.id}`, { headers: { 'Authorization': 'Bearer ' + TOKEN } });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const points = (d.results || []).map(row => ({
+        gen: row.generation,
+        score: parseFloat(row.data.best_score || row.data.mean_score || row.data.score || 0)
+      })).sort((a,b) => a.gen - b.gen);
+      chartData[j.id] = { method: j.method, points };
+    } catch(e) {}
+  }
+  drawChart();
+  renderBestScores();
+}
+
+function renderBestScores() {
+  const el = document.getElementById('best-scores');
+  const methods = {};
+  for (const [id, d] of Object.entries(chartData)) {
+    if (!d.points.length) continue;
+    const best = Math.max(...d.points.map(p => p.score));
+    if (!methods[d.method] || best > methods[d.method]) methods[d.method] = best;
+  }
+  if (!Object.keys(methods).length) { el.innerHTML = ''; return; }
+  el.innerHTML = Object.entries(methods).map(([m, s]) => {
+    const solved = s > 200;
+    return `<div class="big-num"><div class="value ${solved?'solved':''}">${s.toFixed(1)}</div><div class="label">${esc(m)}${solved?' ✓ SOLVED':''}</div></div>`;
+  }).join('');
+}
+
+function drawChart() {
+  const canvas = document.getElementById('chart');
+  const container = document.getElementById('chart-container');
+  const dpr = window.devicePixelRatio || 1;
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+
+  // Gather all points
+  const allPoints = Object.values(chartData).flatMap(d => d.points);
+  if (!allPoints.length) {
+    ctx.fillStyle = '#8888a0';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No result data yet', w/2, h/2);
+    return;
+  }
+
+  const pad = { top: 20, right: 20, bottom: 40, left: 60 };
+  const pw = w - pad.left - pad.right;
+  const ph = h - pad.top - pad.bottom;
+
+  const maxGen = Math.max(...allPoints.map(p => p.gen), 1);
+  const maxScore = Math.max(...allPoints.map(p => p.score), 250);
+  const minScore = Math.min(...allPoints.map(p => p.score), 0);
+  const scoreRange = maxScore - minScore || 1;
+
+  const toX = gen => pad.left + (gen / maxGen) * pw;
+  const toY = score => pad.top + ph - ((score - minScore) / scoreRange) * ph;
+
+  // Grid
+  ctx.strokeStyle = '#2a2a3a';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= 5; i++) {
+    const y = pad.top + (ph / 5) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+    const val = maxScore - (scoreRange / 5) * i;
+    ctx.fillStyle = '#8888a0';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(val.toFixed(0), pad.left - 8, y + 4);
+  }
+
+  // X axis labels
+  ctx.textAlign = 'center';
+  for (let i = 0; i <= 4; i++) {
+    const gen = Math.round((maxGen / 4) * i);
+    const x = toX(gen);
+    ctx.fillStyle = '#8888a0';
+    ctx.fillText(gen, x, h - pad.bottom + 20);
+  }
+  ctx.fillText('Generation', w / 2, h - 4);
+
+  // Solved threshold line at 200
+  if (200 >= minScore && 200 <= maxScore) {
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = '#22c55e50';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, toY(200));
+    ctx.lineTo(w - pad.right, toY(200));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#22c55e80';
+    ctx.textAlign = 'left';
+    ctx.font = '10px sans-serif';
+    ctx.fillText('Solved (200)', pad.left + 4, toY(200) - 4);
+  }
+
+  // Lines
+  let ci = 0;
+  const legend = [];
+  for (const [id, d] of Object.entries(chartData)) {
+    if (!d.points.length) continue;
+    const color = COLORS[ci % COLORS.length];
+    legend.push({ method: d.method, color });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    d.points.forEach((p, i) => {
+      const x = toX(p.gen), y = toY(p.score);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Glow effect
+    ctx.strokeStyle = color + '30';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    d.points.forEach((p, i) => {
+      const x = toX(p.gen), y = toY(p.score);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    ci++;
+  }
+
+  // Legend
+  ctx.font = '11px sans-serif';
+  let lx = pad.left;
+  for (const l of legend) {
+    ctx.fillStyle = l.color;
+    ctx.fillRect(lx, pad.top - 14, 12, 3);
+    ctx.fillStyle = '#e0e0e8';
+    ctx.textAlign = 'left';
+    ctx.fillText(l.method, lx + 16, pad.top - 8);
+    lx += ctx.measureText(l.method).width + 32;
+  }
+}
+
+// Resize handler
+window.addEventListener('resize', drawChart);
+
+async function submitJob() {
+  const method = document.getElementById('method-select').value;
+  const maxEvals = parseInt(document.getElementById('max-evals-input').value) || 100;
+  try {
+    const r = await fetch('/api/jobs/submit', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ method, max_evals: maxEvals })
+    });
+    if (r.ok) {
+      addActivity(`Submitted new job: <strong>${esc(method)}</strong> (${maxEvals} evals)`);
+      refresh();
+    }
+  } catch(e) { addActivity('Failed to submit job'); }
+}
+
+async function downloadCSV(jobId) {
+  try {
+    const r = await fetch(`/api/results/${jobId}/csv`, { headers: { 'Authorization': 'Bearer ' + TOKEN } });
+    const text = await r.text();
+    const blob = new Blob([text], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `gaia-${jobId.slice(0,8)}.csv`;
+    a.click();
+  } catch(e) {}
+}
+</script>
+</body>
+</html>

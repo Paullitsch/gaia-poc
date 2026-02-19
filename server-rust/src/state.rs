@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
+use chrono::{DateTime, Utc};
 use tokio::sync::RwLock;
 
 use crate::models::*;
@@ -11,6 +12,7 @@ pub struct AppState {
     pub results: RwLock<Vec<ResultRow>>,
     pub auth_token: String,
     pub data_dir: String,
+    pub start_time: DateTime<Utc>,
 }
 
 impl AppState {
@@ -22,6 +24,7 @@ impl AppState {
             results: RwLock::new(Vec::new()),
             auth_token,
             data_dir,
+            start_time: Utc::now(),
         })
     }
 }

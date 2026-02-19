@@ -171,3 +171,24 @@ python -c "import torch; print(torch.cuda.is_available())"
 sudo apt install swig  # For gymnasium[box2d]
 pip install torch --index-url https://download.pytorch.org/whl/cu124
 ```
+
+---
+
+## 🐳 Docker Quick Start
+
+```bash
+# Set your auth token
+export GAIA_TOKEN=your-secret-token
+
+# Start the server
+docker-compose up -d
+
+# Dashboard: http://your-vps:7434
+# API: http://your-vps:7434/api/status
+
+# View logs
+docker-compose logs -f
+
+# Stop
+docker-compose down
+```

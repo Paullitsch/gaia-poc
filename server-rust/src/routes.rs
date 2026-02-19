@@ -1,6 +1,7 @@
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
+    response::Html,
     routing::{get, post},
     Json, Router,
 };
@@ -14,6 +15,7 @@ use crate::storage;
 
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
+        .route("/", get(dashboard))
         .route("/api/workers/register", post(register_worker))
         .route("/api/workers/heartbeat/{worker_id}", get(heartbeat))
         .route("/api/jobs/next/{worker_id}", get(next_job))
@@ -24,6 +26,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/results/{job_id}/csv", get(get_results_csv))
         .route("/api/status", get(status))
         .with_state(state)
+}
+
+async fn dashboard() -> Html<&'static str> {
+    Html(include_str!("../static/index.html"))
 }
 
 fn check_auth(state: &AppState, headers: &HeaderMap) -> Result<(), StatusCode> {
@@ -257,5 +263,6 @@ async fn status(
         "jobs": jobs.values().collect::<Vec<_>>(),
         "queue_length": queue.len(),
         "total_results": results.len(),
+        "server_start_time": state.start_time,
     })))
 }
