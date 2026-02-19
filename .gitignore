@@ -1,1 +1,42 @@
+# Python
 __pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets & config (use .example files)
+config.yaml
+.env
+*.key
+*.pem
+
+# Model weights (large files)
+*.npy
+*.pth
+*.pt
+*.onnx
+*.h5
+
+# Results (regeneratable, keep CSVs but not huge files)
+*.pkl
+
+# Logs
+*.log

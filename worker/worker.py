@@ -135,10 +135,15 @@ def run_job(job, device, streamer):
     start_time = time.time()
 
     try:
-        # Dynamic import of experiment module
+        # Dynamic import of experiment module (restricted to experiments/ directory)
         script_path = job.get("script")
         if script_path and os.path.exists(script_path):
-            spec = importlib.util.spec_from_file_location("experiment", script_path)
+            # Security: only allow loading scripts from the experiments/ directory
+            abs_script = os.path.abspath(script_path)
+            allowed_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "experiments"))
+            if not abs_script.startswith(allowed_dir):
+                raise ValueError(f"Security: script must be in experiments/ directory, got: {script_path}")
+            spec = importlib.util.spec_from_file_location("experiment", abs_script)
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
 
