@@ -1,0 +1,15 @@
+worker_name: "gpu-worker-1"
+device: "auto"          # "auto" detects GPU, or specify "cuda:0", "cpu"
+port: 8090
+
+experiments_dir: "../experiments"
+python_bin: "python3"
+job_timeout_secs: 3600
+
+# Authentication (optional, but recommended)
+auth_token: "change-me-to-a-secure-token"
+
+# VPS connection for streaming results
+vps:
+  url: "http://your-vps:8080"
+  auth_token: "vps-auth-token"

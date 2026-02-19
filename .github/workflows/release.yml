@@ -1,0 +1,134 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags (v0.1.0, v1.0.0, etc.)
+  workflow_dispatch:  # Manual trigger
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: gaia-worker
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: gaia-worker-linux-x86_64
+            ext: ""
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            artifact: gaia-worker-windows-x86_64
+            ext: ".exe"
+
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: worker-rust
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            worker-rust/target
+          key: ${{ matrix.target }}-cargo-${{ hashFiles('worker-rust/Cargo.lock') }}
+          restore-keys: ${{ matrix.target }}-cargo-
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary
+        shell: bash
+        run: |
+          src="target/${{ matrix.target }}/release/${BINARY_NAME}${{ matrix.ext }}"
+          dst="${{ matrix.artifact }}${{ matrix.ext }}"
+          cp "$src" "$dst"
+          echo "ASSET=$dst" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: worker-rust/${{ matrix.artifact }}${{ matrix.ext }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "GAIA Worker ${{ github.ref_name }}"
+          body: |
+            ## GAIA Worker ${{ github.ref_name }}
+            
+            ### Downloads
+            - **Linux (x86_64):** `gaia-worker-linux-x86_64`
+            - **Windows (x86_64):** `gaia-worker-windows-x86_64.exe`
+            
+            ### Quick Start
+            ```bash
+            # Linux
+            chmod +x gaia-worker-linux-x86_64
+            ./gaia-worker-linux-x86_64 --help
+            
+            # Windows
+            gaia-worker-windows-x86_64.exe --help
+            ```
+            
+            See [README](worker-rust/README.md) for full setup instructions.
+          files: |
+            artifacts/gaia-worker-linux-x86_64/gaia-worker-linux-x86_64
+            artifacts/gaia-worker-windows-x86_64/gaia-worker-windows-x86_64.exe
+          draft: false
+          prerelease: false
+
+  # Also build on PRs and pushes to main (without release)
+  ci:
+    if: "!startsWith(github.ref, 'refs/tags/v')"
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: worker-rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            worker-rust/target
+          key: ${{ matrix.os }}-cargo-ci-${{ hashFiles('worker-rust/Cargo.lock') }}
+          restore-keys: ${{ matrix.os }}-cargo-ci-
+      - name: Build
+        run: cargo build --release
+      - name: Run tests
+        run: cargo test
