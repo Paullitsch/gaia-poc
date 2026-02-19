@@ -11,6 +11,8 @@ import numpy as np
 import gymnasium as gym
 import time
 import json
+import multiprocessing as mp
+import os
 
 
 class FFPolicyNetwork:
@@ -130,12 +132,20 @@ def evaluate_with_ff_learning(policy, genome, n_episodes=5):
                     pos_good = np.mean(np.sum(pos_act ** 2, axis=1))
                     neg_good = np.mean(np.sum(neg_act ** 2, axis=1))
 
+                    # Get layer input (observations for layer 0, prev activations for layer 1)
+                    if layer_i == 0:
+                        pos_input = pos_batch
+                        neg_input = neg_batch
+                    else:
+                        pos_input = pos_prev
+                        neg_input = neg_prev
+
                     # FF update: increase goodness for positive, decrease for negative
                     lr = ff_lrs[layer_i] * plasticity[min(layer_i, len(plasticity) - 1)]
                     if pos_good < goodness_thresh[min(layer_i, len(goodness_thresh) - 1)]:
-                        W += lr * (pos_batch.T @ pos_act) / len(pos_batch)
+                        W += lr * (pos_input.T @ pos_act) / len(pos_batch)
                     if neg_good > goodness_thresh[min(layer_i, len(goodness_thresh) - 1)] * 0.5:
-                        W -= lr * (neg_batch.T @ neg_act) / len(neg_batch)
+                        W -= lr * (neg_input.T @ neg_act) / len(neg_batch)
 
                     working_weights[idx:idx + w_size] = W.flatten()
                     idx += w_size + b_size
@@ -148,6 +158,7 @@ def run(params=None, device="cpu", callback=None):
     params = params or {}
     max_evals = params.get("max_evals", 100000)
     eval_episodes = params.get("eval_episodes", 5)
+    n_workers = params.get("n_workers", min(os.cpu_count() or 1, 16))
 
     policy = FFPolicyNetwork()
     print(f"Hybrid CMA+FF: {policy.n_params} params ({policy.n_weight_params} weights + {policy.n_hyper} FF hyper)")
@@ -164,11 +175,12 @@ def run(params=None, device="cpu", callback=None):
 
     while total_evals < max_evals:
         candidates = cma.ask()
-        fitnesses = []
-        for c in candidates:
-            f = evaluate_with_ff_learning(policy, c, n_episodes=eval_episodes)
-            fitnesses.append(f)
-        fitnesses = np.array(fitnesses)
+        if n_workers > 1:
+            with mp.Pool(n_workers) as pool:
+                fitnesses = pool.starmap(evaluate_with_ff_learning, [(policy, c, eval_episodes) for c in candidates])
+            fitnesses = np.array(fitnesses)
+        else:
+            fitnesses = np.array([evaluate_with_ff_learning(policy, c, eval_episodes) for c in candidates])
         total_evals += len(candidates) * eval_episodes
 
         cma.tell(candidates, fitnesses)
