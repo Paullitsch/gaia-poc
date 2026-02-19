@@ -135,3 +135,50 @@ Statt dem sparse LunarLander-Reward bekommt der Agent dichteres Feedback:
 ### GAIA-Ergebnisse
 
 **Champion der Phase 7:** +274.0 — höchster Score aller GAIA-Experimente.
+
+## Neuromodulated CMA-ES (Phase 8)
+
+**Biologisch inspiriert: Evolution + lokales Lernen.**
+
+Kombiniert CMA-ES mit neuromodulatorischer Plastizität:
+
+### Architektur
+
+```
+Observation ──┬──► Main Network (64→32→4) ──► Action
+              │
+              └──► Mod Pathway (→16→1) ──► Modulation Signal (dopamine-like)
+```
+
+### Lernmechanismus
+
+1. **Während Episode:** Hebbian-Traces akkumulieren (pre × post × reward × modulation)
+2. **Nach Episode:** Traces werden auf Gewichte angewandt (gesteuert durch evolvierte Plastizitätsraten)
+3. **Über Generationen:** CMA-ES optimiert alle Parameter inkl. Modulations-Gewichte und Plastizitätsraten
+
+### Biologische Plausibilität
+
+| Aspekt | Biologisch | GAIA Neuromod |
+|--------|------------|---------------|
+| Lernregel | Hebbian (fire together, wire together) | ✅ Outer product traces |
+| Neuromodulation | Dopamin moduliert Plastizität | ✅ Mod pathway gates learning |
+| Reward Signal | Dopaminergic reward prediction | ✅ Episode reward scales traces |
+| Meta-Lernen | Evolution formt Lernfähigkeit | ✅ CMA-ES optimiert plasticity rates |
+
+## Population-Based Training (Phase 8)
+
+**Multiple CMA-ES Instanzen mit Hyperparameter-Evolution.**
+
+PBT ist GAIA's distributed-native Ansatz:
+
+```
+Member 0 (σ=0.1) ──► CMA-ES ──► score: +180
+Member 1 (σ=0.3) ──► CMA-ES ──► score: +220  ← BEST
+Member 2 (σ=0.5) ──► CMA-ES ──► score: +150
+Member 3 (σ=0.8) ──► CMA-ES ──► score: -50   ← WORST
+
+Exploit: Member 3 ← copy weights from Member 1
+Explore: Member 3 σ *= random(0.8, 1.2)
+```
+
+Besonders geeignet für GAIA: jeder Member könnte auf einem anderen Worker laufen.
