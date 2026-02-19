@@ -1,103 +1,72 @@
-# Phase 8: GPU-Accelerated Experiments
+# Phase 8: BipedalWalker + Auto-Update Infrastruktur
 
-## Motivation
+## Status: Gestartet 🚀
 
-Phase 7 bewies: gradientenfreie Methoden lösen LunarLander mit genug Compute. Phase 8 testet die Grenzen:
+Phase 8 begann am 19. Februar 2026. Zwei Hauptstränge:
 
-- **Größere Netzwerke:** Wo bricht CMA-ES ein?
-- **GPU-beschleunigte Evaluation:** Vectorized Environments auf CUDA
-- **Komplexere Umgebungen:** BipedalWalker, Atari
-- **Multi-Worker-Skalierung:** Linearer Speedup?
+1. **BipedalWalker-v3** — der nächste Schwierigkeitsgrad nach LunarLander
+2. **Self-Updating Infrastructure** — Worker aktualisieren sich selbst
 
-## GPU-Strategie
+## BipedalWalker-v3: Die Herausforderung
 
-LunarLander ist CPU-bound (Box2D Physik). Für echte GPU-Nutzung brauchen wir:
+| Aspekt | LunarLander (Phase 7) | BipedalWalker (Phase 8) |
+|--------|----------------------|------------------------|
+| Action Space | Diskret (4) | **Kontinuierlich (4D)** |
+| Observation | 8D | **24D** (Lidar, Gelenke, Kontakt) |
+| Solved Threshold | 200 | **300** |
+| Netzwerk | 2.788 Params | **11.588 Params** (4x) |
+| Architektur | 8→64→32→4 | **24→128→64→4** |
+| Output | argmax (diskret) | **tanh (continuous [-1,1])** |
+| Max Steps | 1.000 | **1.600** |
 
-### Option 1: Brax (JAX-basiert)
-Komplett auf GPU simulierte Physik-Environments. 1000x Speedup möglich.
-```
-pip install brax jax[cuda]
-```
-**Pro:** Massiver Speedup
-**Con:** Andere Environments als Gymnasium
+BipedalWalker erfordert koordinierte Steuerung von 4 Gelenkmotoren (Hüfte + Knie × 2 Beine) für aufrechtes Gehen über Terrain.
 
-### Option 2: EnvPool
-GPU-beschleunigter Environment-Pool, kompatibel mit Gymnasium.
-```
-pip install envpool
-```
-**Pro:** Gymnasium-kompatibel
-**Con:** Nicht alle Envs unterstützt
+## Experimente
 
-### Option 3: Vectorized Gymnasium
-Multiple Envs parallel auf CPU, Neural Network Inference auf GPU (PyTorch).
-```python
-envs = gymnasium.vector.AsyncVectorEnv([make_env] * 64)
-# Batch-Forward-Pass auf GPU
-actions = policy.batch_act(obs_batch.to('cuda'))
-```
-**Pro:** Einfach zu implementieren
-**Con:** Environment-Simulation bleibt auf CPU
-
-## Experimentplan
-
-### Experiment 8.1: Netzwerk-Skalierung auf LunarLander
-
-CMA-ES mit verschiedenen Netzwerkgrößen:
-
-| Netzwerk | Parameter | Population | Hypothese |
-|----------|-----------|-----------|-----------|
-| 8→32→16→4 | 756 | 17 | Leicht lösbar |
-| 8→64→32→4 | 2.788 | 27 | Gelöst (Phase 7) |
-| 8→128→64→4 | 9.604 | 35 | Grenzbereich |
-| 8→256→128→4 | 36.228 | 42 | CMA-ES degradiert? |
-| 8→512→256→4 | 140.804 | 50 | Zu groß für CMA-ES? |
-
-**Erwartung:** CMA-ES performt gut bis ~10K Parameter, dann übernimmt OpenAI-ES.
-
-### Experiment 8.2: BipedalWalker-v3
-
-- 24 Observations, 4 continuous Actions
-- Deutlich schwerer als LunarLander
-- Netzwerk: 24→64→32→4 (2.276 Parameter)
+### 8.1: BipedalWalker CMA-ES + Curriculum
+- CMA-ES mit shaped Rewards (Vorwärtsbewegung, Aufrechthaltung)
+- Difficulty ramp von 0.3 → 1.0
 - Budget: 500K Evaluierungen
 
-### Experiment 8.3: Atari (Pong)
+### 8.2: BipedalWalker OpenAI-ES
+- Antithetisches Sampling, Population 64
+- Budget: 500K Evaluierungen
 
-- Pixel-Input (210×160×3) → CNN → Policy
-- Netzwerk: ~100K+ Parameter
-- Braucht GPU für CNN-Inference
-- Budget: 1M+ Evaluierungen
+### 8.3: BipedalWalker CMA-ES (Kontrollgruppe)
+- Reines CMA-ES ohne Reward Shaping
+- Budget: 500K Evaluierungen
 
-### Experiment 8.4: Multi-Worker-Skalierung
+## Auto-Update System
 
-- 1, 2, 4, 8 Workers parallel
-- Messen: Wallclock-Zeit bis Lösung
-- Erwartung: ~linear bei unabhängiger Evaluation
+### v0.4.0: Self-Updating Binary
+- Server hostet Release-Binaries über `/releases/` Endpoints
+- Worker prüft bei jedem Heartbeat auf neue Versionen
+- SHA-256 Verifizierung, Self-Replace + Restart
 
-### Experiment 8.5: Neuromod Revisited
+### v0.4.1: Experiment Sync
+- `experiments.tar.gz` im Release gebundelt
+- Automatische Synchronisation beim Start und nach Updates
+- Kein manuelles `git pull` mehr nötig
 
-Phase 5 Neuromodulation mit 100K+ Evaluierungen:
-- War das Compute-Budget (10K Evals) der Bottleneck?
-- Kann Neuromod CMA-ES schlagen bei gleichem Compute?
+### v0.4.2: Fix Self-Update
+- Temp-File + Rename statt direktem Überschreiben
 
-## Infrastruktur-Anforderungen
+### v0.4.3: Fix Working Directory
+- Worker nutzt parent von experiments_dir als Working Directory
 
-| Experiment | GPU | CPU Cores | RAM | Geschätzte Zeit |
-|-----------|-----|-----------|-----|----------------|
-| 8.1 (klein) | Optional | 8+ | 8 GB | 1-2h |
-| 8.1 (groß) | Optional | 16+ | 16 GB | 4-8h |
-| 8.2 | Optional | 16+ | 16 GB | 4-12h |
-| 8.3 | **Nötig** | 16+ | 32 GB | 12-48h |
-| 8.4 | Multi-GPU | 32+ | 32 GB | 2-4h |
-| 8.5 | Optional | 8+ | 8 GB | 2-4h |
+## Release-API
 
-## Erfolgsmetriken
+| Endpoint | Auth | Beschreibung |
+|----------|------|-------------|
+| `GET /releases/latest` | Nein | Neueste Version (JSON) |
+| `GET /releases/{tag}` | Nein | Version nach Tag |
+| `GET /releases/{tag}/{file}` | Nein | Binary download |
+| `POST /api/releases/upload` | Ja | Binary hochladen |
+| `GET /api/releases` | Ja | Alle Releases listen |
 
-| Experiment | Erfolgskriterium |
-|-----------|-----------------|
-| 8.1 | Bestimme N_max wo CMA-ES noch funktioniert |
-| 8.2 | BipedalWalker Score > 300 (gelöst) |
-| 8.3 | Atari Pong Score > 0 (besser als Random) |
-| 8.4 | >0.7x linearer Speedup |
-| 8.5 | Neuromod vs CMA-ES bei gleichem Budget |
+## Nächste Schritte
+
+- [ ] BipedalWalker Ergebnisse analysieren
+- [ ] Netzwerk-Skalierung auf LunarLander (Experiment 8.4)
+- [ ] Multi-Worker-Skalierung testen
+- [ ] Neuromodulation mit höherem Budget revisiten

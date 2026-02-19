@@ -2,7 +2,7 @@
 
 > Gradientenfreie Optimierung als Alternative zur Backpropagation
 
-**Status:** Phase 7 abgeschlossen — LunarLander GELÖST (+274.0) ✅
+**Status:** Phase 8 gestartet — BipedalWalker + Auto-Update Infrastruktur 🚀
 
 ---
 
@@ -34,7 +34,8 @@ Beweisen, dass neuronale Netze **ohne Backpropagation** trainiert werden können
 - [[Deployment]] — Docker, Binaries, Setup
 
 ### Roadmap
-- [[Phase 8 Plan]] — GPU-Accelerated Experiments
+- [[Phase 8 Plan]] — BipedalWalker + Auto-Update Infrastruktur
+- [[Auto-Update System]] — Self-Updating Worker (v0.4.x)
 - [[Scaling Hypothesen]] — Wo liegen die Grenzen?
 
 ---

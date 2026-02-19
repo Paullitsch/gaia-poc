@@ -11,6 +11,7 @@
 | 5 | Neuromodulation | LunarLander | +80.0 | 🟡 Durchbruch |
 | 6 | Deep Neuromod + PPO | LunarLander | +57.8 / +264.8 | 🟡 PPO gewinnt |
 | 7 | CMA-ES + Compute | LunarLander | **+274.0** | ✅ **GELÖST** |
+| 8 | CMA-ES/ES + Curriculum | BipedalWalker | *läuft* | 🔬 In Arbeit |
 
 ## Phase 1: CartPole (722 Parameter)
 
@@ -81,3 +82,28 @@ Score
         10 20 30 40 50 60 70 80 90
                   Generation
 ```
+
+## Phase 8: BipedalWalker (11.588 Parameter) — In Arbeit 🔬
+
+**Frage:** Skalieren gradientenfreie Methoden auf kontinuierliche Kontrolle?
+
+BipedalWalker-v3 ist ein qualitativ anderes Problem als LunarLander:
+- **Continuous Actions:** 4 Gelenkmotoren mit Werten in [-1, 1]
+- **Höhere Dimensionalität:** 24D Observation, 4D Action
+- **Koordination:** Zwei Beine müssen synchronisiert werden
+- **Solved Threshold:** 300 über 100 Episoden
+
+### Methoden
+
+| Methode | Netzwerk | Parameter | Status |
+|---------|----------|-----------|--------|
+| CMA-ES + Curriculum | 24→128→64→4 | 11.588 | Queued |
+| OpenAI-ES | 24→128→64→4 | 11.588 | Queued |
+| CMA-ES (ohne Curriculum) | 24→128→64→4 | 11.588 | Queued |
+
+### Infrastruktur-Erweiterungen
+
+Phase 8 brachte auch signifikante Infrastruktur-Verbesserungen:
+- **Auto-Update System** (v0.4.0): Worker aktualisiert sich selbst
+- **Experiment-Sync** (v0.4.1): Neue Experiments automatisch verteilt
+- **Release-Management**: Server hostet Binaries + Experiments

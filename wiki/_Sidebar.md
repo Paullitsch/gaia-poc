@@ -14,4 +14,5 @@
 
 **Roadmap**
 - [[Phase 8 Plan]]
+- [[Auto-Update System]]
 - [[Scaling Hypothesen]]
