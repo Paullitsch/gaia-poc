@@ -260,15 +260,15 @@ Für LunarLander (2.788 Parameter) braucht CMA-ES ~100K Evaluierungen. PPO brauc
 
 ---
 
-## 6. Phase 8: GPU-Accelerated Experiments (geplant)
+## 6. Phase 8: BipedalWalker + Auto-Update Infrastruktur (gestartet)
 
 ### 6.1 Motivation
 
-Phase 7 bewies die grundsätzliche Machbarkeit. Phase 8 wird die Grenzen austesten:
-- **Größere Netzwerke** (10K-100K Parameter) — wo bricht CMA-ES ein?
-- **GPU-beschleunigte Evaluation** — Vectorized Environments auf CUDA
-- **Multi-Worker-Skalierung** — mehrere GPUs parallel
-- **Komplexere Umgebungen** — BipedalWalker, Atari (Pong, Breakout)
+Phase 7 bewies die grundsätzliche Machbarkeit. Phase 8 testet die Grenzen:
+- **Komplexere Umgebung:** BipedalWalker-v3 (continuous actions, 24D Observation, 4D Action)
+- **Größere Netzwerke** (11.588 Parameter — 4x Phase 7) — skaliert CMA-ES?
+- **Self-Updating Infrastructure** — Worker aktualisieren sich selbst
+- **Experiment-Sync** — neue Experimente automatisch an Worker verteilt
 
 ### 6.2 GPU-Strategie
 
@@ -296,31 +296,51 @@ LunarLander selbst ist CPU-bound (Box2D Physik). Für GPU-Nutzung:
 └────────────────────────────────────────────┘
 ```
 
-### 6.3 Scaling-Hypothesen
+### 6.3 BipedalWalker-v3: Die Herausforderung
 
-| Parameter | Phase 7 | Phase 8 Ziel | Hypothese |
-|-----------|---------|-------------|-----------|
-| Netzwerk | 2.788 | 10K-100K | CMA-ES degradiert ab ~10K, OpenAI-ES skaliert besser |
-| Evaluierungen | 100K | 1M+ | GPU-Beschleunigung ermöglicht 10x mehr Evals |
-| Umgebung | LunarLander | BipedalWalker, Atari | Höhere Dimensionalität erfordert mehr Evals |
-| Workers | 1 | 4+ | Linearer Speedup bei unabhängiger Evaluation |
+| Aspekt | LunarLander (Phase 7) | BipedalWalker (Phase 8) |
+|--------|----------------------|------------------------|
+| Action Space | Diskret (4) | **Kontinuierlich (4D)** |
+| Observation | 8D | **24D** (Lidar, Gelenke, Kontakt) |
+| Solved Threshold | 200 | **300** |
+| Netzwerk | 2.788 Params | **11.588 Params** (4x) |
+| Architektur | 8→64→32→4 | **24→128→64→4** |
+| Output | argmax (diskret) | **tanh (continuous [-1,1])** |
+| Max Steps | 1.000 | **1.600** |
+| Schwierigkeit | Landen | **Koordinierte Lokomotion** |
 
-### 6.4 Experimentplan Phase 8
+BipedalWalker erfordert koordinierte Steuerung von 4 Gelenkmotoren (Hüfte + Knie × 2 Beine) für aufrechtes Gehen über unebenes Terrain. Dies ist ein qualitativ anderer Test als LunarLander.
 
-**Experiment 8.1: Netzwerk-Skalierung**
+### 6.4 Infrastruktur-Erweiterungen (Phase 8)
+
+**Auto-Update System (v0.4.0):**
+- Server hostet Release-Binaries über `/releases/` Endpoints
+- Worker prüft bei jedem Heartbeat auf neue Versionen
+- Self-Replace mit SHA-256 Verifizierung + automatischer Restart
+- `--auto-update` Flag (opt-in)
+
+**Experiment-Sync (v0.4.1):**
+- Experiment-Files als `experiments.tar.gz` im Release gebundelt
+- Worker synchronisiert automatisch beim Start/Update
+- Kein manuelles `git pull` mehr nötig
+- Ermöglicht kontinuierliche Entwicklung ohne Worker-Downtime
+
+### 6.5 Experimentplan Phase 8
+
+**Experiment 8.1: BipedalWalker CMA-ES + Curriculum**
+CMA-ES mit shaped Rewards (Vorwärtsbewegung, Aufrechthaltung). Budget: 500K Evals.
+
+**Experiment 8.2: BipedalWalker OpenAI-ES**
+Antithetisches Sampling, 64er Population. Bessere Skalierung bei 11K Params?
+
+**Experiment 8.3: BipedalWalker CMA-ES (ohne Curriculum)**
+Kontrollexperiment: reines CMA-ES ohne Reward Shaping.
+
+**Experiment 8.4: Netzwerk-Skalierung**
 CMA-ES auf LunarLander mit 10K, 50K, 100K Parametern. Wo bricht die Performance ein?
 
-**Experiment 8.2: GPU-Vectorized Evaluation**
-Brax/EnvPool für GPU-native Environment-Simulation. Erwarteter Speedup: 100-1000x pro Evaluation.
-
-**Experiment 8.3: BipedalWalker-v3**
-Kontinuierliche Kontrolle, 24 Observations, 4 Actions (continuous). Deutlich schwerer als LunarLander.
-
-**Experiment 8.4: Multi-Worker-Skalierung**
+**Experiment 8.5: Multi-Worker-Skalierung**
 2, 4, 8 Workers parallel. Messen: tatsächlicher Speedup vs. Kommunikations-Overhead.
-
-**Experiment 8.5: Neuromodulation + Compute**
-Phase 5 Neuromodulation mit 100K+ Evaluierungen. Kann sie CMA-ES schlagen wenn der Compute gleich ist?
 
 ---
 
