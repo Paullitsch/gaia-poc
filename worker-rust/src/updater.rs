@@ -77,18 +77,20 @@ pub async fn self_update(
     let current_exe = std::env::current_exe().context("Cannot determine current exe path")?;
     let backup = current_exe.with_extension("bak");
 
-    // On Unix: rename current → .bak, write new, chmod +x
+    // On Unix: write to temp, rename old → .bak, rename new → current
     #[cfg(unix)]
     {
-        // rename current binary to backup
-        if let Err(e) = tokio::fs::rename(&current_exe, &backup).await {
-            tracing::warn!("Could not rename current binary: {e}, trying direct overwrite");
-        }
-        tokio::fs::write(&current_exe, &bytes).await.context("Failed to write new binary")?;
-        // chmod +x
+        let tmp_path = current_exe.with_extension("new");
+        tokio::fs::write(&tmp_path, &bytes).await.context("Failed to write new binary to temp")?;
+        // chmod +x on temp
         use std::os::unix::fs::PermissionsExt;
         let perms = std::fs::Permissions::from_mode(0o755);
-        std::fs::set_permissions(&current_exe, perms)?;
+        std::fs::set_permissions(&tmp_path, perms)?;
+        // rename current → .bak (ok to fail if first run)
+        let _ = tokio::fs::remove_file(&backup).await;
+        let _ = tokio::fs::rename(&current_exe, &backup).await;
+        // rename new → current
+        tokio::fs::rename(&tmp_path, &current_exe).await.context("Failed to move new binary into place")?;
     }
 
     #[cfg(windows)]

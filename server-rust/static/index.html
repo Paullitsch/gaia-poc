@@ -297,7 +297,7 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
 // ======= POLLING =======
 function startPolling(){refresh();setInterval(refresh,3000)}
 
-function addLog(m){activityLog.unshift({time:new Date().toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}),msg:m});if(activityLog.length>MAX_LOG)activityLog.pop()}
+function addLog(m,ts){const d=ts?new Date(ts):new Date();activityLog.unshift({ts:d.getTime(),time:d.toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}),msg:m});activityLog.sort((a,b)=>b.ts-a.ts);if(activityLog.length>MAX_LOG)activityLog.pop()}
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
 function timeSince(iso){if(!iso)return'—';const s=Math.floor((Date.now()-new Date(iso).getTime())/1000);if(s<0)return'now';if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m';if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'d'}
 function dur(a,b){if(!a)return'—';const s=Math.floor(((b?new Date(b):new Date).getTime()-new Date(a).getTime())/1000);if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m'+s%60+'s';return Math.floor(s/3600)+'h'+Math.floor(s%3600/60)+'m'}
@@ -314,10 +314,10 @@ async function refresh(){
 
     // Activity tracking
     const cw=new Set((d.workers||[]).map(w=>w.id));
-    for(const w of d.workers||[])if(!prevWorkerIds.has(w.id))addLog('🟢 <b>'+esc(w.name)+'</b> connected');
+    for(const w of d.workers||[])if(!prevWorkerIds.has(w.id))addLog('🟢 <b>'+esc(w.name)+'</b> connected',w.registered_at);
     for(const id of prevWorkerIds)if(!cw.has(id))addLog('🔴 Worker disconnected');
     prevWorkerIds=cw;
-    for(const j of d.jobs||[]){const p=prevJobStatuses[j.id];if(!p&&j.status==='queued')addLog('📤 Job <b>'+j.id.slice(0,8)+'</b> queued ('+esc(j.method)+')');if(p!==j.status){if(j.status==='running')addLog('▶️ Job <b>'+j.id.slice(0,8)+'</b> running');if(j.status==='completed')addLog('✅ Job <b>'+j.id.slice(0,8)+'</b> completed');if(j.status==='failed')addLog('❌ Job <b>'+j.id.slice(0,8)+'</b> failed')}prevJobStatuses[j.id]=j.status}
+    for(const j of d.jobs||[]){const p=prevJobStatuses[j.id];if(!p&&j.status==='queued')addLog('📤 Job <b>'+j.id.slice(0,8)+'</b> queued ('+esc(j.method)+')',j.created_at);if(p!==j.status){if(j.status==='running')addLog('▶️ Job <b>'+j.id.slice(0,8)+'</b> running',j.started_at);if(j.status==='completed')addLog('✅ Job <b>'+j.id.slice(0,8)+'</b> completed',j.completed_at);if(j.status==='failed')addLog('❌ Job <b>'+j.id.slice(0,8)+'</b> failed',j.completed_at)}prevJobStatuses[j.id]=j.status}
 
     renderWorkers(d.workers||[]);
     renderJobs(d.jobs||[]);
