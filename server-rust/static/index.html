@@ -13,30 +13,35 @@
   --orange:#f97316;--cyan:#06b6d4;
 }
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;line-height:1.5;min-height:100vh}
-a{color:var(--accent2)}
 
-/* Auth overlay */
+/* Auth */
 #auth-overlay{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
 #auth-overlay.hidden{display:none}
-#auth-overlay h1{font-size:2rem;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+#auth-overlay h1{font-size:2rem;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 #auth-overlay input{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:1rem;width:300px;outline:none}
 #auth-overlay input:focus{border-color:var(--accent)}
 #auth-overlay button{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 32px;font-size:1rem;cursor:pointer}
-#auth-overlay button:hover{background:var(--accent2)}
 #auth-error{color:var(--red);font-size:.875rem;min-height:1.25rem}
 
-/* Layout */
-.container{max-width:1400px;margin:0 auto;padding:16px}
+.container{max-width:1440px;margin:0 auto;padding:16px}
 
 /* Header */
-header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+header{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
 .logo{display:flex;align-items:center;gap:10px}
-.logo svg{width:28px;height:28px}
-.logo h1{font-size:1.125rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.header-right{display:flex;align-items:center;gap:16px;font-size:.8125rem;color:var(--text2)}
-.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
-.status-dot.online{background:var(--green);box-shadow:0 0 8px var(--green)}
-.status-dot.offline{background:var(--red);box-shadow:0 0 8px var(--red)}
+.logo svg{width:26px;height:26px}
+.logo h1{font-size:1.05rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header-right{display:flex;align-items:center;gap:16px;font-size:.8rem;color:var(--text2)}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px}
+.dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.off{background:var(--red)}
+
+/* Tabs */
+.tabs{display:flex;gap:0;margin-top:16px;border-bottom:1px solid var(--border)}
+.tab{padding:8px 20px;font-size:.8125rem;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all .2s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent2);border-bottom-color:var(--accent)}
+.tab-content{display:none}
+.tab-content.active{display:block}
 
 /* Grid */
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
@@ -45,94 +50,76 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
 
 /* Cards */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
-.card-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.card-header h2{font-size:.8125rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);font-weight:600}
-.card-body{padding:14px 18px}
+.card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);font-weight:600}
+.card-body{padding:14px 16px}
 
 /* Badges */
-.badge{display:inline-block;padding:2px 10px;border-radius:9999px;font-size:.75rem;font-weight:600;text-transform:uppercase}
-.badge-idle{background:rgba(34,197,94,.15);color:var(--green)}
-.badge-busy{background:rgba(234,179,8,.15);color:var(--yellow)}
-.badge-offline{background:rgba(239,68,68,.15);color:var(--red)}
-.badge-queued{background:rgba(99,102,241,.15);color:var(--accent2)}
-.badge-running{background:rgba(6,182,212,.15);color:var(--cyan)}
-.badge-completed{background:rgba(34,197,94,.15);color:var(--green)}
-.badge-failed{background:rgba(239,68,68,.15);color:var(--red)}
-.badge-timed_out{background:rgba(249,115,22,.15);color:var(--orange)}
+.badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:.7rem;font-weight:600;text-transform:uppercase}
+.badge-idle{background:rgba(34,197,94,.12);color:var(--green)}
+.badge-busy{background:rgba(234,179,8,.12);color:var(--yellow)}
+.badge-offline{background:rgba(239,68,68,.12);color:var(--red)}
+.badge-queued{background:rgba(99,102,241,.12);color:var(--accent2)}
+.badge-running{background:rgba(6,182,212,.12);color:var(--cyan)}
+.badge-completed{background:rgba(34,197,94,.12);color:var(--green)}
+.badge-failed{background:rgba(239,68,68,.12);color:var(--red)}
+.badge-timed_out{background:rgba(249,115,22,.12);color:var(--orange)}
 
 /* Worker cards */
-.worker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
-.worker-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;transition:border-color .2s}
-.worker-card:hover{border-color:var(--accent)}
+.worker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.worker-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
 .worker-card.busy{border-left:3px solid var(--cyan)}
 .worker-card.idle{border-left:3px solid var(--green)}
-.worker-card.offline{border-left:3px solid var(--red);opacity:.6}
-.worker-name{font-weight:600;font-size:.9375rem;display:flex;align-items:center;justify-content:space-between}
-.worker-details{margin-top:8px;font-size:.8125rem;color:var(--text2);display:grid;grid-template-columns:auto 1fr;gap:4px 12px}
-.worker-details .label{color:var(--text2)}
-.worker-details .value{color:var(--text)}
-.worker-pulse{width:8px;height:8px;border-radius:50%;display:inline-block}
-.worker-pulse.active{background:var(--green);animation:pulse 2s infinite}
-.worker-pulse.stale{background:var(--yellow)}
-.worker-pulse.dead{background:var(--red)}
+.worker-name{font-weight:600;font-size:.875rem;display:flex;align-items:center;justify-content:space-between}
+.worker-details{margin-top:6px;font-size:.75rem;color:var(--text2);display:grid;grid-template-columns:auto 1fr;gap:3px 10px}
+.worker-details .v{color:var(--text)}
+.pulse{width:7px;height:7px;border-radius:50%;display:inline-block}
+.pulse.live{background:var(--green);animation:pulse 2s infinite}
+.pulse.stale{background:var(--yellow)}
+.pulse.dead{background:var(--red)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-/* Job list */
-.job-section-title{font-size:.8125rem;font-weight:600;color:var(--text2);margin:12px 0 6px;display:flex;align-items:center;gap:6px}
-.job-section-title:first-child{margin-top:0}
-.job-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2);border-radius:8px;margin-bottom:6px;font-size:.8125rem}
-.job-item .job-left{display:flex;align-items:center;gap:10px}
-.job-item .job-id{font-family:'SF Mono',Consolas,monospace;color:var(--text2)}
-.job-item .job-method{font-weight:500}
-.job-progress{display:flex;align-items:center;gap:8px}
-.progress-bar{width:80px;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
-.progress-bar .fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--cyan));transition:width .3s}
-
-/* Tables (fallback) */
-table{width:100%;border-collapse:collapse;font-size:.8125rem}
-th{text-align:left;color:var(--text2);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--border)}
-td{padding:6px 8px;border-bottom:1px solid rgba(42,42,58,.5)}
-tr:last-child td{border-bottom:none}
+/* Job items */
+.job-section{font-size:.75rem;font-weight:600;color:var(--text2);margin:10px 0 4px;display:flex;align-items:center;gap:6px}
+.job-section:first-child{margin-top:0}
+.job-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:7px;margin-bottom:5px;font-size:.8rem}
+.job-left{display:flex;align-items:center;gap:8px}
+.job-id{font-family:monospace;color:var(--text2);font-size:.75rem}
 
 /* Big numbers */
-.big-numbers{display:flex;gap:12px;flex-wrap:wrap}
-.big-num{flex:1;min-width:110px;background:var(--surface2);border-radius:8px;padding:14px;text-align:center}
-.big-num .value{font-size:1.75rem;font-weight:700;font-variant-numeric:tabular-nums}
-.big-num .label{font-size:.6875rem;color:var(--text2);margin-top:4px;text-transform:uppercase}
+.big-numbers{display:flex;gap:10px;flex-wrap:wrap}
+.big-num{flex:1;min-width:100px;background:var(--surface2);border-radius:8px;padding:12px;text-align:center}
+.big-num .val{font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums}
+.big-num .lbl{font-size:.65rem;color:var(--text2);margin-top:2px;text-transform:uppercase}
 .solved{color:var(--green)!important}
 
+/* Charts */
+.chart-wrap{position:relative;width:100%;height:320px;margin-top:10px}
+.chart-wrap canvas{width:100%!important;height:100%!important}
+
 /* Submit form */
-.submit-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
-.submit-form select,.submit-form input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;color:var(--text);font-size:.8125rem;outline:none}
-.submit-form select:focus,.submit-form input:focus{border-color:var(--accent)}
-.submit-form button{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 16px;cursor:pointer;font-size:.8125rem;font-weight:500;transition:background .2s}
+.submit-form{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.submit-form select,.submit-form input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:.8rem;outline:none}
+.submit-form button{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:.8rem;font-weight:500}
 .submit-form button:hover{background:var(--accent2)}
-.submit-form button:active{transform:scale(.97)}
 
-/* Activity log */
-.activity-log{max-height:200px;overflow-y:auto;font-size:.75rem;font-family:'SF Mono',Consolas,monospace}
-.activity-log .entry{padding:3px 0;border-bottom:1px solid rgba(42,42,58,.3);display:flex;gap:8px}
-.activity-log .time{color:var(--text2);white-space:nowrap;min-width:65px}
-.activity-log .msg{color:var(--text)}
-
-/* Chart */
-#chart-container{position:relative;width:100%;height:280px}
-#chart-container canvas{width:100%!important;height:100%!important}
-
-/* Buttons */
-.btn-sm{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 10px;color:var(--text2);cursor:pointer;font-size:.6875rem;transition:all .2s}
+/* Toolbar */
+.toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.btn-sm{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;color:var(--text2);cursor:pointer;font-size:.7rem}
 .btn-sm:hover{background:var(--border);color:var(--text)}
+.btn-sm.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
-/* Empty state */
-.empty{color:var(--text2);text-align:center;padding:20px;font-size:.8125rem}
+/* Activity */
+.activity-log{max-height:180px;overflow-y:auto;font-size:.7rem;font-family:monospace}
+.activity-log .entry{padding:2px 0;border-bottom:1px solid rgba(42,42,58,.3);display:flex;gap:8px}
+.activity-log .time{color:var(--text2);min-width:60px}
+
+/* Empty */
+.empty{color:var(--text2);text-align:center;padding:20px;font-size:.8rem}
 
 /* Scrollbar */
-::-webkit-scrollbar{width:5px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-
-/* Tooltip */
-.tooltip{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:.75rem;pointer-events:none;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 </style>
 </head>
 <body>
@@ -151,471 +138,637 @@ tr:last-child td{border-bottom:none}
     <h1>GAIA Mission Control</h1>
   </div>
   <div class="header-right">
-    <span>Uptime: <strong id="uptime">—</strong></span>
-    <span><span class="status-dot" id="conn-dot"></span><span id="conn-text">Connecting…</span></span>
+    <span>⏱ <strong id="uptime">—</strong></span>
+    <span><span class="dot" id="conn-dot"></span><span id="conn-text">…</span></span>
   </div>
 </header>
 
 <div class="container">
-  <div class="grid">
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" data-tab="overview">Overview</div>
+    <div class="tab" data-tab="charts">Charts & Analysis</div>
+    <div class="tab" data-tab="export">Export</div>
+  </div>
 
-    <!-- Workers -->
-    <div class="card">
-      <div class="card-header"><h2>⚡ Workers</h2><span id="worker-count" class="badge badge-idle">0</span></div>
-      <div class="card-body" id="workers-body"><div class="empty">No workers connected</div></div>
-    </div>
-
-    <!-- Jobs -->
-    <div class="card">
-      <div class="card-header"><h2>🔬 Jobs</h2><span id="job-count" class="badge badge-queued">0</span></div>
-      <div class="card-body" id="jobs-body">
-        <div class="empty">No jobs yet</div>
+  <!-- TAB: Overview -->
+  <div class="tab-content active" id="tab-overview">
+    <div class="grid">
+      <div class="card">
+        <div class="card-header"><h2>⚡ Workers</h2><span id="worker-count" class="badge badge-idle">0</span></div>
+        <div class="card-body" id="workers-body"><div class="empty">No workers connected</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>🔬 Jobs</h2><span id="job-count" class="badge badge-queued">0</span></div>
+        <div class="card-body" id="jobs-body"><div class="empty">No jobs yet</div></div>
+      </div>
+      <!-- Quick Stats -->
+      <div class="card full-width">
+        <div class="card-header"><h2>📊 Best Scores</h2></div>
+        <div class="card-body"><div class="big-numbers" id="best-scores"><div class="empty">Run experiments to see scores</div></div></div>
+      </div>
+      <!-- Activity -->
+      <div class="card full-width">
+        <div class="card-header"><h2>📋 Activity</h2><button class="btn-sm" onclick="activityLog.length=0;renderActivity()">Clear</button></div>
+        <div class="card-body"><div class="activity-log" id="activity-log"><div class="empty">Waiting…</div></div></div>
       </div>
     </div>
+  </div>
 
-    <!-- Results Chart -->
-    <div class="card full-width">
-      <div class="card-header"><h2>📊 Training Progress</h2><span id="result-info" style="font-size:.75rem;color:var(--text2)"></span></div>
-      <div class="card-body">
-        <div class="big-numbers" id="best-scores"></div>
-        <div id="chart-container" style="margin-top:12px"><canvas id="chart"></canvas></div>
+  <!-- TAB: Charts -->
+  <div class="tab-content" id="tab-charts">
+    <div class="grid">
+      <!-- Learning Curves -->
+      <div class="card full-width">
+        <div class="card-header">
+          <h2>📈 Learning Curves</h2>
+          <div class="toolbar">
+            <button class="btn-sm active" data-metric="best_ever" onclick="setMetric(this,'best_ever')">Best Ever</button>
+            <button class="btn-sm" data-metric="mean" onclick="setMetric(this,'mean')">Mean</button>
+            <button class="btn-sm" data-metric="best" onclick="setMetric(this,'best')">Gen Best</button>
+            <span style="color:var(--text2);font-size:.7rem;margin-left:4px" id="chart1-info"></span>
+            <button class="btn-sm" onclick="exportChart('learning-canvas','gaia-learning-curves.png')" title="Export as PNG">📷 PNG</button>
+          </div>
+        </div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="learning-canvas"></canvas></div></div>
+      </div>
+
+      <!-- Comparison Bars -->
+      <div class="card">
+        <div class="card-header">
+          <h2>🏆 Method Comparison</h2>
+          <button class="btn-sm" onclick="exportChart('comparison-canvas','gaia-comparison.png')">📷 PNG</button>
+        </div>
+        <div class="card-body"><div class="chart-wrap" style="height:280px"><canvas id="comparison-canvas"></canvas></div></div>
+      </div>
+
+      <!-- Sigma / Convergence -->
+      <div class="card">
+        <div class="card-header">
+          <h2>🔬 Convergence (σ)</h2>
+          <button class="btn-sm" onclick="exportChart('sigma-canvas','gaia-sigma.png')">📷 PNG</button>
+        </div>
+        <div class="card-body"><div class="chart-wrap" style="height:280px"><canvas id="sigma-canvas"></canvas></div></div>
+      </div>
+
+      <!-- Score Distribution -->
+      <div class="card full-width">
+        <div class="card-header">
+          <h2>📊 Score Distribution per Generation</h2>
+          <button class="btn-sm" onclick="exportChart('dist-canvas','gaia-distribution.png')">📷 PNG</button>
+        </div>
+        <div class="card-body"><div class="chart-wrap" style="height:260px"><canvas id="dist-canvas"></canvas></div></div>
       </div>
     </div>
+  </div>
 
-    <!-- Activity Log -->
-    <div class="card full-width">
-      <div class="card-header"><h2>📋 Activity</h2><button class="btn-sm" onclick="activityLog.length=0;renderActivity()">Clear</button></div>
-      <div class="card-body"><div class="activity-log" id="activity-log"><div class="empty">Waiting for events…</div></div></div>
+  <!-- TAB: Export -->
+  <div class="tab-content" id="tab-export">
+    <div class="grid">
+      <div class="card full-width">
+        <div class="card-header"><h2>💾 Data Export</h2></div>
+        <div class="card-body" id="export-body"><div class="empty">No completed jobs to export</div></div>
+      </div>
+      <div class="card full-width">
+        <div class="card-header"><h2>📷 Chart Export</h2></div>
+        <div class="card-body">
+          <p style="font-size:.8rem;color:var(--text2);margin-bottom:12px">Export all charts as high-resolution PNG images for papers and presentations.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-sm" onclick="exportChart('learning-canvas','gaia-learning-curves.png')">📈 Learning Curves</button>
+            <button class="btn-sm" onclick="exportChart('comparison-canvas','gaia-comparison.png')">🏆 Comparison</button>
+            <button class="btn-sm" onclick="exportChart('sigma-canvas','gaia-sigma.png')">🔬 Sigma</button>
+            <button class="btn-sm" onclick="exportChart('dist-canvas','gaia-distribution.png')">📊 Distribution</button>
+            <button class="btn-sm" onclick="exportAllCharts()">⬇️ Export All</button>
+          </div>
+        </div>
+      </div>
     </div>
-
   </div>
 </div>
 
 <script>
-let TOKEN = '';
-let serverStart = null;
-const activityLog = [];
-const MAX_LOG = 100;
+// ======= STATE =======
+let TOKEN = '', serverStart = null;
+const activityLog = [], MAX_LOG = 80;
+let prevWorkerIds = new Set(), prevJobStatuses = {};
+let allJobData = {}; // { jobId: { method, status, points: [{gen,best,best_ever,mean,sigma,evals,time}] } }
+let currentMetric = 'best_ever';
+const COLORS = ['#6366f1','#06b6d4','#22c55e','#eab308','#f97316','#ec4899','#ef4444','#a855f7'];
+const METHOD_NAMES = {cma_es:'CMA-ES',openai_es:'OpenAI-ES',hybrid_ff:'Hybrid FF+Evo',curriculum:'Curriculum',indirect:'Indirect Enc',ga:'GA',pbt:'PBT',random_search:'Random Search'};
 
-function authenticate() {
-  TOKEN = document.getElementById('token-input').value.trim();
-  if (!TOKEN) { document.getElementById('auth-error').textContent = 'Token required'; return; }
-  fetch('/api/status', { headers: { 'Authorization': 'Bearer ' + TOKEN } })
-    .then(r => { if (!r.ok) throw new Error('Invalid token'); return r.json(); })
-    .then(() => {
-      document.getElementById('auth-overlay').classList.add('hidden');
-      localStorage.setItem('gaia_token', TOKEN);
-      startPolling();
-    })
-    .catch(() => { document.getElementById('auth-error').textContent = 'Connection failed — check token'; });
+// ======= AUTH =======
+function authenticate(){
+  TOKEN=document.getElementById('token-input').value.trim();
+  if(!TOKEN){document.getElementById('auth-error').textContent='Token required';return}
+  fetch('/api/status',{headers:{'Authorization':'Bearer '+TOKEN}})
+    .then(r=>{if(!r.ok)throw 0;return r.json()})
+    .then(()=>{document.getElementById('auth-overlay').classList.add('hidden');localStorage.setItem('gaia_token',TOKEN);startPolling()})
+    .catch(()=>{document.getElementById('auth-error').textContent='Invalid token'});
 }
+document.getElementById('token-input').addEventListener('keydown',e=>{if(e.key==='Enter')authenticate()});
+window.addEventListener('DOMContentLoaded',()=>{const s=localStorage.getItem('gaia_token');if(s){TOKEN=s;document.getElementById('token-input').value=s;authenticate()}});
 
-// Enter key on token input
-document.getElementById('token-input').addEventListener('keydown', e => { if (e.key === 'Enter') authenticate(); });
+// ======= TABS =======
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('tab-'+t.dataset.tab).classList.add('active');
+  // Redraw charts when switching to charts tab
+  if(t.dataset.tab==='charts')requestAnimationFrame(drawAllCharts);
+}));
 
-// Auto-login from localStorage
-window.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem('gaia_token');
-  if (saved) { TOKEN = saved; document.getElementById('token-input').value = saved; authenticate(); }
-});
+// ======= POLLING =======
+function startPolling(){refresh();setInterval(refresh,3000)}
 
-function startPolling() { refresh(); setInterval(refresh, 3000); }
+function addLog(m){activityLog.unshift({time:new Date().toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}),msg:m});if(activityLog.length>MAX_LOG)activityLog.pop()}
+function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+function timeSince(iso){if(!iso)return'—';const s=Math.floor((Date.now()-new Date(iso).getTime())/1000);if(s<0)return'now';if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m';if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'d'}
+function dur(a,b){if(!a)return'—';const s=Math.floor(((b?new Date(b):new Date).getTime()-new Date(a).getTime())/1000);if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m'+s%60+'s';return Math.floor(s/3600)+'h'+Math.floor(s%3600/60)+'m'}
 
-function addActivity(msg) {
-  const now = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  activityLog.unshift({ time: now, msg });
-  if (activityLog.length > MAX_LOG) activityLog.pop();
-}
+async function refresh(){
+  try{
+    const r=await fetch('/api/status',{headers:{'Authorization':'Bearer '+TOKEN}});
+    if(!r.ok)throw 0;
+    const d=await r.json();
+    document.getElementById('conn-dot').className='dot on';
+    document.getElementById('conn-text').textContent='Connected';
+    if(d.server_start_time)serverStart=new Date(d.server_start_time);
+    if(serverStart){const s=Math.floor((Date.now()-serverStart)/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60);document.getElementById('uptime').textContent=h>0?h+'h '+m+'m':m+'m'}
 
-let prevWorkerIds = new Set();
-let prevJobStatuses = {};
+    // Activity tracking
+    const cw=new Set((d.workers||[]).map(w=>w.id));
+    for(const w of d.workers||[])if(!prevWorkerIds.has(w.id))addLog('🟢 <b>'+esc(w.name)+'</b> connected');
+    for(const id of prevWorkerIds)if(!cw.has(id))addLog('🔴 Worker disconnected');
+    prevWorkerIds=cw;
+    for(const j of d.jobs||[]){const p=prevJobStatuses[j.id];if(!p&&j.status==='queued')addLog('📤 Job <b>'+j.id.slice(0,8)+'</b> queued ('+esc(j.method)+')');if(p!==j.status){if(j.status==='running')addLog('▶️ Job <b>'+j.id.slice(0,8)+'</b> running');if(j.status==='completed')addLog('✅ Job <b>'+j.id.slice(0,8)+'</b> completed');if(j.status==='failed')addLog('❌ Job <b>'+j.id.slice(0,8)+'</b> failed')}prevJobStatuses[j.id]=j.status}
 
-function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-
-function timeSince(iso) {
-  if (!iso) return '—';
-  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 0) return 'just now';
-  if (s < 60) return s + 's ago';
-  if (s < 3600) return Math.floor(s/60) + 'm ago';
-  if (s < 86400) return Math.floor(s/3600) + 'h ago';
-  return Math.floor(s/86400) + 'd ago';
-}
-
-function duration(startIso, endIso) {
-  if (!startIso) return '—';
-  const start = new Date(startIso).getTime();
-  const end = endIso ? new Date(endIso).getTime() : Date.now();
-  const s = Math.floor((end - start) / 1000);
-  if (s < 60) return s + 's';
-  if (s < 3600) return Math.floor(s/60) + 'm ' + (s%60) + 's';
-  return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
-}
-
-async function refresh() {
-  try {
-    const r = await fetch('/api/status', { headers: { 'Authorization': 'Bearer ' + TOKEN } });
-    if (!r.ok) throw new Error('Failed');
-    const d = await r.json();
-
-    document.getElementById('conn-dot').className = 'status-dot online';
-    document.getElementById('conn-text').textContent = 'Connected';
-
-    if (d.server_start_time) serverStart = new Date(d.server_start_time);
-    if (serverStart) {
-      const diff = Math.floor((Date.now() - serverStart.getTime()) / 1000);
-      const h = Math.floor(diff/3600), m = Math.floor((diff%3600)/60);
-      document.getElementById('uptime').textContent = h > 0 ? `${h}h ${m}m` : `${m}m`;
-    }
-
-    // Activity detection
-    const currentWorkerIds = new Set((d.workers||[]).map(w => w.id));
-    for (const w of (d.workers||[])) {
-      if (!prevWorkerIds.has(w.id)) addActivity(`🟢 Worker <strong>${esc(w.name)}</strong> connected`);
-    }
-    for (const id of prevWorkerIds) {
-      if (!currentWorkerIds.has(id)) addActivity(`🔴 Worker disconnected`);
-    }
-    prevWorkerIds = currentWorkerIds;
-
-    for (const j of (d.jobs||[])) {
-      const prev = prevJobStatuses[j.id];
-      if (!prev && j.status === 'queued') addActivity(`📤 Job <strong>${j.id.slice(0,8)}</strong> queued (${esc(j.method)})`);
-      if (prev !== j.status) {
-        if (j.status === 'running') addActivity(`▶️ Job <strong>${j.id.slice(0,8)}</strong> running`);
-        if (j.status === 'completed') addActivity(`✅ Job <strong>${j.id.slice(0,8)}</strong> completed`);
-        if (j.status === 'failed') addActivity(`❌ Job <strong>${j.id.slice(0,8)}</strong> failed`);
-      }
-      prevJobStatuses[j.id] = j.status;
-    }
-
-    renderWorkers(d.workers || []);
-    renderJobs(d.jobs || [], d.queue_length || 0);
+    renderWorkers(d.workers||[]);
+    renderJobs(d.jobs||[]);
     renderActivity();
-    await fetchAndRenderChart(d.jobs || []);
+    await fetchResults(d.jobs||[]);
+    renderBestScores();
+    renderExport(d.jobs||[]);
+    if(document.getElementById('tab-charts').classList.contains('active'))drawAllCharts();
+  }catch(e){document.getElementById('conn-dot').className='dot off';document.getElementById('conn-text').textContent='Disconnected'}
+}
 
-  } catch(e) {
-    document.getElementById('conn-dot').className = 'status-dot offline';
-    document.getElementById('conn-text').textContent = 'Disconnected';
+// ======= RENDER: Workers =======
+function renderWorkers(ws){
+  const el=document.getElementById('workers-body');
+  const on=ws.filter(w=>(Date.now()-new Date(w.last_heartbeat))/1000<60);
+  document.getElementById('worker-count').textContent=on.length+'/'+ws.length;
+  if(!ws.length){el.innerHTML='<div class="empty">No workers<br><code style="font-size:.7rem;color:var(--text2)">gaia-worker --server URL --token TOKEN</code></div>';return}
+  let h='<div class="worker-grid">';
+  for(const w of ws){
+    const age=(Date.now()-new Date(w.last_heartbeat))/1000;
+    const pc=age<15?'live':age<60?'stale':'dead';
+    const sc=w.status==='busy'?'busy':'idle';
+    const gpu=w.gpu&&typeof w.gpu==='object'?w.gpu.name:(w.gpu||'CPU');
+    h+=`<div class="worker-card ${sc}"><div class="worker-name"><span><span class="pulse ${pc}"></span> ${esc(w.name)}</span><span class="badge badge-${sc}">${sc}</span></div><div class="worker-details"><span>GPU:</span><span class="v">${esc(gpu)}</span><span>HB:</span><span class="v">${timeSince(w.last_heartbeat)}</span><span>Up:</span><span class="v">${timeSince(w.registered_at)}</span>${w.current_job?'<span>Job:</span><span class="v" style="color:var(--cyan)">'+w.current_job.slice(0,8)+'</span>':''}</div></div>`;
+  }
+  el.innerHTML=h+'</div>';
+}
+
+// ======= RENDER: Jobs =======
+function renderJobs(jobs){
+  const el=document.getElementById('jobs-body');
+  document.getElementById('job-count').textContent=jobs.length;
+  const run=jobs.filter(j=>j.status==='running'),que=jobs.filter(j=>j.status==='queued'),done=jobs.filter(j=>['completed','failed','timed_out'].includes(j.status));
+  let h='';
+  if(run.length){h+='<div class="job-section"><span style="color:var(--cyan)">▶</span> Running</div>';for(const j of run)h+=`<div class="job-item" style="border-left:2px solid var(--cyan)"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span></div><span style="color:var(--text2);font-size:.75rem">${dur(j.started_at)}</span></div>`}
+  if(que.length){h+=`<div class="job-section"><span style="color:var(--accent2)">⏳</span> Queue (${que.length})</div>`;for(const j of que)h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span></div><span class="badge badge-queued">queued</span></div>`}
+  if(done.length){h+='<div class="job-section">✓ History</div>';for(const j of done.slice(0,8))h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span><span style="color:var(--text2);font-size:.7rem">${dur(j.started_at,j.completed_at)}</span></div><span class="badge badge-${j.status}">${j.status}</span></div>`;if(done.length>8)h+=`<div style="font-size:.7rem;color:var(--text2);text-align:center">+${done.length-8} more</div>`}
+  if(!jobs.length)h='<div class="empty">No jobs</div>';
+  h+=`<div class="submit-form"><select id="method-select"><option value="cma_es">CMA-ES</option><option value="openai_es">OpenAI-ES</option><option value="hybrid_ff">Hybrid FF+Evo</option><option value="curriculum">Curriculum</option><option value="indirect">Indirect Encoding</option></select><input type="number" id="max-evals-input" value="5000" min="100" step="1000" style="width:80px"><button onclick="submitJob()">Submit ⚡</button></div>`;
+  el.innerHTML=h;
+}
+
+function renderActivity(){
+  const el=document.getElementById('activity-log');
+  if(!activityLog.length){el.innerHTML='<div class="empty">Waiting…</div>';return}
+  el.innerHTML=activityLog.slice(0,25).map(e=>`<div class="entry"><span class="time">${e.time}</span><span class="msg">${e.msg}</span></div>`).join('');
+}
+
+// ======= FETCH RESULTS =======
+async function fetchResults(jobs){
+  for(const j of jobs.filter(j=>j.status==='running'||j.status==='completed')){
+    try{
+      const r=await fetch(`/api/results/${j.id}`,{headers:{'Authorization':'Bearer '+TOKEN}});
+      if(!r.ok)continue;
+      const d=await r.json();
+      const pts=(d.results||[]).map(row=>({
+        gen:row.generation,
+        best:parseFloat(row.data?.best||0),
+        best_ever:parseFloat(row.data?.best_ever||row.data?.best||0),
+        mean:parseFloat(row.data?.mean||0),
+        sigma:parseFloat(row.data?.sigma||0),
+        evals:parseInt(row.data?.evals||0),
+        time:parseFloat(row.data?.time||0),
+      })).sort((a,b)=>a.gen-b.gen);
+      allJobData[j.id]={method:j.method,status:j.status,points:pts};
+    }catch(e){}
   }
 }
 
-function renderWorkers(workers) {
-  const el = document.getElementById('workers-body');
-  const online = workers.filter(w => {
-    const age = (Date.now() - new Date(w.last_heartbeat).getTime()) / 1000;
-    return age < 60;
-  });
-  document.getElementById('worker-count').textContent = `${online.length}/${workers.length}`;
-
-  if (!workers.length) { el.innerHTML = '<div class="empty">No workers connected<br><span style="font-size:.75rem;color:var(--text2)">Start a worker: <code>gaia-worker --server URL --token TOKEN</code></span></div>'; return; }
-
-  let html = '<div class="worker-grid">';
-  for (const w of workers) {
-    const hbAge = (Date.now() - new Date(w.last_heartbeat).getTime()) / 1000;
-    const pulseClass = hbAge < 15 ? 'active' : hbAge < 60 ? 'stale' : 'dead';
-    const stClass = w.status === 'busy' ? 'busy' : hbAge > 60 ? 'offline' : 'idle';
-    const gpu = w.gpu && typeof w.gpu === 'object' ? w.gpu.name : (w.gpu || 'CPU only');
-
-    html += `<div class="worker-card ${stClass}">
-      <div class="worker-name">
-        <span><span class="worker-pulse ${pulseClass}"></span> ${esc(w.name)}</span>
-        <span class="badge badge-${stClass}">${stClass}</span>
-      </div>
-      <div class="worker-details">
-        <span class="label">GPU:</span><span class="value">${esc(gpu)}</span>
-        <span class="label">Heartbeat:</span><span class="value">${timeSince(w.last_heartbeat)}</span>
-        <span class="label">Connected:</span><span class="value">${timeSince(w.registered_at)}</span>`;
-    if (w.current_job) {
-      html += `<span class="label">Job:</span><span class="value" style="color:var(--cyan)">${w.current_job.slice(0,8)}…</span>`;
-    }
-    html += `</div></div>`;
+// ======= BEST SCORES =======
+function renderBestScores(){
+  const el=document.getElementById('best-scores');
+  const methods={};
+  for(const d of Object.values(allJobData)){
+    if(!d.points.length)continue;
+    const best=Math.max(...d.points.map(p=>p.best_ever));
+    const name=METHOD_NAMES[d.method]||d.method;
+    if(!methods[name]||best>methods[name])methods[name]=best;
   }
-  html += '</div>';
-  el.innerHTML = html;
-}
-
-function renderJobs(jobs, queueLen) {
-  const el = document.getElementById('jobs-body');
-  document.getElementById('job-count').textContent = jobs.length;
-
-  const running = jobs.filter(j => j.status === 'running');
-  const queued = jobs.filter(j => j.status === 'queued');
-  const done = jobs.filter(j => ['completed','failed','timed_out'].includes(j.status));
-
-  let html = '';
-
-  if (running.length) {
-    html += '<div class="job-section-title"><span style="color:var(--cyan)">▶</span> Running</div>';
-    for (const j of running) {
-      const evals = j.params?.max_evals || j.max_evals || '?';
-      html += `<div class="job-item" style="border-left:2px solid var(--cyan)">
-        <div class="job-left">
-          <span class="job-id">${j.id.slice(0,8)}</span>
-          <span class="job-method">${esc(j.method)}</span>
-        </div>
-        <div class="job-progress">
-          <span style="color:var(--text2);font-size:.75rem">${duration(j.started_at)}</span>
-          <span class="badge badge-running">running</span>
-        </div>
-      </div>`;
-    }
-  }
-
-  if (queued.length) {
-    html += `<div class="job-section-title"><span style="color:var(--accent2)">⏳</span> Queued (${queued.length})</div>`;
-    for (const j of queued) {
-      const evals = j.params?.max_evals || j.max_evals || '?';
-      html += `<div class="job-item">
-        <div class="job-left">
-          <span class="job-id">${j.id.slice(0,8)}</span>
-          <span class="job-method">${esc(j.method)}</span>
-          <span style="color:var(--text2)">${evals} evals</span>
-        </div>
-        <span class="badge badge-queued">queued</span>
-      </div>`;
-    }
-  }
-
-  if (done.length) {
-    html += `<div class="job-section-title"><span style="color:var(--text2)">✓</span> History</div>`;
-    for (const j of done.slice(0, 10)) {
-      const evals = j.params?.max_evals || j.max_evals || '?';
-      html += `<div class="job-item">
-        <div class="job-left">
-          <span class="job-id">${j.id.slice(0,8)}</span>
-          <span class="job-method">${esc(j.method)}</span>
-          <span style="color:var(--text2)">${duration(j.started_at, j.completed_at)}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span class="badge badge-${j.status}">${j.status}</span>
-        </div>
-      </div>`;
-    }
-    if (done.length > 10) html += `<div style="font-size:.75rem;color:var(--text2);text-align:center;padding:4px">+${done.length-10} more</div>`;
-  }
-
-  if (!jobs.length) html = '<div class="empty">No jobs yet</div>';
-
-  html += `<div class="submit-form">
-    <select id="method-select">
-      <option value="cma_es">CMA-ES</option>
-      <option value="openai_es">OpenAI-ES</option>
-      <option value="hybrid_ff">Hybrid FF+Evo</option>
-      <option value="curriculum">Curriculum</option>
-      <option value="indirect">Indirect Encoding</option>
-    </select>
-    <input type="number" id="max-evals-input" value="5000" min="100" step="1000" style="width:90px" placeholder="Evals">
-    <button onclick="submitJob()">Submit ⚡</button>
-  </div>`;
-  el.innerHTML = html;
-}
-
-function renderActivity() {
-  const el = document.getElementById('activity-log');
-  if (!activityLog.length) { el.innerHTML = '<div class="empty">Waiting for events…</div>'; return; }
-  el.innerHTML = activityLog.slice(0, 30).map(e => `<div class="entry"><span class="time">${e.time}</span><span class="msg">${e.msg}</span></div>`).join('');
-}
-
-// Chart
-const COLORS = ['#6366f1','#06b6d4','#22c55e','#eab308','#f97316','#ec4899','#ef4444'];
-let chartData = {};
-
-async function fetchAndRenderChart(jobs) {
-  const interesting = jobs.filter(j => j.status === 'running' || j.status === 'completed');
-  let totalResults = 0;
-
-  for (const j of interesting) {
-    try {
-      const r = await fetch(`/api/results/${j.id}`, { headers: { 'Authorization': 'Bearer ' + TOKEN } });
-      if (!r.ok) continue;
-      const d = await r.json();
-      const points = (d.results || []).map(row => ({
-        gen: row.generation,
-        best: parseFloat(row.data?.best || row.data?.best_ever || row.data?.score || 0),
-        best_ever: parseFloat(row.data?.best_ever || row.data?.best || 0),
-        mean: parseFloat(row.data?.mean || 0),
-        sigma: parseFloat(row.data?.sigma || 0),
-        evals: parseInt(row.data?.evals || 0),
-      })).sort((a,b) => a.gen - b.gen);
-      chartData[j.id] = { method: j.method, points, status: j.status };
-      totalResults += points.length;
-    } catch(e) {}
-  }
-
-  document.getElementById('result-info').textContent = totalResults > 0 ? `${totalResults} data points` : '';
-  drawChart();
-  renderBestScores();
-}
-
-function renderBestScores() {
-  const el = document.getElementById('best-scores');
-  const methods = {};
-  for (const [id, d] of Object.entries(chartData)) {
-    if (!d.points.length) continue;
-    const best = Math.max(...d.points.map(p => p.best_ever));
-    if (!methods[d.method] || best > methods[d.method]) methods[d.method] = best;
-  }
-  if (!Object.keys(methods).length) { el.innerHTML = ''; return; }
-  el.innerHTML = Object.entries(methods).map(([m, s]) => {
-    const solved = s >= 200;
-    return `<div class="big-num"><div class="value ${solved?'solved':''}">${s.toFixed(1)}</div><div class="label">${esc(m)}${solved?' 🎉 SOLVED':''}</div></div>`;
+  if(!Object.keys(methods).length){el.innerHTML='<div class="empty">Run experiments to see scores</div>';return}
+  el.innerHTML=Object.entries(methods).map(([m,s])=>{
+    const ok=s>=200;
+    return`<div class="big-num"><div class="val ${ok?'solved':''}">${s.toFixed(1)}</div><div class="lbl">${esc(m)}${ok?' 🎉':''}</div></div>`;
   }).join('');
 }
 
-function drawChart() {
-  const canvas = document.getElementById('chart');
-  const container = document.getElementById('chart-container');
-  const dpr = window.devicePixelRatio || 1;
-  const w = container.clientWidth;
-  const h = container.clientHeight;
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-
-  const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, w, h);
-
-  const allPoints = Object.values(chartData).flatMap(d => d.points);
-  if (!allPoints.length) {
-    ctx.fillStyle = '#8888a0';
-    ctx.font = '13px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Submit a job to see training progress', w/2, h/2);
-    return;
+// ======= EXPORT TAB =======
+function renderExport(jobs){
+  const el=document.getElementById('export-body');
+  const done=jobs.filter(j=>['completed','failed'].includes(j.status));
+  if(!done.length){el.innerHTML='<div class="empty">No completed jobs to export</div>';return}
+  let h='<table style="font-size:.8rem"><tr><th>Job ID</th><th>Method</th><th>Status</th><th>Gens</th><th>Best</th><th>Actions</th></tr>';
+  for(const j of done){
+    const d=allJobData[j.id];
+    const gens=d?d.points.length:0;
+    const best=d&&d.points.length?Math.max(...d.points.map(p=>p.best_ever)).toFixed(1):'—';
+    h+=`<tr><td style="font-family:monospace">${j.id.slice(0,8)}</td><td>${esc(j.method)}</td><td><span class="badge badge-${j.status}">${j.status}</span></td><td>${gens}</td><td>${best}</td><td><button class="btn-sm" onclick="downloadCSV('${j.id}')">CSV ↓</button> <button class="btn-sm" onclick="downloadJSON('${j.id}')">JSON ↓</button></td></tr>`;
   }
+  h+='</table>';
+  h+='<div style="margin-top:12px;display:flex;gap:6px"><button class="btn-sm" onclick="downloadAllCSV()">⬇️ Export All CSV</button><button class="btn-sm" onclick="downloadSummaryJSON()">⬇️ Summary JSON</button></div>';
+  el.innerHTML=h;
+}
 
-  const pad = { top: 24, right: 20, bottom: 36, left: 56 };
-  const pw = w - pad.left - pad.right;
-  const ph = h - pad.top - pad.bottom;
+// ======= CHARTS =======
+function setMetric(btn,m){
+  currentMetric=m;
+  document.querySelectorAll('[data-metric]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  drawLearningCurves();
+}
 
-  const maxGen = Math.max(...allPoints.map(p => p.gen), 1);
-  const scores = allPoints.map(p => p.best_ever);
-  const maxScore = Math.max(Math.max(...scores), 250);
-  const minScore = Math.min(Math.min(...scores), -300);
-  const scoreRange = maxScore - minScore || 1;
+function drawAllCharts(){drawLearningCurves();drawComparison();drawSigma();drawDistribution()}
 
-  const toX = gen => pad.left + (gen / maxGen) * pw;
-  const toY = score => pad.top + ph - ((score - minScore) / scoreRange) * ph;
+function setupCanvas(id){
+  const canvas=document.getElementById(id);
+  const wrap=canvas.parentElement;
+  const dpr=window.devicePixelRatio||1;
+  const w=wrap.clientWidth,h=wrap.clientHeight;
+  canvas.width=w*dpr;canvas.height=h*dpr;
+  canvas.style.width=w+'px';canvas.style.height=h+'px';
+  const ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+  return{ctx,w,h,dpr};
+}
 
-  // Grid lines
-  ctx.strokeStyle = '#1a1a26';
-  ctx.lineWidth = 0.5;
-  const gridSteps = 6;
-  for (let i = 0; i <= gridSteps; i++) {
-    const y = pad.top + (ph / gridSteps) * i;
-    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
-    const val = maxScore - (scoreRange / gridSteps) * i;
-    ctx.fillStyle = '#666680';
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(val.toFixed(0), pad.left - 6, y + 3);
+function drawGrid(ctx,pad,w,h,minY,maxY,maxX,xLabel,yLabel,steps=6){
+  const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
+  const range=maxY-minY||1;
+  ctx.strokeStyle='#1a1a2a';ctx.lineWidth=.5;
+  for(let i=0;i<=steps;i++){
+    const y=pad.top+(ph/steps)*i;
+    ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();
+    ctx.fillStyle='#666';ctx.font='9px sans-serif';ctx.textAlign='right';
+    ctx.fillText((maxY-(range/steps)*i).toFixed(0),pad.left-5,y+3);
   }
-
-  // X axis
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#666680';
-  for (let i = 0; i <= 4; i++) {
-    const gen = Math.round((maxGen / 4) * i);
-    ctx.fillText(gen, toX(gen), h - pad.bottom + 16);
+  ctx.textAlign='center';ctx.fillStyle='#666';
+  for(let i=0;i<=4;i++){
+    const v=Math.round((maxX/4)*i);
+    ctx.fillText(v,pad.left+(v/maxX)*pw,h-pad.bottom+14);
   }
-  ctx.fillText('Generation', w / 2, h - 2);
+  ctx.fillText(xLabel,w/2,h-2);
+  // Y label
+  ctx.save();ctx.translate(10,h/2);ctx.rotate(-Math.PI/2);ctx.fillText(yLabel,0,0);ctx.restore();
+}
 
-  // Solved threshold (200)
-  if (200 >= minScore && 200 <= maxScore) {
-    ctx.setLineDash([4, 3]);
-    ctx.strokeStyle = '#22c55e40';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(pad.left, toY(200)); ctx.lineTo(w - pad.right, toY(200)); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#22c55e60';
-    ctx.font = '9px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('SOLVED (200)', pad.left + 4, toY(200) - 3);
-  }
+function drawSolvedLine(ctx,pad,w,h,minY,maxY,val=200){
+  if(val<minY||val>maxY)return;
+  const ph=h-pad.top-pad.bottom,range=maxY-minY||1;
+  const y=pad.top+ph-((val-minY)/range)*ph;
+  ctx.setLineDash([4,3]);ctx.strokeStyle='#22c55e40';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#22c55e50';ctx.font='8px sans-serif';ctx.textAlign='left';
+  ctx.fillText('SOLVED (200)',pad.left+4,y-3);
+}
+
+// Chart 1: Learning Curves
+function drawLearningCurves(){
+  const{ctx,w,h}=setupCanvas('learning-canvas');
+  const entries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0);
+  if(!entries.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('Submit a job to see training progress',w/2,h/2);return}
+  const pad={top:28,right:20,bottom:36,left:56};
+  const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
+
+  const allPts=entries.flatMap(([_,d])=>d.points);
+  const maxGen=Math.max(...allPts.map(p=>p.gen),1);
+  const vals=allPts.map(p=>p[currentMetric]||0);
+  const maxV=Math.max(Math.max(...vals),250),minV=Math.min(Math.min(...vals),-300);
+  const range=maxV-minV||1;
+  const toX=g=>pad.left+(g/maxGen)*pw;
+  const toY=v=>pad.top+ph-((v-minV)/range)*ph;
+
+  drawGrid(ctx,pad,w,h,minV,maxV,maxGen,'Generation',currentMetric==='best_ever'?'Best Score Ever':currentMetric==='mean'?'Mean Score':'Gen Best');
+  drawSolvedLine(ctx,pad,w,h,minV,maxV);
 
   // Zero line
-  if (0 >= minScore && 0 <= maxScore) {
-    ctx.setLineDash([2, 2]);
-    ctx.strokeStyle = '#ffffff15';
-    ctx.lineWidth = 0.5;
-    ctx.beginPath(); ctx.moveTo(pad.left, toY(0)); ctx.lineTo(w - pad.right, toY(0)); ctx.stroke();
-    ctx.setLineDash([]);
-  }
+  if(0>=minV&&0<=maxV){ctx.setLineDash([2,2]);ctx.strokeStyle='#fff1';ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(pad.left,toY(0));ctx.lineTo(w-pad.right,toY(0));ctx.stroke();ctx.setLineDash([])}
 
-  // Draw lines
-  let ci = 0;
-  const legend = [];
-  for (const [id, d] of Object.entries(chartData)) {
-    if (!d.points.length) continue;
-    const color = COLORS[ci % COLORS.length];
-    legend.push({ method: d.method, color, status: d.status });
+  let ci=0;const legend=[];
+  for(const[id,d]of entries){
+    const color=COLORS[ci%COLORS.length];
+    const name=METHOD_NAMES[d.method]||d.method;
+    legend.push({name,color,status:d.status});
 
-    // Area fill
-    ctx.fillStyle = color + '10';
-    ctx.beginPath();
-    ctx.moveTo(toX(d.points[0].gen), toY(minScore));
-    d.points.forEach(p => ctx.lineTo(toX(p.gen), toY(p.best_ever)));
-    ctx.lineTo(toX(d.points[d.points.length-1].gen), toY(minScore));
-    ctx.closePath();
-    ctx.fill();
+    // Mean ± std band (if showing best_ever, show mean as faded area)
+    if(currentMetric==='best_ever'&&d.points[0].mean){
+      ctx.fillStyle=color+'08';
+      ctx.beginPath();
+      d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.mean)):ctx.lineTo(toX(p.gen),toY(p.mean))});
+      for(let i=d.points.length-1;i>=0;i--)ctx.lineTo(toX(d.points[i].gen),toY(d.points[i].best_ever));
+      ctx.closePath();ctx.fill();
+    }
+
+    // Area under curve
+    ctx.fillStyle=color+'0c';
+    ctx.beginPath();ctx.moveTo(toX(d.points[0].gen),toY(minV));
+    d.points.forEach(p=>ctx.lineTo(toX(p.gen),toY(p[currentMetric]||0)));
+    ctx.lineTo(toX(d.points[d.points.length-1].gen),toY(minV));ctx.closePath();ctx.fill();
 
     // Line
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    d.points.forEach((p, i) => { i === 0 ? ctx.moveTo(toX(p.gen), toY(p.best_ever)) : ctx.lineTo(toX(p.gen), toY(p.best_ever)); });
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();
+    d.points.forEach((p,i)=>{const x=toX(p.gen),y=toY(p[currentMetric]||0);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});
     ctx.stroke();
 
-    // End dot
-    const last = d.points[d.points.length - 1];
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(toX(last.gen), toY(last.best_ever), 3, 0, Math.PI * 2);
-    ctx.fill();
+    // Data points
+    if(d.points.length<50){
+      ctx.fillStyle=color;
+      d.points.forEach(p=>{ctx.beginPath();ctx.arc(toX(p.gen),toY(p[currentMetric]||0),2.5,0,Math.PI*2);ctx.fill()});
+    }
 
     // End label
-    ctx.fillStyle = color;
-    ctx.font = 'bold 10px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(last.best_ever.toFixed(1), toX(last.gen) + 6, toY(last.best_ever) + 3);
+    const last=d.points[d.points.length-1];
+    const v=last[currentMetric]||0;
+    ctx.fillStyle=color;ctx.font='bold 10px sans-serif';ctx.textAlign='left';
+    ctx.fillText(v.toFixed(1),toX(last.gen)+6,toY(v)+3);
 
     ci++;
   }
 
   // Legend
-  ctx.font = '10px sans-serif';
-  let lx = pad.left;
-  for (const l of legend) {
-    ctx.fillStyle = l.color;
-    ctx.fillRect(lx, pad.top - 16, 10, 3);
-    ctx.fillStyle = '#c0c0d0';
-    ctx.textAlign = 'left';
-    const label = l.method + (l.status === 'running' ? ' ●' : '');
-    ctx.fillText(label, lx + 14, pad.top - 10);
-    lx += ctx.measureText(label).width + 30;
+  ctx.font='10px sans-serif';let lx=pad.left;
+  for(const l of legend){
+    ctx.fillStyle=l.color;ctx.fillRect(lx,pad.top-18,10,3);
+    ctx.fillStyle='#c0c0d0';ctx.textAlign='left';
+    const t=l.name+(l.status==='running'?' ●':'');
+    ctx.fillText(t,lx+14,pad.top-12);
+    lx+=ctx.measureText(t).width+28;
+  }
+  document.getElementById('chart1-info').textContent=entries.reduce((s,[_,d])=>s+d.points.length,0)+' pts';
+}
+
+// Chart 2: Method Comparison Bars
+function drawComparison(){
+  const{ctx,w,h}=setupCanvas('comparison-canvas');
+  const methods={};
+  for(const d of Object.values(allJobData)){
+    if(!d.points.length)continue;
+    const name=METHOD_NAMES[d.method]||d.method;
+    const best=Math.max(...d.points.map(p=>p.best_ever));
+    const lastMean=d.points[d.points.length-1].mean;
+    if(!methods[name]||best>methods[name].best)methods[name]={best,mean:lastMean};
+  }
+  const names=Object.keys(methods);
+  if(!names.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No data yet',w/2,h/2);return}
+
+  const pad={top:24,right:20,bottom:50,left:50};
+  const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
+  const vals=[...Object.values(methods).map(m=>m.best),...Object.values(methods).map(m=>m.mean)];
+  const maxV=Math.max(Math.max(...vals),250);
+  const minV=Math.min(Math.min(...vals),-300);
+  const range=maxV-minV||1;
+  const toY=v=>pad.top+ph-((v-minV)/range)*ph;
+
+  // Grid
+  ctx.strokeStyle='#1a1a2a';ctx.lineWidth=.5;
+  for(let i=0;i<=5;i++){
+    const y=pad.top+(ph/5)*i;
+    ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();
+    ctx.fillStyle='#666';ctx.font='9px sans-serif';ctx.textAlign='right';
+    ctx.fillText((maxV-(range/5)*i).toFixed(0),pad.left-5,y+3);
+  }
+
+  // Solved line
+  drawSolvedLine(ctx,pad,w,h,minV,maxV);
+
+  // Bars
+  const barW=Math.min(40,pw/(names.length*3));
+  const gap=pw/(names.length);
+  names.forEach((name,i)=>{
+    const x=pad.left+gap*i+gap/2;
+    const m=methods[name];
+
+    // Best bar
+    const yBest=toY(m.best);
+    const yZero=toY(0);
+    ctx.fillStyle='#6366f1cc';
+    ctx.fillRect(x-barW-1,Math.min(yBest,yZero),barW,Math.abs(yBest-yZero));
+
+    // Mean bar
+    const yMean=toY(m.mean);
+    ctx.fillStyle='#22c55ecc';
+    ctx.fillRect(x+1,Math.min(yMean,yZero),barW,Math.abs(yMean-yZero));
+
+    // Labels
+    ctx.fillStyle='#e0e0e8';ctx.font='bold 9px sans-serif';ctx.textAlign='center';
+    ctx.fillText(m.best.toFixed(0),x-barW/2,yBest-4);
+    ctx.fillStyle='#22c55e';
+    ctx.fillText(m.mean.toFixed(0),x+barW/2+1,yMean-4);
+
+    // X label
+    ctx.save();ctx.translate(x,h-pad.bottom+6);ctx.rotate(-Math.PI/6);
+    ctx.fillStyle='#aaa';ctx.font='9px sans-serif';ctx.textAlign='right';
+    ctx.fillText(name,0,0);ctx.restore();
+  });
+
+  // Legend
+  ctx.fillStyle='#6366f1';ctx.fillRect(pad.left,pad.top-16,10,3);
+  ctx.fillStyle='#ccc';ctx.font='9px sans-serif';ctx.textAlign='left';ctx.fillText('Best Ever',pad.left+14,pad.top-11);
+  ctx.fillStyle='#22c55e';ctx.fillRect(pad.left+80,pad.top-16,10,3);
+  ctx.fillStyle='#ccc';ctx.fillText('Final Mean',pad.left+94,pad.top-11);
+}
+
+// Chart 3: Sigma convergence
+function drawSigma(){
+  const{ctx,w,h}=setupCanvas('sigma-canvas');
+  const entries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0&&d.points[0].sigma>0);
+  if(!entries.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No sigma data',w/2,h/2);return}
+
+  const pad={top:24,right:20,bottom:36,left:50};
+  const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
+  const allPts=entries.flatMap(([_,d])=>d.points);
+  const maxGen=Math.max(...allPts.map(p=>p.gen),1);
+  const maxS=Math.max(...allPts.map(p=>p.sigma),1)*1.1;
+  const toX=g=>pad.left+(g/maxGen)*pw;
+  const toY=s=>pad.top+ph-(s/maxS)*ph;
+
+  drawGrid(ctx,pad,w,h,0,maxS,maxGen,'Generation','σ (Step Size)');
+
+  let ci=0;
+  for(const[id,d]of entries){
+    const color=COLORS[ci%COLORS.length];
+    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();
+    d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.sigma)):ctx.lineTo(toX(p.gen),toY(p.sigma))});
+    ctx.stroke();
+
+    const last=d.points[d.points.length-1];
+    ctx.fillStyle=color;ctx.font='9px sans-serif';ctx.textAlign='left';
+    ctx.fillText((METHOD_NAMES[d.method]||d.method)+' σ='+last.sigma.toFixed(4),toX(last.gen)+4,toY(last.sigma));
+    ci++;
   }
 }
 
-window.addEventListener('resize', drawChart);
+// Chart 4: Score distribution (mean ± range band)
+function drawDistribution(){
+  const{ctx,w,h}=setupCanvas('dist-canvas');
+  const entries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0);
+  if(!entries.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No data',w/2,h/2);return}
 
-async function submitJob() {
-  const method = document.getElementById('method-select').value;
-  const maxEvals = parseInt(document.getElementById('max-evals-input').value) || 5000;
-  try {
-    const r = await fetch('/api/jobs/submit', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ method, params: { max_evals: maxEvals } })
-    });
-    if (r.ok) {
-      addActivity(`📤 Submitted: <strong>${esc(method)}</strong> (${maxEvals} evals)`);
-      refresh();
-    }
-  } catch(e) { addActivity('❌ Failed to submit job'); }
+  const pad={top:24,right:20,bottom:36,left:56};
+  const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
+  const allPts=entries.flatMap(([_,d])=>d.points);
+  const maxGen=Math.max(...allPts.map(p=>p.gen),1);
+  const allVals=[...allPts.map(p=>p.best_ever),...allPts.map(p=>p.mean)];
+  const maxV=Math.max(...allVals)*1.1,minV=Math.min(...allVals)*1.1;
+  const range=maxV-minV||1;
+  const toX=g=>pad.left+(g/maxGen)*pw;
+  const toY=v=>pad.top+ph-((v-minV)/range)*ph;
+
+  drawGrid(ctx,pad,w,h,minV,maxV,maxGen,'Generation','Score');
+  drawSolvedLine(ctx,pad,w,h,minV,maxV);
+
+  let ci=0;
+  for(const[id,d]of entries){
+    const color=COLORS[ci%COLORS.length];
+    const name=METHOD_NAMES[d.method]||d.method;
+
+    // Band: mean to best_ever
+    ctx.fillStyle=color+'18';
+    ctx.beginPath();
+    d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.best_ever)):ctx.lineTo(toX(p.gen),toY(p.best_ever))});
+    for(let i=d.points.length-1;i>=0;i--)ctx.lineTo(toX(d.points[i].gen),toY(d.points[i].mean));
+    ctx.closePath();ctx.fill();
+
+    // Best ever line
+    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.beginPath();
+    d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.best_ever)):ctx.lineTo(toX(p.gen),toY(p.best_ever))});
+    ctx.stroke();
+
+    // Mean line (dashed)
+    ctx.strokeStyle=color+'80';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();
+    d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.mean)):ctx.lineTo(toX(p.gen),toY(p.mean))});
+    ctx.stroke();ctx.setLineDash([]);
+
+    // Label
+    ctx.fillStyle=color;ctx.font='9px sans-serif';ctx.textAlign='left';
+    const last=d.points[d.points.length-1];
+    ctx.fillText(name,toX(last.gen)+4,toY(last.best_ever));
+    ci++;
+  }
+
+  // Legend
+  ctx.font='9px sans-serif';
+  ctx.strokeStyle='#ccc';ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(pad.left,pad.top-14);ctx.lineTo(pad.left+12,pad.top-14);ctx.stroke();
+  ctx.fillStyle='#ccc';ctx.textAlign='left';ctx.fillText('Best Ever (solid)',pad.left+16,pad.top-10);
+  ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(pad.left+100,pad.top-14);ctx.lineTo(pad.left+112,pad.top-14);ctx.stroke();
+  ctx.setLineDash([]);ctx.fillText('Mean (dashed)',pad.left+116,pad.top-10);
+  ctx.fillStyle='#ffffff10';ctx.fillRect(pad.left+200,pad.top-18,12,8);
+  ctx.fillStyle='#ccc';ctx.fillText('Range',pad.left+216,pad.top-10);
 }
+
+// ======= CHART EXPORT =======
+function exportChart(canvasId,filename){
+  const canvas=document.getElementById(canvasId);
+  // Redraw onto export canvas at 2x
+  const link=document.createElement('a');
+  link.download=filename;
+  link.href=canvas.toDataURL('image/png');
+  link.click();
+}
+
+function exportAllCharts(){
+  ['learning-canvas','comparison-canvas','sigma-canvas','dist-canvas'].forEach((id,i)=>{
+    setTimeout(()=>exportChart(id,'gaia-'+['learning','comparison','sigma','distribution'][i]+'.png'),i*200);
+  });
+}
+
+// ======= DATA EXPORT =======
+async function downloadCSV(jobId){
+  try{
+    const r=await fetch(`/api/results/${jobId}/csv`,{headers:{'Authorization':'Bearer '+TOKEN}});
+    const text=await r.text();
+    dl(text,'text/csv',`gaia-${jobId.slice(0,8)}.csv`);
+  }catch(e){}
+}
+
+function downloadJSON(jobId){
+  const d=allJobData[jobId];
+  if(!d)return;
+  dl(JSON.stringify(d,null,2),'application/json',`gaia-${jobId.slice(0,8)}.json`);
+}
+
+async function downloadAllCSV(){
+  let allCSV='job_id,method,generation,best,best_ever,mean,sigma,evals,time\n';
+  for(const[id,d]of Object.entries(allJobData)){
+    for(const p of d.points){
+      allCSV+=`${id.slice(0,8)},${d.method},${p.gen},${p.best},${p.best_ever},${p.mean},${p.sigma},${p.evals},${p.time}\n`;
+    }
+  }
+  dl(allCSV,'text/csv','gaia-all-results.csv');
+}
+
+function downloadSummaryJSON(){
+  const summary={};
+  for(const[id,d]of Object.entries(allJobData)){
+    const name=METHOD_NAMES[d.method]||d.method;
+    if(!d.points.length)continue;
+    summary[name]={
+      job_id:id,method:d.method,status:d.status,
+      generations:d.points.length,
+      best_ever:Math.max(...d.points.map(p=>p.best_ever)),
+      final_mean:d.points[d.points.length-1].mean,
+      final_sigma:d.points[d.points.length-1].sigma,
+      total_evals:Math.max(...d.points.map(p=>p.evals)),
+    };
+  }
+  dl(JSON.stringify(summary,null,2),'application/json','gaia-summary.json');
+}
+
+function dl(content,type,name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type}));
+  a.download=name;a.click();
+}
+
+// ======= SUBMIT =======
+async function submitJob(){
+  const method=document.getElementById('method-select').value;
+  const maxEvals=parseInt(document.getElementById('max-evals-input').value)||5000;
+  try{
+    const r=await fetch('/api/jobs/submit',{method:'POST',headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},body:JSON.stringify({method,params:{max_evals:maxEvals}})});
+    if(r.ok){addLog('📤 Submitted: <b>'+esc(method)+'</b> ('+maxEvals+' evals)');refresh()}
+  }catch(e){addLog('❌ Submit failed')}
+}
+
+window.addEventListener('resize',()=>{if(document.getElementById('tab-charts').classList.contains('active'))drawAllCharts()});
 </script>
 </body>
 </html>
