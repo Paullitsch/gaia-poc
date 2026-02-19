@@ -29,6 +29,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/results/:job_id/csv", get(get_results_csv))
         .route("/api/jobs/cancel/:job_id", post(cancel_job))
         .route("/api/workers/:worker_id/enable", post(toggle_worker))
+        .route("/api/workers/:worker_id/force-update", post(force_update_worker))
+        .route("/api/workers/force-update-all", post(force_update_all))
         .route("/api/status", get(status))
         // Release management (upload requires auth, download is public)
         .route("/api/releases/upload", post(upload_release))
@@ -74,6 +76,7 @@ async fn register_worker(
         current_job: None,
         enabled: true,
         version: req.version,
+        force_update: false,
     };
     state.workers.write().await.insert(id.clone(), worker);
     tracing::info!(worker_id = %id, "Worker registered");
@@ -89,11 +92,13 @@ async fn heartbeat(
     let mut workers = state.workers.write().await;
     if let Some(w) = workers.get_mut(&worker_id) {
         w.last_heartbeat = Utc::now();
+        let force = w.force_update;
+        if force { w.force_update = false; } // consume the flag
         // Include latest release version for auto-update
         let releases = state.releases.read().await;
         let latest = releases.last().map(|r| r.tag.clone());
         drop(releases);
-        let mut resp = json!({ "status": "ok" });
+        let mut resp = json!({ "status": "ok", "force_update": force });
         if let Some(tag) = latest {
             resp["latest_version"] = json!(tag);
         }
@@ -351,6 +356,39 @@ async fn toggle_worker(
     } else {
         Err(StatusCode::NOT_FOUND)
     }
+}
+
+async fn force_update_worker(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path(worker_id): Path<String>,
+) -> Result<Json<Value>, StatusCode> {
+    check_auth(&state, &headers)?;
+    let mut workers = state.workers.write().await;
+    if let Some(w) = workers.get_mut(&worker_id) {
+        w.force_update = true;
+        tracing::info!(worker_id = %worker_id, "Force update flagged");
+        Ok(Json(json!({ "force_update": true })))
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
+}
+
+async fn force_update_all(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, StatusCode> {
+    check_auth(&state, &headers)?;
+    let mut workers = state.workers.write().await;
+    let mut count = 0;
+    for w in workers.values_mut() {
+        if w.enabled {
+            w.force_update = true;
+            count += 1;
+        }
+    }
+    tracing::info!(count = count, "Force update flagged for all enabled workers");
+    Ok(Json(json!({ "force_update_count": count })))
 }
 
 async fn status(

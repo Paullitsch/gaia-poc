@@ -349,7 +349,7 @@ function renderWorkers(ws){
     const opacity=isOffline||disabled?'opacity:.5':'';
     const statusLabel=disabled?'disabled':sc;
     const ver=w.version?'v'+w.version:'—';
-    h+=`<div class="worker-card ${sc}" style="${opacity}"><div class="worker-name"><span><span class="pulse ${pc}"></span> ${esc(w.name)}</span><div style="display:flex;gap:4px;align-items:center"><span class="badge badge-${sc}">${statusLabel}</span><button class="btn-sm" onclick="toggleWorker('${w.id}')" title="${disabled?'Enable':'Disable'} worker">${disabled?'▶':'⏸'}</button></div></div><div class="worker-details"><span>GPU:</span><span class="v">${esc(gpu)}</span><span>Ver:</span><span class="v" style="color:var(--accent2)">${ver}</span><span>HB:</span><span class="v">${timeSince(w.last_heartbeat)}</span><span>Up:</span><span class="v">${timeSince(w.registered_at)}</span>${w.current_job?'<span>Job:</span><span class="v" style="color:var(--cyan)">'+w.current_job.slice(0,8)+'</span>':''}</div></div>`;
+    h+=`<div class="worker-card ${sc}" style="${opacity}"><div class="worker-name"><span><span class="pulse ${pc}"></span> ${esc(w.name)}</span><div style="display:flex;gap:4px;align-items:center"><span class="badge badge-${sc}">${statusLabel}</span><button class="btn-sm" onclick="toggleWorker('${w.id}')" title="${disabled?'Enable':'Disable'} worker">${disabled?'▶':'⏸'}</button><button class="btn-sm" onclick="forceUpdate('${w.id}')" title="Force update" style="font-size:.6rem">🔄</button></div></div><div class="worker-details"><span>GPU:</span><span class="v">${esc(gpu)}</span><span>Ver:</span><span class="v" style="color:var(--accent2)">${ver}</span><span>HB:</span><span class="v">${timeSince(w.last_heartbeat)}</span><span>Up:</span><span class="v">${timeSince(w.registered_at)}</span>${w.current_job?'<span>Job:</span><span class="v" style="color:var(--cyan)">'+w.current_job.slice(0,8)+'</span>':''}</div></div>`;
   }
   el.innerHTML=h+'</div>';
 }
@@ -810,6 +810,16 @@ async function toggleWorker(workerId){
     addLog(d.enabled?'▶️ Worker enabled':'⏸ Worker disabled');
     refresh();
   }catch(e){addLog('❌ Toggle failed')}
+}
+
+async function forceUpdate(workerId){
+  if(!confirm('Force update this worker? Current job will be aborted.'))return;
+  try{
+    const r=await fetch(`/api/workers/${workerId}/force-update`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});
+    const d=await r.json();
+    addLog('🔄 Force update sent to worker');
+    refresh();
+  }catch(e){addLog('❌ Force update failed')}
 }
 
 // Debug tab

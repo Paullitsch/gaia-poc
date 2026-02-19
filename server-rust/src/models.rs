@@ -15,6 +15,8 @@ pub struct Worker {
     pub enabled: bool,
     #[serde(default)]
     pub version: Option<String>,
+    #[serde(default)]
+    pub force_update: bool,
 }
 
 fn default_true() -> bool { true }

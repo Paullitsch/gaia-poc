@@ -42,7 +42,8 @@ impl ServerClient {
     }
 
     /// Send heartbeat, returns Some(latest_version) if server reports one
-    pub async fn heartbeat(&self, worker_id: &str) -> Result<Option<String>> {
+    /// Returns (latest_version, force_update)
+    pub async fn heartbeat(&self, worker_id: &str) -> Result<(Option<String>, bool)> {
         let url = format!("{}/api/workers/heartbeat/{}", self.base_url, worker_id);
         let resp = self.auth(self.http.get(&url)).send().await
             .context("Heartbeat failed")?;
@@ -50,7 +51,9 @@ impl ServerClient {
             anyhow::bail!("Heartbeat HTTP {}", resp.status());
         }
         let data: serde_json::Value = resp.json().await?;
-        Ok(data["latest_version"].as_str().map(|s| s.to_string()))
+        let version = data["latest_version"].as_str().map(|s| s.to_string());
+        let force = data["force_update"].as_bool().unwrap_or(false);
+        Ok((version, force))
     }
 
     pub async fn register(&self, name: &str, gpu: &GpuInfo) -> Result<String> {

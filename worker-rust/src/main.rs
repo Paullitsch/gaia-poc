@@ -129,7 +129,7 @@ async fn main() -> Result<()> {
         // Auto-update check via heartbeat
         if auto_update {
             match client.heartbeat(&worker_id).await {
-                Ok(Some(latest_version)) => {
+                Ok((Some(latest_version), _force)) => {
                     if updater::is_newer(&latest_version, updater::VERSION) {
                         tracing::info!(
                             current = %updater::VERSION,
@@ -138,7 +138,6 @@ async fn main() -> Result<()> {
                         );
                         match updater::self_update(client.http_client(), &cfg.server_url, &cfg.auth_token, &latest_version).await {
                             Ok(true) => {
-                                // Also sync experiments before restart
                                 if sync_experiments {
                                     let _ = updater::sync_experiments(client.http_client(), &cfg.server_url, &cfg.auth_token, &cfg.experiments_dir).await;
                                 }
@@ -149,7 +148,7 @@ async fn main() -> Result<()> {
                         }
                     }
                 }
-                Ok(None) => {}
+                Ok((None, _)) => {}
                 Err(e) => tracing::debug!("Heartbeat failed: {e}"),
             }
         }
@@ -159,19 +158,52 @@ async fn main() -> Result<()> {
             Ok(Some(job)) => {
                 tracing::info!(job_id = %job.id, method = %job.method, "Got job");
                 // Send heartbeats during job execution (every 15s)
+                // Also watch for force_update signal from server
                 let hb_client = client::ServerClient::new(&cfg);
                 let hb_wid = worker_id.clone();
+                let (force_tx, mut force_rx) = tokio::sync::oneshot::channel::<String>();
+                let hb_auto = auto_update;
                 let hb_handle = tokio::spawn(async move {
                     let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+                    let mut force_tx = Some(force_tx);
                     loop {
                         interval.tick().await;
-                        if let Err(e) = hb_client.heartbeat(&hb_wid).await {
-                            tracing::debug!("Background heartbeat failed: {e}");
+                        match hb_client.heartbeat(&hb_wid).await {
+                            Ok((version, force)) => {
+                                if force && hb_auto {
+                                    if let (Some(tx), Some(v)) = (force_tx.take(), version) {
+                                        tracing::warn!("🔄 Server requested force update!");
+                                        let _ = tx.send(v);
+                                        return;
+                                    }
+                                }
+                            }
+                            Err(e) => tracing::debug!("Background heartbeat failed: {e}"),
                         }
                     }
                 });
-                if let Err(e) = worker::execute_job(&client, &cfg, &worker_id, job).await {
-                    tracing::error!("Job execution error: {e}");
+                // Run job, but abort if force update arrives
+                tokio::select! {
+                    result = worker::execute_job(&client, &cfg, &worker_id, job) => {
+                        if let Err(e) = result {
+                            tracing::error!("Job execution error: {e}");
+                        }
+                    }
+                    Ok(version) = &mut force_rx => {
+                        tracing::warn!("Force update received — aborting current job");
+                        // Job subprocess will be killed when execute_job is dropped
+                        // Now update
+                        match updater::self_update(client.http_client(), &cfg.server_url, &cfg.auth_token, &version).await {
+                            Ok(true) => {
+                                if sync_experiments {
+                                    let _ = updater::sync_experiments(client.http_client(), &cfg.server_url, &cfg.auth_token, &cfg.experiments_dir).await;
+                                }
+                                updater::restart()
+                            }
+                            Ok(false) => {}
+                            Err(e) => tracing::warn!("Force update failed: {e}"),
+                        }
+                    }
                 }
                 hb_handle.abort();
             }
