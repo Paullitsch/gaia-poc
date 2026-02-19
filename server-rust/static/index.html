@@ -254,7 +254,7 @@ let prevWorkerIds = new Set(), prevJobStatuses = {};
 let allJobData = {}; // { jobId: { method, status, points: [{gen,best,best_ever,mean,sigma,evals,time}] } }
 let currentMetric = 'best_ever';
 const COLORS = ['#6366f1','#06b6d4','#22c55e','#eab308','#f97316','#ec4899','#ef4444','#a855f7'];
-const METHOD_NAMES = {cma_es:'CMA-ES',openai_es:'OpenAI-ES',hybrid_ff:'Hybrid FF+Evo',curriculum:'Curriculum',indirect:'Indirect Enc',ga:'GA',pbt:'PBT',random_search:'Random Search'};
+const METHOD_NAMES = {cma_es:'CMA-ES',openai_es:'OpenAI-ES',hybrid_cma_ff:'Hybrid CMA+FF',curriculum:'Curriculum',indirect_encoding:'Indirect Enc',ga:'GA',pbt:'PBT',random_search:'Random Search'};
 
 // ======= AUTH =======
 function authenticate(){
@@ -344,7 +344,7 @@ function renderJobs(jobs){
   if(que.length){h+=`<div class="job-section"><span style="color:var(--accent2)">⏳</span> Queue (${que.length})</div>`;for(const j of que)h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span></div><span class="badge badge-queued">queued</span></div>`}
   if(done.length){h+='<div class="job-section">✓ History</div>';for(const j of done.slice(0,8))h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span><span style="color:var(--text2);font-size:.7rem">${dur(j.started_at,j.completed_at)}</span></div><span class="badge badge-${j.status}">${j.status}</span></div>`;if(done.length>8)h+=`<div style="font-size:.7rem;color:var(--text2);text-align:center">+${done.length-8} more</div>`}
   if(!jobs.length)h='<div class="empty">No jobs</div>';
-  h+=`<div class="submit-form"><select id="method-select"><option value="cma_es">CMA-ES</option><option value="openai_es">OpenAI-ES</option><option value="hybrid_ff">Hybrid FF+Evo</option><option value="curriculum">Curriculum</option><option value="indirect">Indirect Encoding</option></select><input type="number" id="max-evals-input" value="5000" min="100" step="1000" style="width:80px"><button onclick="submitJob()">Submit ⚡</button></div>`;
+  h+=`<div class="submit-form"><select id="method-select"><option value="cma_es">CMA-ES</option><option value="openai_es">OpenAI-ES</option><option value="hybrid_cma_ff">Hybrid CMA+FF</option><option value="curriculum">Curriculum</option><option value="indirect_encoding">Indirect Encoding</option></select><input type="number" id="max-evals-input" value="5000" min="100" step="1000" style="width:80px"><button onclick="submitJob()">Submit ⚡</button></div>`;
   el.innerHTML=h;
 }
 
