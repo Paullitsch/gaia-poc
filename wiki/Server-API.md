@@ -16,8 +16,9 @@ Response: { "worker_id": "uuid" }
 ### Heartbeat
 ```
 GET /api/workers/heartbeat/:worker_id
-Response: { "status": "ok" }
+Response: { "status": "ok", "latest_version": "v0.4.3" }
 ```
+Includes `latest_version` for auto-update support.
 
 ### Enable/Disable Worker
 ```
@@ -35,7 +36,9 @@ Body: { "method": "cma_es", "params": { "max_evals": 100000 } }
 Response: { "job_id": "uuid", "status": "queued" }
 ```
 
-Verfügbare Methoden: `cma_es`, `openai_es`, `hybrid_cma_ff`, `curriculum`, `indirect_encoding`
+Verfügbare Methoden:
+- **Phase 7:** `cma_es`, `openai_es`, `hybrid_cma_ff`, `curriculum`, `indirect_encoding`
+- **Phase 8:** `bipedal_cma`, `bipedal_es`, `scaling`
 
 ### Get Next Job (Worker)
 ```
@@ -95,4 +98,39 @@ Response: {
   "total_results": 456,
   "server_start_time": "2026-02-19T20:00:00Z"
 }
+```
+
+## Release Management (v0.4.0+)
+
+### Upload Release File (Auth required)
+```
+POST /api/releases/upload?tag=v0.4.3&filename=gaia-worker-linux&notes=description
+Body: <binary data>
+Response: { "status": "ok", "tag": "v0.4.3", "filename": "gaia-worker-linux" }
+```
+Computes SHA-256 automatically. Multiple files per tag supported.
+
+### List Releases (Auth required)
+```
+GET /api/releases
+Response: { "releases": [...] }
+```
+
+### Get Latest Release (Public)
+```
+GET /releases/latest
+Response: { "tag": "v0.4.3", "files": [...], "created_at": "...", "notes": "..." }
+```
+
+### Get Release by Tag (Public)
+```
+GET /releases/:tag
+Response: { "tag": "v0.4.3", "files": [...] }
+```
+
+### Download Release File (Public)
+```
+GET /releases/:tag/:filename
+GET /releases/latest/:filename
+Response: Binary download (application/octet-stream)
 ```
