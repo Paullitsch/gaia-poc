@@ -127,6 +127,58 @@ pub fn restart() -> ! {
     }
 }
 
+/// Download and extract experiments.tar.gz from the latest release
+pub async fn sync_experiments(
+    http: &reqwest::Client,
+    server_url: &str,
+    token: &str,
+    experiments_dir: &str,
+) -> Result<bool> {
+    let url = format!("{}/releases/latest/experiments.tar.gz", server_url.trim_end_matches('/'));
+
+    let resp = http.get(&url)
+        .header("Authorization", format!("Bearer {token}"))
+        .send().await.context("Failed to download experiments")?;
+
+    if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(false);
+    }
+    if !resp.status().is_success() {
+        anyhow::bail!("Download failed: HTTP {}", resp.status());
+    }
+
+    let bytes = resp.bytes().await?;
+    if bytes.is_empty() {
+        return Ok(false);
+    }
+
+    // Extract tar.gz to experiments_dir parent
+    // experiments.tar.gz contains: experiments/ and run_all.py
+    let target = std::path::Path::new(experiments_dir);
+    let parent = target.parent().unwrap_or(target);
+
+    tracing::info!(target = %parent.display(), size = bytes.len(), "Extracting experiments");
+
+    // Use tar command for simplicity
+    let tmp_path = parent.join(".experiments.tar.gz");
+    tokio::fs::write(&tmp_path, &bytes).await?;
+
+    let output = tokio::process::Command::new("tar")
+        .args(["xzf", &tmp_path.to_string_lossy(), "-C", &parent.to_string_lossy()])
+        .output()
+        .await
+        .context("Failed to run tar")?;
+
+    let _ = tokio::fs::remove_file(&tmp_path).await;
+
+    if !output.status.success() {
+        anyhow::bail!("tar extraction failed: {}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    tracing::info!("Experiments extracted successfully");
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

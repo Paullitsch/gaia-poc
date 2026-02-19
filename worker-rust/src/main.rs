@@ -43,6 +43,10 @@ struct Cli {
     /// Enable auto-update from server
     #[arg(long, default_value = "false")]
     auto_update: bool,
+
+    /// Sync experiment files from server on startup and updates
+    #[arg(long, default_value = "false")]
+    sync_experiments: bool,
 }
 
 #[tokio::main]
@@ -63,6 +67,7 @@ async fn main() -> Result<()> {
     };
 
     let auto_update = cli.auto_update;
+    let sync_experiments = cli.sync_experiments;
     tracing::info!(
         worker = %cfg.worker_name, 
         server = %cfg.server_url, 
@@ -94,6 +99,16 @@ async fn main() -> Result<()> {
         }
     };
 
+    // Sync experiments if enabled (auto-enabled when auto_update is on)
+    let sync_experiments = sync_experiments || auto_update;
+    if sync_experiments {
+        match updater::sync_experiments(client.http_client(), &cfg.server_url, &cfg.auth_token, &cfg.experiments_dir).await {
+            Ok(true) => tracing::info!("Experiments synced from server"),
+            Ok(false) => tracing::info!("No experiment bundle on server, using local files"),
+            Err(e) => tracing::warn!("Experiment sync failed: {e}"),
+        }
+    }
+
     // Main loop: poll for jobs, execute, repeat
     let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
     let poll_interval = std::time::Duration::from_secs(cfg.poll_interval_secs);
@@ -122,7 +137,13 @@ async fn main() -> Result<()> {
                             "New version available — updating"
                         );
                         match updater::self_update(client.http_client(), &cfg.server_url, &cfg.auth_token, &latest_version).await {
-                            Ok(true) => updater::restart(),
+                            Ok(true) => {
+                                // Also sync experiments before restart
+                                if sync_experiments {
+                                    let _ = updater::sync_experiments(client.http_client(), &cfg.server_url, &cfg.auth_token, &cfg.experiments_dir).await;
+                                }
+                                updater::restart()
+                            }
                             Ok(false) => {}
                             Err(e) => tracing::warn!("Auto-update failed: {e}"),
                         }
