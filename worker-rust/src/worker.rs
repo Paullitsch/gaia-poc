@@ -21,6 +21,9 @@ pub async fn execute_job(
         .canonicalize()
         .unwrap_or_else(|_| PathBuf::from(&cfg.experiments_dir));
 
+    // Working directory: parent of experiments dir (run_all.py lives there)
+    let work_dir = exp_dir.parent().unwrap_or(&exp_dir).to_path_buf();
+
     let script = job.script.as_deref().unwrap_or("run_all.py");
     if script.contains("..") {
         client.complete_job(&job_id, worker_id, "failed", Some("Script path contains '..'")).await?;
@@ -38,7 +41,7 @@ pub async fn execute_job(
         .arg("--method").arg(&job.method)
         .arg("--max-evals").arg(max_evals.to_string())
         .arg("--no-plots")
-        .current_dir(&exp_dir)
+        .current_dir(&work_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
