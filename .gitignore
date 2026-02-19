@@ -25,6 +25,7 @@ Thumbs.db
 # Secrets & config (use .example files)
 config.yaml
 .env
+!.env.example
 *.key
 *.pem
 

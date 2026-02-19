@@ -1,18 +1,38 @@
 version: "3.8"
 
 services:
-  gaia-server:
+  server:
     build:
       context: ./server-rust
       dockerfile: Dockerfile
+    container_name: gaia-server
     ports:
       - "7434:7434"
     volumes:
       - gaia-data:/data
     environment:
       - GAIA_PORT=7434
-      - GAIA_TOKEN=${GAIA_TOKEN:-changeme}
+      - GAIA_TOKEN=${GAIA_TOKEN:-gaia2026}
       - GAIA_DATA_DIR=/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:7434/api/status", "-H", "Authorization: Bearer ${GAIA_TOKEN:-gaia2026}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker-cpu:
+    build:
+      context: .
+      dockerfile: worker.Dockerfile
+    container_name: gaia-worker-cpu
+    depends_on:
+      server:
+        condition: service_healthy
+    environment:
+      - GAIA_SERVER=http://server:7434
+      - GAIA_TOKEN=${GAIA_TOKEN:-gaia2026}
+      - GAIA_WORKER_NAME=default-cpu-worker
     restart: unless-stopped
 
 volumes:

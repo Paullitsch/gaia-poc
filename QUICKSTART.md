@@ -1,5 +1,32 @@
 # GAIA Quick Start Guide
 
+## Docker Quick Start (empfohlen)
+
+```bash
+git clone https://github.com/Paullitsch/gaia-poc.git
+cd gaia-poc
+
+# Token setzen
+cp .env.example .env
+# .env editieren: GAIA_TOKEN=dein-geheimes-token
+
+# Server + CPU-Worker starten
+docker compose up -d
+
+# Dashboard: http://localhost:7434
+```
+
+Startet automatisch:
+- **gaia-server** — API + Web Dashboard (Port 7434)
+- **gaia-worker-cpu** — CPU-Worker der Jobs vom Server holt
+
+Externe GPU-Worker verbinden sich über die URL:
+```bash
+./gaia-worker --server https://gaia.kndl.at --token dein-token --name mein-pc-rtx5070
+```
+
+---
+
 ## Architecture
 
 GAIA uses a **server-worker** model:
