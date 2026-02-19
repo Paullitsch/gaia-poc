@@ -22,6 +22,15 @@ pub async fn save_state(state: &AppState) -> Result<()> {
     Ok(())
 }
 
+pub async fn save_releases(state: &AppState) -> Result<()> {
+    let dir = Path::new(&state.data_dir);
+    tokio::fs::create_dir_all(dir).await?;
+    let releases = state.releases.read().await;
+    let json = serde_json::to_string_pretty(&*releases)?;
+    tokio::fs::write(dir.join("releases.json"), json).await?;
+    Ok(())
+}
+
 pub async fn load_state(state: &AppState) -> Result<()> {
     let dir = Path::new(&state.data_dir);
 
@@ -38,6 +47,12 @@ pub async fn load_state(state: &AppState) -> Result<()> {
     if let Ok(data) = tokio::fs::read_to_string(dir.join("results.json")).await {
         if let Ok(results) = serde_json::from_str(&data) {
             *state.results.write().await = results;
+        }
+    }
+
+    if let Ok(data) = tokio::fs::read_to_string(dir.join("releases.json")).await {
+        if let Ok(releases) = serde_json::from_str(&data) {
+            *state.releases.write().await = releases;
         }
     }
 

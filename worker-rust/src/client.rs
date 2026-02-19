@@ -33,8 +33,24 @@ impl ServerClient {
         }
     }
 
+    pub fn http_client(&self) -> &reqwest::Client {
+        &self.http
+    }
+
     fn auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         req.header("Authorization", format!("Bearer {}", self.token))
+    }
+
+    /// Send heartbeat, returns Some(latest_version) if server reports one
+    pub async fn heartbeat(&self, worker_id: &str) -> Result<Option<String>> {
+        let url = format!("{}/api/workers/heartbeat/{}", self.base_url, worker_id);
+        let resp = self.auth(self.http.get(&url)).send().await
+            .context("Heartbeat failed")?;
+        if !resp.status().is_success() {
+            anyhow::bail!("Heartbeat HTTP {}", resp.status());
+        }
+        let data: serde_json::Value = resp.json().await?;
+        Ok(data["latest_version"].as_str().map(|s| s.to_string()))
     }
 
     pub async fn register(&self, name: &str, gpu: &GpuInfo) -> Result<String> {
@@ -42,6 +58,7 @@ impl ServerClient {
         let body = serde_json::json!({
             "name": name,
             "gpu": gpu,
+            "version": crate::updater::VERSION,
             "registered_at": chrono::Utc::now().to_rfc3339(),
         });
         let resp = self.auth(self.http.post(&url)).json(&body).send().await

@@ -1,6 +1,7 @@
 mod client;
 mod config;
 mod gpu;
+mod updater;
 mod worker;
 
 use anyhow::Result;
@@ -38,6 +39,10 @@ struct Cli {
     /// Job timeout in seconds
     #[arg(long, default_value = "3600")]
     job_timeout: u64,
+
+    /// Enable auto-update from server
+    #[arg(long, default_value = "false")]
+    auto_update: bool,
 }
 
 #[tokio::main]
@@ -57,7 +62,14 @@ async fn main() -> Result<()> {
         job_timeout_secs: cli.job_timeout,
     };
 
-    tracing::info!(worker = %cfg.worker_name, server = %cfg.server_url, "Starting GAIA worker");
+    let auto_update = cli.auto_update;
+    tracing::info!(
+        worker = %cfg.worker_name, 
+        server = %cfg.server_url, 
+        version = %updater::VERSION,
+        auto_update = auto_update,
+        "Starting GAIA worker"
+    );
 
     let gpu_info = gpu::detect_gpu();
     if gpu_info.available {
@@ -99,7 +111,29 @@ async fn main() -> Result<()> {
             break;
         }
 
-        // Heartbeat + poll for job
+        // Auto-update check via heartbeat
+        if auto_update {
+            match client.heartbeat(&worker_id).await {
+                Ok(Some(latest_version)) => {
+                    if updater::is_newer(&latest_version, updater::VERSION) {
+                        tracing::info!(
+                            current = %updater::VERSION,
+                            available = %latest_version,
+                            "New version available — updating"
+                        );
+                        match updater::self_update(client.http_client(), &cfg.server_url, &cfg.auth_token, &latest_version).await {
+                            Ok(true) => updater::restart(),
+                            Ok(false) => {}
+                            Err(e) => tracing::warn!("Auto-update failed: {e}"),
+                        }
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => tracing::debug!("Heartbeat failed: {e}"),
+            }
+        }
+
+        // Poll for job
         match client.fetch_job(&worker_id).await {
             Ok(Some(job)) => {
                 tracing::info!(job_id = %job.id, method = %job.method, "Got job");

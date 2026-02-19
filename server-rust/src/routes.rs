@@ -1,13 +1,16 @@
 use axum::{
-    extract::{Path, State},
-    http::{HeaderMap, StatusCode},
-    response::Html,
+    body::Body,
+    extract::{Path, Query, State},
+    http::{HeaderMap, StatusCode, header},
+    response::{Html, IntoResponse},
     routing::{get, post},
     Json, Router,
 };
 use chrono::Utc;
+use serde::Deserialize;
 use serde_json::{json, Value};
 use std::sync::Arc;
+use tokio_util::io::ReaderStream;
 
 use crate::models::*;
 use crate::state::AppState;
@@ -27,7 +30,15 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/jobs/cancel/:job_id", post(cancel_job))
         .route("/api/workers/:worker_id/enable", post(toggle_worker))
         .route("/api/status", get(status))
+        // Release management (upload requires auth, download is public)
+        .route("/api/releases/upload", post(upload_release))
+        .route("/api/releases", get(list_releases))
+        .route("/releases/latest", get(latest_release))
+        .route("/releases/latest/:filename", get(download_latest))
+        .route("/releases/:tag", get(get_release))
+        .route("/releases/:tag/:filename", get(download_release))
         .with_state(state)
+        .layer(axum::extract::DefaultBodyLimit::max(100 * 1024 * 1024))
 }
 
 async fn dashboard() -> Html<&'static str> {
@@ -62,6 +73,7 @@ async fn register_worker(
         status: WorkerStatus::Idle,
         current_job: None,
         enabled: true,
+        version: req.version,
     };
     state.workers.write().await.insert(id.clone(), worker);
     tracing::info!(worker_id = %id, "Worker registered");
@@ -77,7 +89,15 @@ async fn heartbeat(
     let mut workers = state.workers.write().await;
     if let Some(w) = workers.get_mut(&worker_id) {
         w.last_heartbeat = Utc::now();
-        Ok(Json(json!({ "status": "ok" })))
+        // Include latest release version for auto-update
+        let releases = state.releases.read().await;
+        let latest = releases.last().map(|r| r.tag.clone());
+        drop(releases);
+        let mut resp = json!({ "status": "ok" });
+        if let Some(tag) = latest {
+            resp["latest_version"] = json!(tag);
+        }
+        Ok(Json(resp))
     } else {
         Err(StatusCode::NOT_FOUND)
     }
@@ -360,4 +380,142 @@ async fn status(
         "total_results": results_len,
         "server_start_time": state.start_time,
     })))
+}
+
+// --- Release management ---
+
+#[derive(Debug, Deserialize)]
+struct UploadQuery {
+    tag: String,
+    filename: String,
+    notes: Option<String>,
+}
+
+async fn upload_release(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(q): Query<UploadQuery>,
+    body: axum::body::Bytes,
+) -> Result<Json<Value>, StatusCode> {
+    check_auth(&state, &headers)?;
+
+    let releases_dir = state.releases_dir().join(&q.tag);
+    tokio::fs::create_dir_all(&releases_dir).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Validate filename (no path traversal)
+    if q.filename.contains("..") || q.filename.contains('/') || q.filename.contains('\\') {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let file_path = releases_dir.join(&q.filename);
+    tokio::fs::write(&file_path, &body).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Compute SHA-256
+    let sha256 = {
+        use sha2::Digest;
+        let hash = sha2::Sha256::digest(&body);
+        format!("{:x}", hash)
+    };
+
+    let release_file = ReleaseFile {
+        filename: q.filename.clone(),
+        size: body.len() as u64,
+        sha256,
+    };
+
+    let mut releases = state.releases.write().await;
+    if let Some(existing) = releases.iter_mut().find(|r| r.tag == q.tag) {
+        // Update notes if provided
+        if q.notes.is_some() {
+            existing.notes = q.notes;
+        }
+        // Replace or add file
+        existing.files.retain(|f| f.filename != q.filename);
+        existing.files.push(release_file);
+    } else {
+        releases.push(Release {
+            tag: q.tag.clone(),
+            created_at: Utc::now(),
+            notes: q.notes,
+            files: vec![release_file],
+        });
+    }
+    drop(releases);
+
+    // Persist releases
+    let _ = storage::save_releases(&state).await;
+
+    tracing::info!(tag = %q.tag, filename = %q.filename, size = body.len(), "Release file uploaded");
+    Ok(Json(json!({ "status": "ok", "tag": q.tag, "filename": q.filename })))
+}
+
+async fn list_releases(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, StatusCode> {
+    check_auth(&state, &headers)?;
+    let releases = state.releases.read().await;
+    Ok(Json(json!({ "releases": *releases })))
+}
+
+async fn latest_release(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Value>, StatusCode> {
+    let releases = state.releases.read().await;
+    match releases.last() {
+        Some(r) => Ok(Json(json!(r))),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn get_release(
+    State(state): State<Arc<AppState>>,
+    Path(tag): Path<String>,
+) -> Result<Json<Value>, StatusCode> {
+    let releases = state.releases.read().await;
+    match releases.iter().find(|r| r.tag == tag) {
+        Some(r) => Ok(Json(json!(r))),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn download_latest(
+    State(state): State<Arc<AppState>>,
+    Path(filename): Path<String>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let releases = state.releases.read().await;
+    let tag = releases.last().map(|r| r.tag.clone()).ok_or(StatusCode::NOT_FOUND)?;
+    drop(releases);
+    serve_release_file(&state, &tag, &filename).await
+}
+
+async fn download_release(
+    State(state): State<Arc<AppState>>,
+    Path((tag, filename)): Path<(String, String)>,
+) -> Result<impl IntoResponse, StatusCode> {
+    serve_release_file(&state, &tag, &filename).await
+}
+
+async fn serve_release_file(
+    state: &AppState,
+    tag: &str,
+    filename: &str,
+) -> Result<impl IntoResponse, StatusCode> {
+    if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let path = state.releases_dir().join(tag).join(filename);
+    let file = tokio::fs::File::open(&path).await.map_err(|_| StatusCode::NOT_FOUND)?;
+    let meta = file.metadata().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let stream = ReaderStream::new(file);
+    let body = Body::from_stream(stream);
+
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/octet-stream".to_string()),
+            (header::CONTENT_DISPOSITION, format!("attachment; filename=\"{filename}\"")),
+            (header::CONTENT_LENGTH, meta.len().to_string()),
+        ],
+        body,
+    ))
 }

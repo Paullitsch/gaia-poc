@@ -13,6 +13,8 @@ pub struct Worker {
     pub current_job: Option<String>,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    #[serde(default)]
+    pub version: Option<String>,
 }
 
 fn default_true() -> bool { true }
@@ -64,12 +66,31 @@ pub struct ResultRow {
     pub timestamp: DateTime<Utc>,
 }
 
+// --- Release types ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Release {
+    pub tag: String,
+    pub created_at: DateTime<Utc>,
+    pub notes: Option<String>,
+    pub files: Vec<ReleaseFile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReleaseFile {
+    pub filename: String,
+    pub size: u64,
+    pub sha256: String,
+}
+
 // --- Request/response types ---
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterRequest {
     pub name: String,
     pub gpu: serde_json::Value,
+    #[serde(default)]
+    pub version: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
