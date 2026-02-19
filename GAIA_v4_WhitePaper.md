@@ -296,7 +296,21 @@ LunarLander selbst ist CPU-bound (Box2D Physik). Für GPU-Nutzung:
 └────────────────────────────────────────────┘
 ```
 
-### 6.3 BipedalWalker-v3: Die Herausforderung
+### 6.3 BipedalWalker-v3: GELÖST ✅
+
+**Ergebnis: +338.5 (Threshold: 300) — CMA-ES + Curriculum, Gen 84**
+
+BipedalWalker-v3 wurde in der ersten Nacht von Phase 8 gelöst. Ohne Backpropagation, ohne Gradienten, reines CMA-ES mit Reward Shaping und Curriculum Learning.
+
+**Lernkurve:**
+```
+Gen 10: +225.9 (erstes Laufen gelernt)
+Gen 60: +268.9 (stabiles Gehen)
+Gen 80: +309.4 (GELÖST!)
+Gen 84: +338.5 (weiter steigend)
+```
+
+### 6.4 BipedalWalker-v3: Die Herausforderung
 
 | Aspekt | LunarLander (Phase 7) | BipedalWalker (Phase 8) |
 |--------|----------------------|------------------------|
