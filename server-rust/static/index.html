@@ -407,7 +407,9 @@ function renderBestScores(){
   }
   if(!Object.keys(methods).length){el.innerHTML='<div class="empty">Run experiments to see scores</div>';return}
   el.innerHTML=Object.entries(methods).map(([m,s])=>{
-    const ok=s>=200;
+    const isBipedal=m.toLowerCase().includes('bipedal')||m.toLowerCase().includes('hardcore');
+    const threshold=isBipedal?300:200;
+    const ok=s>=threshold;
     return`<div class="big-num"><div class="val ${ok?'solved':''}">${s.toFixed(1)}</div><div class="lbl">${esc(m)}${ok?' 🎉':''}</div></div>`;
   }).join('');
 }

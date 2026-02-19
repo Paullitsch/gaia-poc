@@ -77,7 +77,7 @@ curl -X POST http://localhost:7434/api/jobs/submit \
 | 5 | Neuromodulation | 🟡 +80.0 breakthrough |
 | 6 | Deep Neuromod + PPO baseline | 🟡 PPO: +264.8 |
 | 7 | **CMA-ES + Compute** | **✅ +274.0 SOLVED** |
-| 8 | **BipedalWalker + Infrastructure** | 🔬 In progress |
+| 8 | **BipedalWalker + Infrastructure** | **✅ +338 SOLVED** |
 
 ## 🧬 Available Methods
 
