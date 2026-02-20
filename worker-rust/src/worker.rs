@@ -17,12 +17,21 @@ pub async fn execute_job(
     let job_id = job.id.clone();
     tracing::info!(job_id = %job_id, method = %job.method, "Starting job execution");
 
-    // Try native Rust execution first
+    // Native Rust execution — no Python needed
     if crate::experiments::native_runner::can_run_native(&job.method, &job.environment) {
-        tracing::info!(job_id = %job_id, "Running NATIVE Rust: {} on {}", job.method, job.environment);
+        tracing::info!(job_id = %job_id, "🦀 Running NATIVE Rust: {} on {}", job.method, job.environment);
         return execute_native(client, worker_id, job).await;
     }
 
+    // Unsupported method/env combo — fail with clear message
+    let err = format!("Unsupported native combo: {} on {}. Supported methods: cma_es, openai_es, scaling_test, curriculum, neuromod, neuromod_island, island_model, island_advanced, meta_learning, meta_learning_pure. Supported envs: CartPole-v1, LunarLander-v3, BipedalWalker-v3.",
+        job.method, job.environment);
+    tracing::warn!(job_id = %job_id, "{}", err);
+    client.complete_job(&job_id, worker_id, "failed", Some(&err)).await?;
+    return Ok(());
+
+    // Legacy Python path (kept for reference, unreachable)
+    #[allow(unreachable_code)]
     let exp_dir = PathBuf::from(&cfg.experiments_dir)
         .canonicalize()
         .unwrap_or_else(|_| PathBuf::from(&cfg.experiments_dir));
@@ -260,17 +269,10 @@ async fn execute_native(
     // Run in blocking thread (Box2D is not async)
     let results = tokio::task::spawn_blocking(move || {
         let mut results: Vec<crate::experiments::native_runner::GenResult> = Vec::new();
-        
-        match method.as_str() {
-            "cma_es" | "openai_es" | "scaling_test" => {
-                crate::experiments::native_runner::run_cma_es(
-                    &env_name,
-                    &params,
-                    |gr| { results.push(gr); },
-                );
-            }
-            _ => {}
-        }
+        crate::experiments::native_runner::run(
+            &method, &env_name, &params,
+            |gr| { results.push(gr); },
+        );
         results
     }).await?;
 
