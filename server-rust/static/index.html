@@ -183,16 +183,21 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
               <option value="BipedalWalkerHardcore-v3">BipedalWalkerHardcore-v3</option>
             </select>
             <select id="method-select">
-              <option value="cma_es">CMA-ES</option>
-              <option value="openai_es">OpenAI-ES</option>
-              <option value="neuromod">Neuromod CMA-ES</option>
-              <option value="island_model">Island Model</option>
-              <option value="neuromod_island">Neuromod Island</option>
-              <option value="curriculum">Curriculum</option>
-              <option value="hybrid_cma_ff">Hybrid CMA+FF</option>
-              <option value="indirect_encoding">Indirect Encoding</option>
-              <option value="island_advanced">Island Advanced</option>
-              <option value="scaling">Network Scaling</option>
+              <optgroup label="⚡ Backpropagation (Control)">
+                <option value="ppo_baseline">PPO (Backprop) — Control Group</option>
+              </optgroup>
+              <optgroup label="🧬 Gradient-Free (GAIA)">
+                <option value="cma_es">CMA-ES</option>
+                <option value="openai_es">OpenAI-ES</option>
+                <option value="neuromod">Neuromod CMA-ES</option>
+                <option value="island_model">Island Model</option>
+                <option value="neuromod_island">Neuromod Island</option>
+                <option value="curriculum">Curriculum</option>
+                <option value="hybrid_cma_ff">Hybrid CMA+FF</option>
+                <option value="indirect_encoding">Indirect Encoding</option>
+                <option value="island_advanced">Island Advanced</option>
+                <option value="scaling">Network Scaling</option>
+              </optgroup>
             </select>
             <input type="number" id="max-evals-input" value="5000" min="100" step="1000" style="width:90px" placeholder="Max evals">
             <button onclick="submitJob()">Submit ⚡</button>
@@ -339,7 +344,9 @@ const METHOD_NAMES = {
   neuromod:'Neuromod CMA-ES', island_model:'Island Model',
   island_advanced:'Island Advanced', neuromod_island:'Neuromod Island',
   scaling:'Network Scaling',
+  ppo_baseline:'PPO (Backprop)',
 };
+const BACKPROP_METHODS = new Set(['ppo_baseline']);
 
 function resolveEnv(job) { return job.environment; }
 
@@ -505,7 +512,7 @@ function renderLeaderboard(){
     const totalEvals=Math.max(...d.points.map(p=>p.evals),d.points.length);
     const runtime=d.started_at&&d.completed_at?dur(d.started_at,d.completed_at):(d.started_at?dur(d.started_at):'-');
     if(!methods[mKey]||best>methods[mKey].best){
-      methods[mKey]={name:mName,best,evals:totalEvals,runtime,solved:best>=bench.threshold,jobId:id,status:d.status};
+      methods[mKey]={key:mKey,name:mName,best,evals:totalEvals,runtime,solved:best>=bench.threshold,jobId:id,status:d.status};
     }
   }
 
@@ -519,13 +526,16 @@ function renderLeaderboard(){
   let h=`<div style="font-size:.7rem;color:var(--text2);margin-bottom:8px">Solved ≥ ${bench.threshold} | obs_dim=${bench.obs_dim} | act_dim=${bench.act_dim} (${bench.action_type})</div>`;
   h+='<table class="leaderboard"><tr><th>#</th><th>Method</th><th>Best Score</th><th>Evals</th><th>Solved?</th><th>Runtime</th><th>Status</th></tr>';
   sorted.forEach((m,i)=>{
+    const isBackprop=['ppo_baseline'].includes(m.key);
     const rankClass=i<3?`rank-${i+1}`:'';
     const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
     const solvedBadge=m.solved?'<span style="color:var(--green)">✅</span>':'<span style="color:var(--text2)">—</span>';
     const scoreColor=m.solved?'var(--green)':m.best>bench.threshold*0.8?'var(--yellow)':'var(--text)';
-    h+=`<tr>
+    const typeBadge=isBackprop?'<span style="background:rgba(239,68,68,.15);color:var(--red);padding:1px 6px;border-radius:4px;font-size:.65rem;margin-left:4px">⚡ BACKPROP</span>':'<span style="background:rgba(34,197,94,.12);color:var(--green);padding:1px 6px;border-radius:4px;font-size:.65rem;margin-left:4px">🧬 GRAD-FREE</span>';
+    const rowBg=isBackprop?'background:rgba(239,68,68,.04);':'';
+    h+=`<tr style="${rowBg}">
       <td class="${rankClass}">${medal}${i+1}</td>
-      <td style="font-weight:600">${esc(m.name)}</td>
+      <td style="font-weight:600">${esc(m.name)}${typeBadge}</td>
       <td style="color:${scoreColor};font-weight:700;font-variant-numeric:tabular-nums">${m.best.toFixed(1)}</td>
       <td style="font-variant-numeric:tabular-nums">${m.evals>1000?(m.evals/1000).toFixed(1)+'K':m.evals}</td>
       <td>${solvedBadge}</td>

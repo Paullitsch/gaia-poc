@@ -20,7 +20,8 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from experiments import (cma_es, openai_es, hybrid_ff, curriculum, indirect,
-                        scaling, neuromod, island_model, island_advanced, neuromod_island)
+                        scaling, neuromod, island_model, island_advanced, neuromod_island,
+                        ppo_baseline)
 
 # ─── Environment configs ───────────────────────────────────────────────
 ENVIRONMENTS = {
@@ -62,6 +63,7 @@ METHODS = {
     "island_model":      ("Island Model", island_model),
     "island_advanced":   ("Island Advanced", island_advanced),
     "neuromod_island":   ("Neuromod Island", neuromod_island),
+    "ppo_baseline":      ("PPO (Backprop)", ppo_baseline),
 }
 
 
