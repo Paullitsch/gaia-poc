@@ -112,7 +112,7 @@ impl DiffPolicy {
 
             // Apply activation derivative for non-last layers
             if !is_last {
-                let z = &fwd.pre_activations[layer_idx + 1];
+                let z = &fwd.pre_activations[layer_idx];
                 for j in 0..fan_out {
                     let tanh_z = z[j].tanh();
                     delta[j] *= 1.0 - tanh_z * tanh_z; // dtanh/dz = 1 - tanh²
