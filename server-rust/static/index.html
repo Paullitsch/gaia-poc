@@ -192,7 +192,6 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
               <option value="hybrid_cma_ff">Hybrid CMA+FF</option>
               <option value="indirect_encoding">Indirect Encoding</option>
               <option value="island_advanced">Island Advanced</option>
-              <option value="gpu_cma">GPU CMA-ES</option>
               <option value="scaling">Network Scaling</option>
             </select>
             <input type="number" id="max-evals-input" value="5000" min="100" step="1000" style="width:90px" placeholder="Max evals">
@@ -339,33 +338,10 @@ const METHOD_NAMES = {
   curriculum:'Curriculum', indirect_encoding:'Indirect Enc',
   neuromod:'Neuromod CMA-ES', island_model:'Island Model',
   island_advanced:'Island Advanced', neuromod_island:'Neuromod Island',
-  gpu_cma:'GPU CMA-ES', scaling:'Network Scaling',
-  // Legacy
-  bipedal_cma:'CMA-ES (legacy)', bipedal_es:'OpenAI-ES (legacy)',
-  bipedal_pbt:'PBT (legacy)', bipedal_hardcore:'Hardcore (legacy)',
-  gpu_bipedal:'GPU CMA-ES (legacy)', neuromod_island_bipedal:'Neuromod Island (legacy)',
+  scaling:'Network Scaling',
 };
 
-// Legacy method → environment mapping
-const LEGACY_ENV_MAP = {
-  bipedal_cma:'BipedalWalker-v3', bipedal_es:'BipedalWalker-v3',
-  bipedal_pbt:'BipedalWalker-v3', bipedal_hardcore:'BipedalWalkerHardcore-v3',
-  gpu_bipedal:'BipedalWalker-v3', neuromod_island_bipedal:'BipedalWalker-v3',
-};
-
-// Resolve environment for a job (handles legacy + new)
-function resolveEnv(job) {
-  if (job.environment && job.environment !== 'LunarLander-v3') return job.environment;
-  if (LEGACY_ENV_MAP[job.method]) return LEGACY_ENV_MAP[job.method];
-  return job.environment || 'LunarLander-v3';
-}
-
-// Normalize legacy method names to generic
-function normalizeMethod(method) {
-  const map = {bipedal_cma:'cma_es', bipedal_es:'openai_es', bipedal_pbt:'pbt',
-    bipedal_hardcore:'cma_es', gpu_bipedal:'gpu_cma', neuromod_island_bipedal:'neuromod_island'};
-  return map[method] || method;
-}
+function resolveEnv(job) { return job.environment; }
 
 // ======= STATE =======
 let TOKEN = '', serverStart = null, currentBenchEnv = 'LunarLander-v3';
@@ -523,7 +499,7 @@ function renderLeaderboard(){
     if(!d.points.length)continue;
     const env=d.environment||'LunarLander-v3';
     if(env!==currentBenchEnv)continue;
-    const mKey=normalizeMethod(d.method);
+    const mKey=d.method;
     const mName=METHOD_NAMES[mKey]||METHOD_NAMES[d.method]||d.method;
     const best=Math.max(...d.points.map(p=>p.best_ever));
     const totalEvals=Math.max(...d.points.map(p=>p.evals),d.points.length);
@@ -690,7 +666,7 @@ function drawLearningCurves(){
   let ci=0;const legend=[];
   for(const[id,d]of entries){
     const color=COLORS[ci%COLORS.length];
-    const name=METHOD_NAMES[normalizeMethod(d.method)]||METHOD_NAMES[d.method]||d.method;
+    const name=METHOD_NAMES[d.method]||METHOD_NAMES[d.method]||d.method;
     legend.push({name,color,status:d.status});
 
     // Area under curve
@@ -732,7 +708,7 @@ function drawComparison(){
   for(const d of Object.values(allJobData)){
     if(!d.points.length)continue;
     const env=d.environment||'LunarLander-v3';
-    const name=(METHOD_NAMES[normalizeMethod(d.method)]||d.method)+'\n'+env.replace('-v3','');
+    const name=(METHOD_NAMES[d.method]||d.method)+'\n'+env.replace('-v3','');
     const best=Math.max(...d.points.map(p=>p.best_ever));
     const lastMean=d.points[d.points.length-1].mean;
     if(!methods[name]||best>methods[name].best)methods[name]={best,mean:lastMean,env};

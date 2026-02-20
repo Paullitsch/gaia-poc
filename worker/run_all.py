@@ -23,30 +23,20 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from experiments import cma_es, openai_es, hybrid_ff, curriculum, indirect
-from experiments import bipedal_cma, bipedal_es, bipedal_pbt, bipedal_hardcore, scaling, neuromod, island_model, island_advanced, neuromod_island, gpu_cma, gpu_bipedal, neuromod_island_bipedal
+from experiments import scaling, neuromod, island_model, island_advanced, neuromod_island
 
 
 METHODS = {
-    # Phase 7 — LunarLander
     "cma_es": ("CMA-ES", cma_es),
     "openai_es": ("OpenAI ES", openai_es),
     "hybrid_cma_ff": ("Hybrid CMA+FF", hybrid_ff),
     "curriculum": ("Curriculum CMA-ES", curriculum),
     "indirect_encoding": ("Indirect Encoding", indirect),
-    # Phase 8 — BipedalWalker
-    "bipedal_cma": ("BipedalWalker CMA-ES", bipedal_cma),
-    "bipedal_es": ("BipedalWalker OpenAI-ES", bipedal_es),
-    "bipedal_pbt": ("BipedalWalker PBT", bipedal_pbt),
-    "bipedal_hardcore": ("BipedalWalker Hardcore", bipedal_hardcore),
-    # Scaling experiments
     "scaling": ("Network Scaling", scaling),
     "neuromod": ("Neuromodulated CMA-ES", neuromod),
     "island_model": ("Island Model CMA-ES", island_model),
     "island_advanced": ("Advanced Island Model", island_advanced),
     "neuromod_island": ("Neuromod Island Model", neuromod_island),
-    "gpu_cma": ("GPU CMA-ES", gpu_cma),
-    "gpu_bipedal": ("GPU BipedalWalker", gpu_bipedal),
-    "neuromod_island_bipedal": ("Neuromod Island BipedalWalker", neuromod_island_bipedal),
 }
 
 

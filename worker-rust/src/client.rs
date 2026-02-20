@@ -15,7 +15,6 @@ pub struct ServerClient {
 pub struct Job {
     pub id: String,
     pub method: String,
-    #[serde(default = "default_environment")]
     pub environment: String,
     #[serde(default)]
     pub params: serde_json::Value,
@@ -23,8 +22,6 @@ pub struct Job {
     #[serde(default = "default_max_evals")]
     pub max_evals: u64,
 }
-
-fn default_environment() -> String { "LunarLander-v3".to_string() }
 
 fn default_max_evals() -> u64 { 100 }
 
