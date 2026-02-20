@@ -192,35 +192,34 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
       <div class="card full-width">
         <div class="card-header"><h2>⚡ Submit Experiment</h2></div>
         <div class="card-body">
-          <div class="submit-form" style="margin-top:0;padding-top:0;border-top:none">
-            <select id="env-select">
+          <div class="submit-form" style="margin-top:0;padding-top:0;border-top:none;flex-wrap:wrap">
+            <select id="env-select" style="min-width:160px">
               <option value="LunarLander-v3">LunarLander-v3</option>
               <option value="BipedalWalker-v3">BipedalWalker-v3</option>
               <option value="BipedalWalkerHardcore-v3">BipedalWalkerHardcore-v3</option>
             </select>
-            <select id="method-select">
-              <optgroup label="⚡ Backpropagation (Control)">
-                <option value="ppo_baseline">PPO (Backprop) — Control Group</option>
-                <option value="meta_learning">Meta-Learning (Evolved Rules) 🧬</option>
-                <option value="meta_learning_pure">Pure Meta-Learning (Rules Only) 🧠</option>
-                <option value="scaling_test">Scaling Test 📏</option>
-              </optgroup>
+            <select id="method-select" onchange="updateMethodParams()" style="min-width:200px">
               <optgroup label="🧬 Gradient-Free (GAIA)">
                 <option value="cma_es">CMA-ES</option>
                 <option value="openai_es">OpenAI-ES</option>
+                <option value="curriculum">Curriculum</option>
                 <option value="neuromod">Neuromod CMA-ES</option>
                 <option value="island_model">Island Model</option>
                 <option value="neuromod_island">Neuromod Island</option>
-                <option value="curriculum">Curriculum</option>
+                <option value="island_advanced">Island Advanced</option>
+                <option value="meta_learning">Meta-Learning 🧬</option>
+                <option value="meta_learning_pure">Pure Meta-Learning 🧠</option>
+                <option value="scaling_test">Scaling Test 📏</option>
                 <option value="hybrid_cma_ff">Hybrid CMA+FF</option>
                 <option value="indirect_encoding">Indirect Encoding</option>
-                <option value="island_advanced">Island Advanced</option>
-                <option value="scaling">Network Scaling</option>
+              </optgroup>
+              <optgroup label="⚡ Backpropagation (Control)">
+                <option value="ppo_baseline">PPO (Backprop)</option>
               </optgroup>
             </select>
-            <input type="number" id="max-evals-input" value="5000" min="100" step="1000" style="width:90px" placeholder="Max evals">
-            <button onclick="submitJob()">Submit ⚡</button>
+            <button onclick="submitJob()" style="white-space:nowrap">Submit ⚡</button>
           </div>
+          <div id="method-params" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;margin-top:8px"></div>
         </div>
       </div>
 
@@ -1005,14 +1004,116 @@ function drawDistribution(){
 }
 
 // ======= ACTIONS =======
+// ======= METHOD PARAMS =======
+const METHOD_PARAMS = {
+  _common: [
+    {key:'max_evals',label:'Max Evals',type:'number',default:100000,step:10000},
+    {key:'eval_episodes',label:'Eval Episodes',type:'number',default:5,step:1},
+    {key:'hidden',label:'Hidden Layers',type:'text',default:'64,32',help:'e.g. 64,32'},
+  ],
+  cma_es: [
+    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
+    {key:'patience',label:'Patience',type:'number',default:200,step:50},
+  ],
+  openai_es: [
+    {key:'pop_size',label:'Pop Size',type:'number',default:50,step:10},
+    {key:'lr',label:'Learning Rate',type:'number',default:0.02,step:0.005},
+    {key:'noise_std',label:'Noise σ',type:'number',default:0.05,step:0.01},
+    {key:'weight_decay',label:'Weight Decay',type:'number',default:0.005,step:0.001},
+  ],
+  curriculum: [
+    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
+  ],
+  neuromod: [
+    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
+  ],
+  neuromod_island: [
+    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
+  ],
+  island_model: [
+    {key:'n_islands',label:'Islands',type:'number',default:4,step:1},
+    {key:'migration_interval',label:'Migration Int.',type:'number',default:10,step:5},
+    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
+  ],
+  island_advanced: [
+    {key:'n_islands',label:'Islands',type:'number',default:6,step:1},
+    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
+  ],
+  meta_learning: [
+    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
+    {key:'n_lifetime_episodes',label:'Lifetime Eps',type:'number',default:3,step:1},
+  ],
+  meta_learning_pure: [
+    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
+    {key:'n_lifetime_episodes',label:'Lifetime Eps',type:'number',default:10,step:1},
+    {key:'n_random_inits',label:'Random Inits',type:'number',default:3,step:1},
+  ],
+  scaling_test: [
+    {key:'config',label:'Net Size',type:'select',options:['1k','3k','10k','33k','100k','200k','500k'],default:'10k'},
+  ],
+  ppo_baseline: [
+    {key:'rollout_steps',label:'Rollout Steps',type:'number',default:2048,step:256},
+    {key:'n_epochs',label:'Epochs',type:'number',default:10,step:1},
+    {key:'lr',label:'Learning Rate',type:'number',default:0.0003,step:0.0001},
+    {key:'clip_eps',label:'Clip ε',type:'number',default:0.2,step:0.05},
+    {key:'gamma',label:'γ',type:'number',default:0.99,step:0.005},
+    {key:'lambda',label:'λ (GAE)',type:'number',default:0.95,step:0.05},
+    {key:'ent_coeff',label:'Entropy Coeff',type:'number',default:0.01,step:0.005},
+  ],
+  hybrid_cma_ff: [],
+  indirect_encoding: [],
+};
+
+function updateMethodParams(){
+  const method=document.getElementById('method-select').value;
+  const el=document.getElementById('method-params');
+  const common=METHOD_PARAMS._common||[];
+  const specific=METHOD_PARAMS[method]||[];
+  const fields=[...common,...specific];
+  el.innerHTML=fields.map(f=>{
+    const id=`param-${f.key}`;
+    if(f.type==='select'){
+      const opts=(f.options||[]).map(o=>`<option value="${o}"${o===f.default?' selected':''}>${o}</option>`).join('');
+      return`<label style="font-size:.7rem;color:var(--text2);display:flex;flex-direction:column;gap:2px">${esc(f.label)}<select id="${id}" style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:4px 8px;color:var(--text);font-size:.8rem">${opts}</select></label>`;
+    }
+    const inputType=f.type==='text'?'text':'number';
+    const step=f.step?`step="${f.step}"`:'';
+    return`<label style="font-size:.7rem;color:var(--text2);display:flex;flex-direction:column;gap:2px">${esc(f.label)}<input type="${inputType}" id="${id}" value="${f.default}" ${step} style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:4px 8px;color:var(--text);font-size:.8rem;width:100%"></label>`;
+  }).join('');
+}
+
+// Init on load
+setTimeout(updateMethodParams,0);
+
 async function submitJob(){
   const environment=document.getElementById('env-select').value;
   const method=document.getElementById('method-select').value;
-  const maxEvals=parseInt(document.getElementById('max-evals-input').value)||5000;
+  const common=METHOD_PARAMS._common||[];
+  const specific=METHOD_PARAMS[method]||[];
+  const fields=[...common,...specific];
+  const params={};
+  for(const f of fields){
+    const el=document.getElementById(`param-${f.key}`);
+    if(!el)continue;
+    let v=el.value;
+    if(f.key==='hidden'){
+      // Keep as string — server parses it or pass as-is
+      // Actually skip hidden from params, let server use defaults unless changed
+      if(v&&v!=='64,32'){
+        params.hidden=v.split(',').map(Number);
+      }
+      continue;
+    }
+    if(f.type==='number')v=parseFloat(v);
+    if(f.type==='select')v=v;
+    if(v!==''&&v!==null&&v!==undefined)params[f.key]=v;
+  }
+  const maxEvals=params.max_evals||100000;
   try{
-    const r=await fetch('/api/jobs/submit',{method:'POST',headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},body:JSON.stringify({method,environment,max_evals:maxEvals,params:{max_evals:maxEvals}})});
+    const r=await fetch('/api/jobs/submit',{method:'POST',headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},body:JSON.stringify({method,environment,max_evals:maxEvals,params})});
     if(r.ok){addLog(`📤 Submitted: <b>${esc(method)}</b> on <b>${esc(environment)}</b> (${maxEvals} evals)`);refresh()}
-  }catch(e){addLog('❌ Submit failed')}
+    else{addLog('❌ Submit failed: HTTP '+r.status)}
+  }catch(e){addLog('❌ Submit failed: '+e)}
 }
 
 async function cancelJob(jobId){
