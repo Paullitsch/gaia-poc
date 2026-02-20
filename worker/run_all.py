@@ -180,6 +180,20 @@ def main():
         "n_frames": env_cfg.get("n_frames", 4),
     }
 
+    # Merge extra params from GAIA_JOB_PARAMS env var (set by worker)
+    extra_json = os.environ.get("GAIA_JOB_PARAMS", "")
+    if extra_json:
+        try:
+            extra = json.loads(extra_json)
+            # Only merge known experiment params, don't override env config
+            for key in ("pop_size", "lr", "noise_std", "sigma0", "n_workers",
+                        "n_islands", "migration_interval", "config"):
+                if key in extra:
+                    params[key] = extra[key]
+                    print(f"  [params] {key}={extra[key]}")
+        except json.JSONDecodeError:
+            pass
+
     label, module = METHODS[args.method]
 
     print(f"""

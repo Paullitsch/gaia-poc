@@ -45,6 +45,7 @@ pub async fn execute_job(
         .arg("--no-plots")
         .current_dir(&work_dir)
         .env("PYTHONUNBUFFERED", "1")
+        .env("GAIA_JOB_PARAMS", serde_json::to_string(&job.params).unwrap_or_default())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 

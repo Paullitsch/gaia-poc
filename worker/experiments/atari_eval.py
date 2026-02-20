@@ -160,7 +160,7 @@ def evaluate_atari(params_vec, env_name, n_actions, n_episodes=3,
     # Vectorized environments — all episodes run in parallel!
     n_envs = n_episodes
     try:
-        envs = gym.vector.make(env_name, num_envs=n_envs)
+        envs = gym.vector.make(env_name, num_envs=n_envs, vectorization_mode="async")
     except Exception:
         # Fallback: sequential if vectorized fails
         return _evaluate_sequential(model, env_name, n_episodes, max_steps, device)
@@ -258,7 +258,8 @@ def evaluate_population_gpu(params_list, env_name, n_actions, n_episodes=1,
     print(f"    [GPU] Evaluating {n_candidates} candidates × {n_episodes} eps = {total_envs} parallel envs")
 
     try:
-        envs = gym.vector.make(env_name, num_envs=total_envs)
+        # ASYNC = multiprocessing! Each env in its own process = parallel CPU stepping
+        envs = gym.vector.make(env_name, num_envs=total_envs, vectorization_mode="async")
     except Exception as e:
         print(f"    [GPU] Vectorized envs failed: {e}, falling back to sequential")
         return [evaluate_atari(p, env_name, n_actions, n_episodes, max_steps, device)
