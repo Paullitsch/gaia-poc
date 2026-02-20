@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from experiments import (cma_es, openai_es, hybrid_ff, curriculum, indirect,
                         scaling, neuromod, island_model, island_advanced, neuromod_island,
-                        ppo_baseline, meta_learning, scaling_test)
+                        ppo_baseline, meta_learning, meta_learning_pure, scaling_test)
 
 # ─── Environment configs ───────────────────────────────────────────────
 ENVIRONMENTS = {
@@ -66,6 +66,7 @@ METHODS = {
     "neuromod_island":   ("Neuromod Island", neuromod_island),
     "ppo_baseline":      ("PPO (Backprop)", ppo_baseline),
     "meta_learning":     ("Meta-Learning (Evolved Rules)", meta_learning),
+    "meta_learning_pure":("Pure Meta-Learning (Rules Only)", meta_learning_pure),
     "scaling_test":      ("Scaling Test", scaling_test),
 }
 
