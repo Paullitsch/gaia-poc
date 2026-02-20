@@ -4,8 +4,10 @@ Advanced Island Model: Fully connected topology, adaptive migration, heterogeneo
 Improvements over basic Island Model:
 - Fully connected topology (any island can send to any other)
 - Adaptive migration rate (more migration when diversity drops)
-- Heterogeneous islands: mix CMA-ES sigmas AND network architectures
+- Heterogeneous islands: mix CMA-ES sigmas
 - Migration tournament: only migrate if migrant is better than worst in target
+
+Environment-agnostic.
 """
 
 import numpy as np
@@ -14,46 +16,7 @@ import time
 import multiprocessing as mp
 import os
 
-
-class PolicyNetwork:
-    def __init__(self, obs_dim=8, act_dim=4, hidden1=64, hidden2=32):
-        self.shapes = [
-            (obs_dim, hidden1), (hidden1,),
-            (hidden1, hidden2), (hidden2,),
-            (hidden2, act_dim), (act_dim,),
-        ]
-        self.sizes = [np.prod(s) for s in self.shapes]
-        self.n_params = sum(self.sizes)
-
-    def forward(self, x, params):
-        idx = 0
-        layers = []
-        for shape, size in zip(self.shapes, self.sizes):
-            layers.append(params[idx:idx + size].reshape(shape))
-            idx += size
-        h = np.tanh(x @ layers[0] + layers[1])
-        h = np.tanh(h @ layers[2] + layers[3])
-        return h @ layers[4] + layers[5]
-
-    def act(self, obs, params):
-        return int(np.argmax(self.forward(obs, params)))
-
-
-def evaluate(policy, params, n_episodes=5):
-    env = gym.make("LunarLander-v3")
-    total = 0.0
-    for ep in range(n_episodes):
-        obs, _ = env.reset(seed=ep * 1000)
-        done, steps, ep_r = False, 0, 0.0
-        while not done and steps < 1000:
-            action = policy.act(obs, params)
-            obs, reward, terminated, truncated, _ = env.step(action)
-            ep_r += reward
-            done = terminated or truncated
-            steps += 1
-        total += ep_r
-    env.close()
-    return total / n_episodes
+from experiments.cma_es import PolicyNetwork, evaluate, CMAES
 
 
 class AdaptiveCMAES:
@@ -83,7 +46,6 @@ class AdaptiveCMAES:
         self.gen = 0
         self.best_fitness = -float("inf")
         self.best_params = None
-        self.fitness_history = []
 
     def ask(self):
         if self.use_diagonal:
@@ -102,7 +64,6 @@ class AdaptiveCMAES:
         if fitnesses[best_idx] > self.best_fitness:
             self.best_fitness = fitnesses[best_idx]
             self.best_params = solutions[best_idx].copy()
-        self.fitness_history.append(float(np.max(fitnesses)))
         old_mean = self.mean.copy()
         self.mean = self.weights @ selected
         if self.use_diagonal:
@@ -125,8 +86,7 @@ class AdaptiveCMAES:
         self.gen += 1
 
     def inject(self, params, fitness):
-        """Tournament migration: only accept if better than current worst."""
-        if fitness > self.best_fitness * 0.8:  # Accept if within 80% of best
+        if fitness > self.best_fitness * 0.8:
             alpha = min(0.5, max(0.1, (fitness - self.best_fitness) / (abs(self.best_fitness) + 1e-8)))
             if fitness > self.best_fitness:
                 alpha = 0.4
@@ -135,7 +95,6 @@ class AdaptiveCMAES:
         return False
 
     def diversity(self):
-        """Measure population diversity via sigma."""
         return self.sigma
 
 
@@ -159,19 +118,13 @@ class AdvancedIslandModel:
             self.labels.append(cfg["label"])
         self.total_migrations = 0
         self.successful_migrations = 0
-        self.base_migration_rate = 0.3  # 30% chance per pair
+        self.base_migration_rate = 0.3
 
     def adaptive_migrate(self):
-        """Fully connected adaptive migration."""
-        # Calculate diversity across islands
         diversities = [isl.diversity() for isl in self.islands]
         mean_div = np.mean(diversities)
-        
-        # If diversity is low, increase migration rate
-        migration_rate = self.base_migration_rate
-        if mean_div < 0.1:
-            migration_rate = 0.6  # Double migration when converging
-        
+        migration_rate = 0.6 if mean_div < 0.1 else self.base_migration_rate
+
         migrated = 0
         for i in range(self.n_islands):
             if self.islands[i].best_params is None:
@@ -193,15 +146,21 @@ class AdvancedIslandModel:
 
 def run(params=None, device="cpu", callback=None):
     params = params or {}
+    env_name = params.get("environment", "LunarLander-v3")
     max_evals = params.get("max_evals", 200000)
     n_islands = params.get("n_islands", 6)
     migration_interval = params.get("migration_interval", 8)
     eval_episodes = params.get("eval_episodes", 5)
+    obs_dim = params.get("obs_dim", 8)
+    act_dim = params.get("act_dim", 4)
+    act_type = params.get("act_type", "discrete")
+    hidden = params.get("hidden", [64, 32])
+    max_steps = params.get("max_steps", 1000)
+    solved_threshold = params.get("solved_threshold", 200)
     n_workers = params.get("n_workers", min(os.cpu_count() or 1, 16))
 
-    policy = PolicyNetwork()
-    print(f"🏝️  Advanced Island Model: {n_islands} islands, fully connected")
-    print(f"Network: {policy.n_params} params | Budget: {max_evals} evals | Workers: {n_workers}")
+    policy = PolicyNetwork(obs_dim, act_dim, hidden)
+    print(f"📐 Advanced Island Model on {env_name}: {n_islands} islands, {policy.n_params} params")
 
     model = AdvancedIslandModel(policy.n_params, n_islands=n_islands)
     best_ever = -float("inf")
@@ -216,7 +175,7 @@ def run(params=None, device="cpu", callback=None):
         island_sizes = []
         for island in model.islands:
             candidates = island.ask()
-            all_candidates.extend([(policy, c, eval_episodes) for c in candidates])
+            all_candidates.extend([(policy, c, env_name, eval_episodes, max_steps) for c in candidates])
             island_sizes.append(len(candidates))
 
         if n_workers > 1:
@@ -224,14 +183,14 @@ def run(params=None, device="cpu", callback=None):
                 all_fitnesses = pool.starmap(evaluate, all_candidates)
             all_fitnesses = np.array(all_fitnesses)
         else:
-            all_fitnesses = np.array([evaluate(policy, c, eval_episodes) for _, c, _ in all_candidates])
+            all_fitnesses = np.array([evaluate(*a) for a in all_candidates])
         total_evals += len(all_candidates) * eval_episodes
 
         idx = 0
         island_bests = []
         for i, island in enumerate(model.islands):
             size = island_sizes[i]
-            candidates = [c for _, c, _ in all_candidates[idx:idx + size]]
+            candidates = [c for _, c, _, _, _ in all_candidates[idx:idx + size]]
             fitnesses = all_fitnesses[idx:idx + size]
             island.tell(candidates, fitnesses)
             island_bests.append(np.max(fitnesses))
@@ -260,24 +219,23 @@ def run(params=None, device="cpu", callback=None):
         if callback:
             callback(entry)
 
-        solved = "✅ SOLVED!" if best_ever >= 200 else ""
+        solved = "✅ SOLVED!" if best_ever >= solved_threshold else ""
         print(f"Gen {gen:4d} | Best: {max(island_bests):8.1f} | Ever: {best_ever:8.1f} | "
               f"Mean: {np.mean(all_fitnesses):8.1f} | σ̄: {avg_sigma:.4f} | Evals: {total_evals:6d} | "
               f"Mig: {model.total_migrations}/{model.successful_migrations} | {elapsed:6.1f}s {solved}")
 
-        if best_ever >= 200:
-            print(f"\n🎉🏝️  SOLVED with Advanced Island Model! Score: {best_ever:.1f}")
-            print(f"   Migrations: {model.total_migrations} total, {model.successful_migrations} accepted")
+        if best_ever >= solved_threshold:
             break
 
     if best_params is not None:
-        final_scores = [evaluate(policy, best_params, 1) for _ in range(20)]
+        final_scores = [evaluate(policy, best_params, env_name, 1, max_steps) for _ in range(20)]
         final_mean, final_std = float(np.mean(final_scores)), float(np.std(final_scores))
     else:
         final_mean = final_std = 0.0
 
     return {
         "method": "Advanced Island Model",
+        "environment": env_name,
         "best_ever": float(best_ever),
         "final_mean": final_mean,
         "final_std": final_std,
@@ -288,5 +246,5 @@ def run(params=None, device="cpu", callback=None):
         "total_migrations": model.total_migrations,
         "successful_migrations": model.successful_migrations,
         "elapsed_seconds": round(time.time() - start_time, 1),
-        "solved": best_ever >= 200,
+        "solved": best_ever >= solved_threshold,
     }
