@@ -343,7 +343,7 @@ let prevWorkerIds = new Set(), prevJobStatuses = {};
 let allJobData = {}; // { jobId: { method, status, points: [{gen,best,best_ever,mean,sigma,evals,time}] } }
 let currentMetric = 'best_ever';
 const COLORS = ['#6366f1','#06b6d4','#22c55e','#eab308','#f97316','#ec4899','#ef4444','#a855f7'];
-const METHOD_NAMES = {cma_es:'CMA-ES',openai_es:'OpenAI-ES',hybrid_cma_ff:'Hybrid CMA+FF',curriculum:'Curriculum',indirect_encoding:'Indirect Enc',ga:'GA',pbt:'PBT',random_search:'Random Search',island_model:'Island Model',bipedal_cma:'BipedalWalker CMA',bipedal_es:'BipedalWalker ES',bipedal_pbt:'BipedalWalker PBT',scaling:'Network Scaling'};
+const METHOD_NAMES = {cma_es:'CMA-ES',openai_es:'OpenAI-ES',hybrid_cma_ff:'Hybrid CMA+FF',curriculum:'Curriculum',indirect_encoding:'Indirect Enc',ga:'GA',pbt:'PBT',random_search:'Random Search',island_model:'Island Model',island_advanced:'Advanced Island',neuromod_island:'Neuromod Island',neuromod:'Neuromod CMA-ES',bipedal_cma:'BipedalWalker CMA',bipedal_es:'BipedalWalker ES',bipedal_pbt:'BipedalWalker PBT',bipedal_hardcore:'BipedalWalker HC',scaling:'Network Scaling'};
 
 // ======= AUTH =======
 function authenticate(){
