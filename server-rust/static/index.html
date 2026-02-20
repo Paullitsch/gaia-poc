@@ -228,7 +228,11 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
             <span style="color:var(--text2);font-size:.7rem;margin-left:4px" id="chart1-info"></span>
           </div>
         </div>
-        <div class="card-body"><div class="chart-wrap"><canvas id="learning-canvas"></canvas></div></div>
+        <div class="card-body">
+          <div id="method-toggles" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;font-size:.75rem"></div>
+          <div style="font-size:.65rem;color:var(--text2);margin-bottom:4px">🖱️ Scroll to zoom • Shift+drag to pan • Double-click to reset</div>
+          <div class="chart-wrap"><canvas id="learning-canvas"></canvas></div>
+        </div>
       </div>
     </div>
   </div>
@@ -355,6 +359,8 @@ let TOKEN = '', serverStart = null, currentBenchEnv = 'LunarLander-v3';
 const activityLog = [], MAX_LOG = 80;
 let prevWorkerIds = new Set(), prevJobStatuses = {};
 let allJobData = {}; // { jobId: { method, environment, status, points: [...] } }
+let chartZoom = {x0:0, x1:1, dragging:false, startX:0}; // 0..1 range
+let hiddenMethods = new Set();
 let allJobs = []; // raw jobs from API
 let currentMetric = 'best_ever';
 const COLORS = ['#6366f1','#06b6d4','#22c55e','#eab308','#f97316','#ec4899','#ef4444','#a855f7','#14b8a6','#f43f5e'];
@@ -651,62 +657,130 @@ function drawSolvedLine(ctx,pad,w,h,minY,maxY,val){
   ctx.fillText(`SOLVED (${val})`,pad.left+4,y-3);
 }
 
-// Learning Curves — filtered by current benchmark env
+// Learning Curves — filtered by current benchmark env, with zoom + method toggles
+function buildMethodToggles(entries){
+  const el=document.getElementById('method-toggles');
+  const methods=new Map();
+  let ci=0;
+  for(const[id,d]of entries){
+    if(!methods.has(d.method)){
+      const color=COLORS[ci%COLORS.length];
+      const name=METHOD_NAMES[d.method]||d.method;
+      const isBackprop=BACKPROP_METHODS.has(d.method);
+      methods.set(d.method,{name,color,isBackprop});
+      ci++;
+    }
+  }
+  el.innerHTML=[...methods.entries()].map(([key,{name,color,isBackprop}])=>{
+    const checked=!hiddenMethods.has(key)?'checked':'';
+    const label=isBackprop?`⚡${name}`:`🧬${name}`;
+    return`<label style="display:flex;align-items:center;gap:3px;cursor:pointer;opacity:${hiddenMethods.has(key)?'.4':'1'}"><input type="checkbox" ${checked} onchange="toggleMethod('${key}')" style="accent-color:${color}"><span style="color:${color}">${label}</span></label>`;
+  }).join('');
+}
+
+function toggleMethod(key){
+  if(hiddenMethods.has(key))hiddenMethods.delete(key);else hiddenMethods.add(key);
+  drawLearningCurves();
+}
+
+function initChartZoom(){
+  const canvas=document.getElementById('learning-canvas');
+  canvas.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const rect=canvas.getBoundingClientRect();
+    const xFrac=(e.clientX-rect.left)/rect.width;
+    const zoomRange=chartZoom.x1-chartZoom.x0;
+    const center=chartZoom.x0+xFrac*zoomRange;
+    const factor=e.deltaY>0?1.2:0.8;
+    const newRange=Math.min(1,zoomRange*factor);
+    chartZoom.x0=Math.max(0,center-xFrac*newRange);
+    chartZoom.x1=Math.min(1,chartZoom.x0+newRange);
+    if(chartZoom.x1-chartZoom.x0>0.99){chartZoom.x0=0;chartZoom.x1=1}
+    drawLearningCurves();
+  },{passive:false});
+  canvas.addEventListener('dblclick',()=>{chartZoom.x0=0;chartZoom.x1=1;drawLearningCurves()});
+  canvas.addEventListener('mousedown',e=>{if(e.shiftKey){chartZoom.dragging=true;chartZoom.startX=e.clientX;chartZoom.dragStart={...chartZoom}}});
+  canvas.addEventListener('mousemove',e=>{
+    if(!chartZoom.dragging)return;
+    const rect=canvas.getBoundingClientRect();
+    const dx=(e.clientX-chartZoom.startX)/rect.width*(chartZoom.dragStart.x1-chartZoom.dragStart.x0);
+    const r=chartZoom.dragStart.x1-chartZoom.dragStart.x0;
+    chartZoom.x0=Math.max(0,Math.min(1-r,chartZoom.dragStart.x0-dx));
+    chartZoom.x1=chartZoom.x0+r;
+    drawLearningCurves();
+  });
+  canvas.addEventListener('mouseup',()=>{chartZoom.dragging=false});
+  canvas.addEventListener('mouseleave',()=>{chartZoom.dragging=false});
+}
+let chartZoomInited=false;
+
 function drawLearningCurves(){
+  if(!chartZoomInited){initChartZoom();chartZoomInited=true}
   const{ctx,w,h}=setupCanvas('learning-canvas');
   const bench=BENCHMARKS[currentBenchEnv]||{threshold:200};
-  const entries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0&&(d.environment||'LunarLander-v3')===currentBenchEnv);
-  if(!entries.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText(`No data for ${currentBenchEnv} — submit a job`,w/2,h/2);return}
+  const allEntries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0&&(d.environment||'LunarLander-v3')===currentBenchEnv);
+  buildMethodToggles(allEntries);
+  const entries=allEntries.filter(([_,d])=>!hiddenMethods.has(d.method));
+  if(!entries.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText(`No visible data for ${currentBenchEnv}`,w/2,h/2);return}
 
   const pad={top:28,right:20,bottom:36,left:56};
   const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
   const allPts=entries.flatMap(([_,d])=>d.points);
-  const maxGen=Math.max(...allPts.map(p=>p.gen),1);
-  const vals=allPts.map(p=>p[currentMetric]||0);
-  const maxV=Math.max(Math.max(...vals),bench.threshold*1.2),minV=Math.min(Math.min(...vals),-300);
+  const fullMaxGen=Math.max(...allEntries.flatMap(([_,d])=>d.points).map(p=>p.gen),1);
+  const visMinGen=Math.floor(chartZoom.x0*fullMaxGen);
+  const visMaxGen=Math.ceil(chartZoom.x1*fullMaxGen)||1;
+  const visPts=allPts.filter(p=>p.gen>=visMinGen&&p.gen<=visMaxGen);
+  const vals=visPts.length?visPts.map(p=>p[currentMetric]||0):[0];
+  const maxV=Math.max(Math.max(...vals),bench.threshold*1.1),minV=Math.min(Math.min(...vals),-100);
   const range=maxV-minV||1;
-  const toX=g=>pad.left+(g/maxGen)*pw;
+  const toX=g=>pad.left+((g-visMinGen)/(visMaxGen-visMinGen||1))*pw;
   const toY=v=>pad.top+ph-((v-minV)/range)*ph;
 
-  drawGrid(ctx,pad,w,h,minV,maxV,maxGen,'Generation',currentMetric==='best_ever'?'Best Score Ever':'Mean Score');
+  drawGrid(ctx,pad,w,h,minV,maxV,visMaxGen,'Generation',currentMetric==='best_ever'?'Best Score Ever':'Mean Score');
   drawSolvedLine(ctx,pad,w,h,minV,maxV,bench.threshold);
 
   if(0>=minV&&0<=maxV){ctx.setLineDash([2,2]);ctx.strokeStyle='#fff1';ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(pad.left,toY(0));ctx.lineTo(w-pad.right,toY(0));ctx.stroke();ctx.setLineDash([])}
 
-  let ci=0;const legend=[];
-  for(const[id,d]of entries){
-    const color=COLORS[ci%COLORS.length];
-    const name=METHOD_NAMES[d.method]||METHOD_NAMES[d.method]||d.method;
-    legend.push({name,color,status:d.status});
+  // Clip to chart area
+  ctx.save();ctx.beginPath();ctx.rect(pad.left,pad.top,pw,ph);ctx.clip();
 
-    // Area under curve
+  let ci=0;
+  // Color index must match allEntries order for consistency with toggles
+  const colorMap=new Map();let cj=0;
+  for(const[_,d]of allEntries){if(!colorMap.has(d.method)){colorMap.set(d.method,COLORS[cj%COLORS.length]);cj++}}
+
+  for(const[id,d]of entries){
+    const color=colorMap.get(d.method)||COLORS[0];
+    const pts=d.points.filter(p=>p.gen>=visMinGen&&p.gen<=visMaxGen);
+    if(!pts.length)continue;
+
+    // Area
     ctx.fillStyle=color+'0c';
-    ctx.beginPath();ctx.moveTo(toX(d.points[0].gen),toY(minV));
-    d.points.forEach(p=>ctx.lineTo(toX(p.gen),toY(p[currentMetric]||0)));
-    ctx.lineTo(toX(d.points[d.points.length-1].gen),toY(minV));ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.moveTo(toX(pts[0].gen),toY(minV));
+    pts.forEach(p=>ctx.lineTo(toX(p.gen),toY(p[currentMetric]||0)));
+    ctx.lineTo(toX(pts[pts.length-1].gen),toY(minV));ctx.closePath();ctx.fill();
 
     // Line
     ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();
-    d.points.forEach((p,i)=>{const x=toX(p.gen),y=toY(p[currentMetric]||0);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});
+    pts.forEach((p,i)=>{const x=toX(p.gen),y=toY(p[currentMetric]||0);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});
     ctx.stroke();
 
-    if(d.points.length<50){ctx.fillStyle=color;d.points.forEach(p=>{ctx.beginPath();ctx.arc(toX(p.gen),toY(p[currentMetric]||0),2.5,0,Math.PI*2);ctx.fill()})}
+    if(pts.length<50){ctx.fillStyle=color;pts.forEach(p=>{ctx.beginPath();ctx.arc(toX(p.gen),toY(p[currentMetric]||0),2.5,0,Math.PI*2);ctx.fill()})}
 
-    const last=d.points[d.points.length-1];
+    const last=pts[pts.length-1];
     const v=last[currentMetric]||0;
     ctx.fillStyle=color;ctx.font='bold 10px sans-serif';ctx.textAlign='left';
     ctx.fillText(v.toFixed(1),toX(last.gen)+6,toY(v)+3);
-    ci++;
   }
+  ctx.restore(); // unclip
 
-  // Legend
-  ctx.font='10px sans-serif';let lx=pad.left;
-  for(const l of legend){
-    ctx.fillStyle=l.color;ctx.fillRect(lx,pad.top-18,10,3);
-    ctx.fillStyle='#c0c0d0';ctx.textAlign='left';
-    const t=l.name+(l.status==='running'?' ●':'');
-    ctx.fillText(t,lx+14,pad.top-12);
-    lx+=ctx.measureText(t).width+28;
+  // Zoom indicator
+  if(chartZoom.x0>0.001||chartZoom.x1<0.999){
+    ctx.fillStyle='rgba(99,102,241,0.15)';
+    const zx=pad.left,zy=h-pad.bottom+20,zw=pw,zh=4;
+    ctx.fillRect(zx,zy,zw,zh);
+    ctx.fillStyle='var(--accent)';
+    ctx.fillRect(zx+chartZoom.x0*zw,zy,((chartZoom.x1-chartZoom.x0)*zw),zh);
   }
   document.getElementById('chart1-info').textContent=`${currentBenchEnv} · ${entries.reduce((s,[_,d])=>s+d.points.length,0)} pts`;
 }
