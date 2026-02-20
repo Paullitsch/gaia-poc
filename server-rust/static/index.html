@@ -36,8 +36,9 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 .dot.off{background:var(--red)}
 
 /* Tabs */
-.tabs{display:flex;gap:0;margin-top:16px;border-bottom:1px solid var(--border)}
-.tab{padding:8px 20px;font-size:.8125rem;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all .2s}
+.tabs{display:flex;gap:0;margin-top:16px;border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:8px 20px;font-size:.8125rem;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all .2s;white-space:nowrap;flex-shrink:0}
 .tab:hover{color:var(--text)}
 .tab.active{color:var(--accent2);border-bottom-color:var(--accent)}
 .tab-content{display:none}
@@ -45,7 +46,20 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 
 /* Grid */
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
-@media(max-width:768px){.grid{grid-template-columns:1fr}}
+@media(max-width:768px){
+  .grid{grid-template-columns:1fr}
+  .container{padding:8px}
+  header{padding:8px 12px}
+  .card-body{padding:10px 12px}
+  .card-header{padding:10px 12px}
+  .chart-wrap{height:260px}
+  .leaderboard{font-size:.7rem}
+  .leaderboard th,.leaderboard td{padding:4px 6px}
+  .submit-form{flex-direction:column;align-items:stretch}
+  .submit-form select,.submit-form input,.submit-form button{width:100%}
+  .toolbar{flex-wrap:wrap}
+  .worker-grid{grid-template-columns:1fr}
+}
 .full-width{grid-column:1/-1}
 
 /* Cards */
@@ -96,7 +110,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 
 /* Charts */
 .chart-wrap{position:relative;width:100%;height:320px;margin-top:10px}
-.chart-wrap canvas{width:100%!important;height:100%!important}
+.chart-wrap canvas{width:100%!important;height:100%!important;touch-action:none}
 
 /* Submit form */
 .submit-form{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
@@ -119,8 +133,9 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 .empty{color:var(--text2);text-align:center;padding:20px;font-size:.8rem}
 
 /* Env tabs */
-.env-tabs{display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid var(--border)}
-.env-tab{padding:6px 16px;font-size:.75rem;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all .2s}
+.env-tabs{display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.env-tabs::-webkit-scrollbar{display:none}
+.env-tab{padding:6px 16px;font-size:.75rem;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all .2s;white-space:nowrap;flex-shrink:0}
 .env-tab:hover{color:var(--text)}
 .env-tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
 
@@ -233,7 +248,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
         </div>
         <div class="card-body">
           <div id="method-toggles" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;font-size:.75rem"></div>
-          <div style="font-size:.65rem;color:var(--text2);margin-bottom:4px">🖱️ Scroll to zoom • Shift+drag to pan • Double-click to reset</div>
+          <div style="font-size:.65rem;color:var(--text2);margin-bottom:4px">🖱️ Drag to pan • Scroll to zoom • Shift+drag = time only • Pinch on mobile • Double-tap to reset</div>
           <div class="chart-wrap"><canvas id="learning-canvas"></canvas></div>
         </div>
       </div>
@@ -701,6 +716,8 @@ function toggleMethod(key){
 
 function initChartZoom(){
   const canvas=document.getElementById('learning-canvas');
+
+  // Scroll wheel → zoom (centered on cursor)
   canvas.addEventListener('wheel',e=>{
     e.preventDefault();
     const rect=canvas.getBoundingClientRect();
@@ -714,19 +731,93 @@ function initChartZoom(){
     if(chartZoom.x1-chartZoom.x0>0.99){chartZoom.x0=0;chartZoom.x1=1}
     drawLearningCurves();
   },{passive:false});
+
+  // Double-click/tap → reset zoom
   canvas.addEventListener('dblclick',()=>{chartZoom.x0=0;chartZoom.x1=1;drawLearningCurves()});
-  canvas.addEventListener('mousedown',e=>{if(e.shiftKey){chartZoom.dragging=true;chartZoom.startX=e.clientX;chartZoom.dragStart={...chartZoom}}});
+
+  // ── Mouse: left-click drag = pan, shift+drag = time-axis only ──
+  canvas.addEventListener('mousedown',e=>{
+    if(e.button!==0)return;
+    chartZoom.dragging=true;
+    chartZoom.shiftKey=e.shiftKey;
+    chartZoom.startX=e.clientX;
+    chartZoom.startY=e.clientY;
+    chartZoom.dragStart={x0:chartZoom.x0,x1:chartZoom.x1,yOff:chartZoom.yOff||0};
+    e.preventDefault();
+  });
   canvas.addEventListener('mousemove',e=>{
     if(!chartZoom.dragging)return;
     const rect=canvas.getBoundingClientRect();
-    const dx=(e.clientX-chartZoom.startX)/rect.width*(chartZoom.dragStart.x1-chartZoom.dragStart.x0);
     const r=chartZoom.dragStart.x1-chartZoom.dragStart.x0;
+    const dx=(e.clientX-chartZoom.startX)/rect.width*r;
     chartZoom.x0=Math.max(0,Math.min(1-r,chartZoom.dragStart.x0-dx));
     chartZoom.x1=chartZoom.x0+r;
+    if(!chartZoom.shiftKey){
+      // Also allow Y-axis panning (store offset as fraction of range)
+      const dy=(e.clientY-chartZoom.startY)/rect.height;
+      chartZoom.yOff=(chartZoom.dragStart.yOff||0)+dy;
+    }
     drawLearningCurves();
   });
   canvas.addEventListener('mouseup',()=>{chartZoom.dragging=false});
   canvas.addEventListener('mouseleave',()=>{chartZoom.dragging=false});
+
+  // ── Touch: single finger = pan, pinch = zoom ──
+  let lastTouches=null;
+  canvas.addEventListener('touchstart',e=>{
+    if(e.touches.length===1){
+      chartZoom.dragging=true;
+      chartZoom.shiftKey=false;
+      chartZoom.startX=e.touches[0].clientX;
+      chartZoom.startY=e.touches[0].clientY;
+      chartZoom.dragStart={x0:chartZoom.x0,x1:chartZoom.x1,yOff:chartZoom.yOff||0};
+    }
+    if(e.touches.length===2){
+      chartZoom.dragging=false;
+      lastTouches=[...e.touches];
+    }
+    e.preventDefault();
+  },{passive:false});
+
+  canvas.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    const rect=canvas.getBoundingClientRect();
+
+    if(e.touches.length===1&&chartZoom.dragging){
+      // Pan
+      const r=chartZoom.dragStart.x1-chartZoom.dragStart.x0;
+      const dx=(e.touches[0].clientX-chartZoom.startX)/rect.width*r;
+      chartZoom.x0=Math.max(0,Math.min(1-r,chartZoom.dragStart.x0-dx));
+      chartZoom.x1=chartZoom.x0+r;
+      const dy=(e.touches[0].clientY-chartZoom.startY)/rect.height;
+      chartZoom.yOff=(chartZoom.dragStart.yOff||0)+dy;
+      drawLearningCurves();
+    }
+
+    if(e.touches.length===2&&lastTouches&&lastTouches.length===2){
+      // Pinch zoom
+      const prevDist=Math.hypot(lastTouches[0].clientX-lastTouches[1].clientX,lastTouches[0].clientY-lastTouches[1].clientY);
+      const curDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      const scale=prevDist/curDist; // >1 = zoom out, <1 = zoom in
+
+      // Center of pinch
+      const cx=((e.touches[0].clientX+e.touches[1].clientX)/2-rect.left)/rect.width;
+      const zoomRange=chartZoom.x1-chartZoom.x0;
+      const center=chartZoom.x0+cx*zoomRange;
+      const newRange=Math.max(0.01,Math.min(1,zoomRange*scale));
+      chartZoom.x0=Math.max(0,center-cx*newRange);
+      chartZoom.x1=Math.min(1,chartZoom.x0+newRange);
+      if(chartZoom.x1-chartZoom.x0>0.99){chartZoom.x0=0;chartZoom.x1=1}
+
+      lastTouches=[...e.touches];
+      drawLearningCurves();
+    }
+  },{passive:false});
+
+  canvas.addEventListener('touchend',e=>{
+    chartZoom.dragging=false;
+    if(e.touches.length<2)lastTouches=null;
+  });
 }
 let chartZoomInited=false;
 
@@ -747,7 +838,10 @@ function drawLearningCurves(){
   const visMaxGen=Math.ceil(chartZoom.x1*fullMaxGen)||1;
   const visPts=allPts.filter(p=>p.gen>=visMinGen&&p.gen<=visMaxGen);
   const vals=visPts.length?visPts.map(p=>p[currentMetric]||0):[0];
-  const maxV=Math.max(Math.max(...vals),bench.threshold*1.1),minV=Math.min(Math.min(...vals),-100);
+  const rawMaxV=Math.max(Math.max(...vals),bench.threshold*1.1),rawMinV=Math.min(Math.min(...vals),-100);
+  const rawRange=rawMaxV-rawMinV||1;
+  const yOff=(chartZoom.yOff||0)*rawRange;
+  const maxV=rawMaxV+yOff,minV=rawMinV+yOff;
   const range=maxV-minV||1;
   const toX=g=>pad.left+((g-visMinGen)/(visMaxGen-visMinGen||1))*pw;
   const toY=v=>pad.top+ph-((v-minV)/range)*ph;
