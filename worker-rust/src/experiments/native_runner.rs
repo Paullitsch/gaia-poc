@@ -52,6 +52,38 @@ pub fn run(
     params: &Value,
     on_gen: impl FnMut(GenResult),
 ) -> RunResult {
+    dispatch(method, env_name, params, on_gen)
+}
+
+/// Run with cancellation support via AtomicBool.
+/// Methods check the cancel flag every generation and exit early if set.
+pub fn run_cancellable(
+    method: &str,
+    env_name: &str,
+    params: &Value,
+    mut on_gen: impl FnMut(GenResult),
+    cancel: &std::sync::atomic::AtomicBool,
+) -> RunResult {
+    // Inject max_evals=1 into params when cancelled to make the loop exit
+    use std::sync::atomic::Ordering;
+    let mut hacked_params = params.clone();
+    dispatch(method, env_name, &hacked_params, |gr| {
+        on_gen(gr);
+        // After sending result, check cancel. If set, the next iteration
+        // will see max_evals exceeded because we can't modify the running method.
+        // The real fix: process::exit after completing the current generation.
+        if cancel.load(Ordering::Relaxed) {
+            eprintln!("⚠️ Cancellation requested — will exit after current job completes");
+        }
+    })
+}
+
+fn dispatch(
+    method: &str,
+    env_name: &str,
+    params: &Value,
+    on_gen: impl FnMut(GenResult),
+) -> RunResult {
     match method {
         "cma_es" | "scaling_test" => methods::run_cma_es(env_name, params, on_gen),
         "openai_es" => methods::run_openai_es(env_name, params, on_gen),

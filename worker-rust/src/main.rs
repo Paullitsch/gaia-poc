@@ -227,7 +227,7 @@ async fn main() -> Result<()> {
                         }
                     }
                 });
-                // Run job, but abort if force update arrives
+                // Run job, but abort on force update OR shutdown
                 tokio::select! {
                     result = worker::execute_job(&client, &cfg, &worker_id, job) => {
                         if let Err(e) = result {
@@ -236,8 +236,6 @@ async fn main() -> Result<()> {
                     }
                     Ok(version) = &mut force_rx => {
                         tracing::warn!("Force update received — aborting current job");
-                        // Job subprocess will be killed when execute_job is dropped
-                        // Now update
                         match updater::self_update(client.http_client(), &cfg.server_url, &cfg.auth_token, &version).await {
                             Ok(true) => {
                                 if sync_experiments {
@@ -248,6 +246,12 @@ async fn main() -> Result<()> {
                             Ok(false) => {}
                             Err(e) => tracing::warn!("Force update failed: {e}"),
                         }
+                    }
+                    _ = shutdown_rx.changed() => {
+                        tracing::info!("Shutdown signal received — aborting current job");
+                        // For native Rust jobs, spawn_blocking can't be cancelled,
+                        // so we just exit the process. Results already streamed.
+                        std::process::exit(0);
                     }
                 }
                 hb_handle.abort();
