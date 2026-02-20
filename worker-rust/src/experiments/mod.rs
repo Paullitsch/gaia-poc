@@ -12,5 +12,6 @@ pub mod optim;
 pub mod lunar_lander;
 pub mod bipedal_walker;
 pub mod methods;
+pub mod ppo;
 pub mod bench_cartpole;
 pub mod native_runner;

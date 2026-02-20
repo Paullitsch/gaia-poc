@@ -1,6 +1,7 @@
 //! Native Rust experiment runner — replaces Python subprocess entirely.
 
 use super::methods;
+use super::ppo;
 use serde_json::Value;
 
 /// Result streamed per generation.
@@ -36,7 +37,7 @@ const SUPPORTED_ENVS: &[&str] = &["CartPole-v1", "LunarLander-v3", "BipedalWalke
 const SUPPORTED_METHODS: &[&str] = &[
     "cma_es", "openai_es", "scaling_test", "curriculum",
     "neuromod", "neuromod_island", "island_model", "island_advanced",
-    "meta_learning", "meta_learning_pure",
+    "meta_learning", "meta_learning_pure", "ppo_baseline",
 ];
 
 /// Check if we can run this job natively in Rust.
@@ -58,6 +59,7 @@ pub fn run(
         "neuromod" | "neuromod_island" => methods::run_neuromod(env_name, params, on_gen),
         "island_model" | "island_advanced" => methods::run_island_model(env_name, params, on_gen),
         "meta_learning" | "meta_learning_pure" => methods::run_meta_learning(env_name, params, on_gen),
+        "ppo_baseline" => ppo::run_ppo(env_name, params, on_gen),
         _ => RunResult {
             method: method.into(), environment: env_name.into(),
             best_ever: 0.0, final_mean: 0.0, final_std: 0.0,

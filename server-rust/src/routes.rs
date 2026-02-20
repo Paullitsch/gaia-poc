@@ -33,6 +33,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/workers/:worker_id/force-update", post(force_update_worker))
         .route("/api/workers/force-update-all", post(force_update_all))
         .route("/api/status", get(status))
+        .route("/api/admin/clear-all", post(clear_all))
+        .route("/api/admin/clear-workers", post(clear_workers))
         // Release management (upload requires auth, download is public)
         .route("/api/releases/upload", post(upload_release))
         .route("/api/releases", get(list_releases))
@@ -424,6 +426,50 @@ async fn status(
         "total_results": results_len,
         "server_start_time": state.start_time,
     })))
+}
+
+// --- Admin cleanup ---
+
+async fn clear_all(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, StatusCode> {
+    check_auth(&state, &headers)?;
+    let job_count = {
+        let mut jobs = state.jobs.write().await;
+        let c = jobs.len();
+        jobs.clear();
+        c
+    };
+    {
+        state.job_queue.write().await.clear();
+    }
+    let result_count = {
+        let mut results = state.results.write().await;
+        let c = results.len();
+        results.clear();
+        c
+    };
+    let _ = storage::save_state(&state).await;
+    tracing::info!(jobs = job_count, results = result_count, "All jobs and results cleared");
+    Ok(Json(json!({ "cleared_jobs": job_count, "cleared_results": result_count })))
+}
+
+async fn clear_workers(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, StatusCode> {
+    check_auth(&state, &headers)?;
+    // Keep only workers with heartbeat in last 5 minutes
+    let cutoff = Utc::now() - chrono::Duration::minutes(5);
+    let mut workers = state.workers.write().await;
+    let before = workers.len();
+    workers.retain(|_, w| w.last_heartbeat > cutoff);
+    let after = workers.len();
+    drop(workers);
+    let _ = storage::save_state(&state).await;
+    tracing::info!(removed = before - after, kept = after, "Stale workers cleared");
+    Ok(Json(json!({ "removed": before - after, "kept": after })))
 }
 
 // --- Release management ---

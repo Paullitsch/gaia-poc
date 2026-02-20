@@ -29,6 +29,12 @@ impl Rng {
     pub fn randn_vec(&mut self, n: usize) -> Vec<f64> {
         (0..n).map(|_| self.randn()).collect()
     }
+
+    /// Uniform random in [lo, hi).
+    pub fn uniform(&mut self, lo: f64, hi: f64) -> f64 {
+        let u = (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64;
+        lo + u * (hi - lo)
+    }
 }
 
 /// CMA-ES optimizer.
