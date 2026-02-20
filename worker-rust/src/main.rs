@@ -77,7 +77,13 @@ async fn main() -> Result<()> {
             }
             "lunarlander" => {
                 println!("━━━ GAIA Native Benchmark: LunarLander ━━━");
-                let result = experiments::bench_cartpole::run_env("LunarLander-v3", cli.bench_evals);
+                let result = experiments::bench_cartpole::run_env("LunarLander-v3", cli.bench_evals, true);
+                println!("\n━━━ Result ━━━");
+                println!("{:#?}", result);
+            }
+            "bipedal" => {
+                println!("━━━ GAIA Native Benchmark: BipedalWalker ━━━");
+                let result = experiments::bench_cartpole::run_env("BipedalWalker-v3", cli.bench_evals, true);
                 println!("\n━━━ Result ━━━");
                 println!("{:#?}", result);
             }

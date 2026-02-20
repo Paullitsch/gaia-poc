@@ -21,3 +21,4 @@ sha2 = "0.10"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
 wrapped2d = "0.4.2"
+rayon = "1.11.0"

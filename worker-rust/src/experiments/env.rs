@@ -120,6 +120,7 @@ pub fn make(name: &str, seed: Option<u64>) -> Option<Box<dyn Environment>> {
     match name {
         "CartPole-v1" => Some(Box::new(cartpole::CartPole::new(seed))),
         "LunarLander-v3" => Some(Box::new(super::lunar_lander::LunarLander::new(seed))),
+        "BipedalWalker-v3" => Some(Box::new(super::bipedal_walker::BipedalWalker::new(seed))),
         _ => None,
     }
 }

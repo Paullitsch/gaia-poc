@@ -1,13 +1,12 @@
-//! CMA-ES on CartPole benchmark — pure Rust, no Python.
-//!
-//! Run with: cargo run --release -- --bench-cartpole
+//! Generic CMA-ES benchmark runner with Rayon parallel evaluation.
 
-use super::env::{self, Action, Environment};
+use super::env::{self, Environment};
 use super::policy::Policy;
 use super::optim::CmaEs;
+use rayon::prelude::*;
 use std::time::Instant;
 
-/// Evaluate a parameter vector on any environment.
+/// Evaluate a parameter vector on any environment (single-threaded per call).
 fn evaluate(env_name: &str, policy: &Policy, params: &[f32], n_episodes: usize, max_steps: usize) -> f64 {
     let mut total = 0.0;
     for ep in 0..n_episodes {
@@ -16,14 +15,11 @@ fn evaluate(env_name: &str, policy: &Policy, params: &[f32], n_episodes: usize, 
         let obs = env.reset(Some(ep as u64 * 1000));
         let mut obs = obs;
         let mut ep_reward = 0.0;
-
         for _ in 0..max_steps {
             let action = policy.forward(&obs, params);
             let result = env.step(&action);
             ep_reward += result.reward;
-            if result.done() {
-                break;
-            }
+            if result.done() { break; }
             obs = result.observation;
         }
         total += ep_reward;
@@ -33,11 +29,11 @@ fn evaluate(env_name: &str, policy: &Policy, params: &[f32], n_episodes: usize, 
 
 /// Run CMA-ES on CartPole.
 pub fn run(max_evals: usize) -> BenchResult {
-    run_env("CartPole-v1", max_evals)
+    run_env("CartPole-v1", max_evals, true)
 }
 
-/// Run CMA-ES on any environment and return results.
-pub fn run_env(env_name: &str, max_evals: usize) -> BenchResult {
+/// Run CMA-ES on any environment with optional parallelism.
+pub fn run_env(env_name: &str, max_evals: usize, parallel: bool) -> BenchResult {
     let env_cfg = env::get_env_config(env_name).unwrap();
     let hidden = env::default_hidden(env_name);
     let policy = Policy::new(
@@ -47,11 +43,12 @@ pub fn run_env(env_name: &str, max_evals: usize) -> BenchResult {
         env_cfg.action_space,
     );
 
+    let n_threads = if parallel { rayon::current_num_threads() } else { 1 };
     println!("🦀 Rust CMA-ES on {}", env_name);
     println!("Network: {} ({} params)", policy.arch_string(), policy.n_params);
 
     let mut cma = CmaEs::new(policy.n_params, 0.5, None);
-    println!("Pop: {} | Budget: {} evals", cma.pop_size, max_evals);
+    println!("Pop: {} | Budget: {} | Threads: {}", cma.pop_size, max_evals, n_threads);
 
     let eval_episodes = 5;
     let max_steps = env_cfg.max_steps;
@@ -65,12 +62,21 @@ pub fn run_env(env_name: &str, max_evals: usize) -> BenchResult {
     while total_evals < max_evals {
         let candidates = cma.ask();
 
-        let fitnesses: Vec<f64> = candidates.iter()
-            .map(|c| {
-                let params_f32: Vec<f32> = c.iter().map(|&v| v as f32).collect();
-                evaluate(env_name, &policy, &params_f32, eval_episodes, max_steps)
-            })
-            .collect();
+        let fitnesses: Vec<f64> = if parallel {
+            candidates.par_iter()
+                .map(|c| {
+                    let params_f32: Vec<f32> = c.iter().map(|&v| v as f32).collect();
+                    evaluate(env_name, &policy, &params_f32, eval_episodes, max_steps)
+                })
+                .collect()
+        } else {
+            candidates.iter()
+                .map(|c| {
+                    let params_f32: Vec<f32> = c.iter().map(|&v| v as f32).collect();
+                    evaluate(env_name, &policy, &params_f32, eval_episodes, max_steps)
+                })
+                .collect()
+        };
 
         total_evals += candidates.len() * eval_episodes;
         cma.tell(&candidates, &fitnesses);
@@ -92,7 +98,7 @@ pub fn run_env(env_name: &str, max_evals: usize) -> BenchResult {
             cma.gen, gen_best, best_ever, gen_mean, cma.sigma, total_evals, elapsed, solved_str);
 
         if best_ever >= solved {
-            println!("\n🎉 CartPole SOLVED in {:.2}s!", elapsed);
+            println!("\n🎉 {} SOLVED in {:.2}s!", env_name, elapsed);
             break;
         }
     }
@@ -103,7 +109,7 @@ pub fn run_env(env_name: &str, max_evals: usize) -> BenchResult {
     let (final_mean, final_std) = if let Some(ref bp) = best_params {
         let params_f32: Vec<f32> = bp.iter().map(|&v| v as f32).collect();
         let scores: Vec<f64> = (0..20)
-            .map(|i| evaluate(env_name, &policy, &params_f32, 1, max_steps))
+            .map(|_| evaluate(env_name, &policy, &params_f32, 1, max_steps))
             .collect();
         let mean = scores.iter().sum::<f64>() / scores.len() as f64;
         let std = (scores.iter().map(|s| (s - mean).powi(2)).sum::<f64>() / scores.len() as f64).sqrt();
@@ -113,9 +119,10 @@ pub fn run_env(env_name: &str, max_evals: usize) -> BenchResult {
     };
 
     println!("\n📊 Final: {:.1} ± {:.1} (20 episodes)", final_mean, final_std);
-    println!("⏱️  Total: {:.3}s | {:.0} evals/sec", elapsed, total_evals as f64 / elapsed);
+    println!("⏱️  Total: {:.3}s | {:.0} evals/sec | {} threads", elapsed, total_evals as f64 / elapsed, n_threads);
 
     BenchResult {
+        env_name: env_name.to_string(),
         best_ever,
         final_mean,
         final_std,
@@ -123,12 +130,14 @@ pub fn run_env(env_name: &str, max_evals: usize) -> BenchResult {
         generations: cma.gen,
         elapsed_secs: elapsed,
         evals_per_sec: total_evals as f64 / elapsed,
+        n_threads,
         solved: best_ever >= solved,
     }
 }
 
 #[derive(Debug)]
 pub struct BenchResult {
+    pub env_name: String,
     pub best_ever: f64,
     pub final_mean: f64,
     pub final_std: f64,
@@ -136,5 +145,6 @@ pub struct BenchResult {
     pub generations: usize,
     pub elapsed_secs: f64,
     pub evals_per_sec: f64,
+    pub n_threads: usize,
     pub solved: bool,
 }

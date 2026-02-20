@@ -17,6 +17,12 @@ pub async fn execute_job(
     let job_id = job.id.clone();
     tracing::info!(job_id = %job_id, method = %job.method, "Starting job execution");
 
+    // Try native Rust execution first
+    if crate::experiments::native_runner::can_run_native(&job.method, &job.environment) {
+        tracing::info!(job_id = %job_id, "Running NATIVE Rust: {} on {}", job.method, job.environment);
+        return execute_native(client, worker_id, job).await;
+    }
+
     let exp_dir = PathBuf::from(&cfg.experiments_dir)
         .canonicalize()
         .unwrap_or_else(|_| PathBuf::from(&cfg.experiments_dir));
@@ -237,5 +243,51 @@ pub async fn execute_job(
 
     client.complete_job(&job_id, worker_id, status, error_msg.as_deref()).await?;
     tracing::info!(job_id = %job_id, status = %status, generations = generation, "Job finished");
+    Ok(())
+}
+
+/// Execute a job using native Rust experiments (no Python).
+async fn execute_native(
+    client: &ServerClient,
+    worker_id: &str,
+    job: Job,
+) -> Result<()> {
+    let job_id = job.id.clone();
+    let env_name = job.environment.clone();
+    let method = job.method.clone();
+    let params = job.params.clone();
+
+    // Run in blocking thread (Box2D is not async)
+    let results = tokio::task::spawn_blocking(move || {
+        let mut results: Vec<crate::experiments::native_runner::GenResult> = Vec::new();
+        
+        match method.as_str() {
+            "cma_es" | "openai_es" | "scaling_test" => {
+                crate::experiments::native_runner::run_cma_es(
+                    &env_name,
+                    &params,
+                    |gr| { results.push(gr); },
+                );
+            }
+            _ => {}
+        }
+        results
+    }).await?;
+
+    // Stream results to server
+    for gr in &results {
+        let mut data = std::collections::HashMap::new();
+        data.insert("best".into(), format!("{:.1}", gr.best));
+        data.insert("best_ever".into(), format!("{:.1}", gr.best_ever));
+        data.insert("mean".into(), format!("{:.1}", gr.mean));
+        data.insert("sigma".into(), format!("{:.4}", gr.sigma));
+        data.insert("evals".into(), format!("{}", gr.evals));
+        data.insert("generation".into(), format!("{}", gr.generation));
+        data.insert("time".into(), format!("{:.1}", gr.time));
+        let _ = client.stream_result(&job_id, worker_id, gr.generation as u64, &data).await;
+    }
+
+    client.complete_job(&job_id, worker_id, "completed", None).await?;
+    tracing::info!(job_id = %job_id, "Native job completed");
     Ok(())
 }
