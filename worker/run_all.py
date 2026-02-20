@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from experiments import cma_es, openai_es, hybrid_ff, curriculum, indirect
-from experiments import bipedal_cma, bipedal_es, bipedal_pbt, bipedal_hardcore, scaling, neuromod
+from experiments import bipedal_cma, bipedal_es, bipedal_pbt, bipedal_hardcore, scaling, neuromod, island_model
 
 
 METHODS = {
@@ -41,6 +41,7 @@ METHODS = {
     # Scaling experiments
     "scaling": ("Network Scaling", scaling),
     "neuromod": ("Neuromodulated CMA-ES", neuromod),
+    "island_model": ("Island Model CMA-ES", island_model),
 }
 
 
