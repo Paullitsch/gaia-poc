@@ -49,6 +49,37 @@ ENVIRONMENTS = {
         "max_steps": 2000,
         "hidden": [256, 128],
     },
+    # ─── Atari (Phase 10) ──────────────────────────────────────────
+    "ALE/Pong-v5": {
+        "obs_type": "pixel",
+        "obs_dim": (4, 84, 84),  # 4 stacked grayscale frames
+        "act_dim": 6,
+        "act_type": "discrete",
+        "solved": 21,
+        "max_steps": 10000,
+        "hidden": None,  # CNN, not MLP
+        "n_frames": 4,
+    },
+    "ALE/Breakout-v5": {
+        "obs_type": "pixel",
+        "obs_dim": (4, 84, 84),
+        "act_dim": 4,
+        "act_type": "discrete",
+        "solved": 30,
+        "max_steps": 10000,
+        "hidden": None,
+        "n_frames": 4,
+    },
+    "ALE/SpaceInvaders-v5": {
+        "obs_type": "pixel",
+        "obs_dim": (4, 84, 84),
+        "act_dim": 6,
+        "act_type": "discrete",
+        "solved": 500,
+        "max_steps": 10000,
+        "hidden": None,
+        "n_frames": 4,
+    },
 }
 
 # ─── Methods ───────────────────────────────────────────────────────────
