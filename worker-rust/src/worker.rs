@@ -225,8 +225,10 @@ pub async fn execute_job(
     };
 
     let error_msg = if status == "failed" && !stderr_lines.is_empty() {
-        let last_lines: Vec<_> = stderr_lines.iter().rev().take(5).rev().collect();
+        let last_lines: Vec<_> = stderr_lines.iter().rev().take(10).rev().collect();
         Some(last_lines.into_iter().cloned().collect::<Vec<_>>().join("\n"))
+    } else if status == "failed" {
+        Some("Process failed with no stderr output".into())
     } else {
         None
     };
