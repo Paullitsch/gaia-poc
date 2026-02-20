@@ -172,29 +172,21 @@ def run(params=None, device="cpu", callback=None):
     n_workers = params.get("n_workers", min(os.cpu_count() or 1, 16))
 
     obs_type = params.get("obs_type", "vector")
+    is_atari = obs_type == "pixel"
 
-    if obs_type == "pixel":
-        # Atari: use CNN policy via PyTorch
+    if is_atari:
         from experiments.atari_eval import AtariCNN
-        import torch
         n_frames = params.get("n_frames", 4)
         _model = AtariCNN(n_frames=n_frames, n_actions=act_dim)
-        # Create a lightweight adapter so evaluate() knows it's Atari
-        class _AtariPolicy:
-            def __init__(self, model):
-                self.n_params = model.n_params
-                self.act_dim = act_dim
-                self.act_type = "discrete"
-                self._is_atari = True
-                self.device = device
-        policy = _AtariPolicy(_model)
-        print(f"🎮 CMA-ES on {env_name} (CNN, {policy.n_params} params)")
+        n_params = _model.n_params
+        print(f"🎮 CMA-ES on {env_name} (CNN, {n_params} params)")
     else:
         policy = PolicyNetwork(obs_dim=obs_dim, act_dim=act_dim, act_type=act_type, hidden=hidden)
+        n_params = policy.n_params
         print(f"🧬 CMA-ES on {env_name}")
-        print(f"Network: {obs_dim}→{'→'.join(map(str,hidden))}→{act_dim} ({policy.n_params} params, {act_type})")
+        print(f"Network: {obs_dim}→{'→'.join(map(str,hidden))}→{act_dim} ({n_params} params, {act_type})")
 
-    cma = CMAES(policy.n_params, sigma0=sigma0)
+    cma = CMAES(n_params, sigma0=sigma0)
     print(f"Budget: {max_evals:,} evals | Pop: {cma.lam} | Workers: {n_workers} | Diagonal: {cma.use_diagonal}")
 
     best_ever = -float("inf")
@@ -202,10 +194,23 @@ def run(params=None, device="cpu", callback=None):
     total_evals = 0
     start_time = time.time()
 
+    # For Atari: create a picklable evaluation function
+    if is_atari:
+        from experiments.atari_eval import evaluate_atari
+        def _eval_atari(params_vec, env_name, act_dim, n_episodes, max_steps, device):
+            return evaluate_atari(params_vec, env_name, act_dim, n_episodes, max_steps, device)
+
     while total_evals < max_evals:
         candidates = cma.ask()
 
-        if n_workers > 1:
+        if is_atari:
+            # Atari: sequential eval (CNN model not picklable across processes easily)
+            # GPU handles the heavy lifting anyway
+            fitnesses = np.array([
+                _eval_atari(c, env_name, act_dim, eval_episodes, max_steps, device)
+                for c in candidates
+            ])
+        elif n_workers > 1:
             with mp.Pool(n_workers) as pool:
                 fitnesses = pool.starmap(evaluate, [(policy, c, env_name, eval_episodes, max_steps) for c in candidates])
             fitnesses = np.array(fitnesses)
@@ -243,7 +248,10 @@ def run(params=None, device="cpu", callback=None):
             break
 
     if best_params is not None:
-        final_scores = [evaluate(policy, best_params, env_name, 1, max_steps) for _ in range(20)]
+        if is_atari:
+            final_scores = [_eval_atari(best_params, env_name, act_dim, 1, max_steps, device) for _ in range(10)]
+        else:
+            final_scores = [evaluate(policy, best_params, env_name, 1, max_steps) for _ in range(20)]
         final_mean, final_std = float(np.mean(final_scores)), float(np.std(final_scores))
     else:
         final_mean = final_std = 0.0

@@ -31,25 +31,23 @@ def run(params=None, device="cpu", callback=None):
     n_workers = params.get("n_workers", min(os.cpu_count() or 1, 16))
 
     obs_type = params.get("obs_type", "vector")
+    is_atari = obs_type == "pixel"
 
-    if obs_type == "pixel":
-        from experiments.atari_eval import AtariCNN
+    if is_atari:
+        from experiments.atari_eval import AtariCNN, evaluate_atari
         n_frames = params.get("n_frames", 4)
         _model = AtariCNN(n_frames=n_frames, n_actions=act_dim)
-        class _AtariPolicy:
-            def __init__(self, model):
-                self.n_params = model.n_params
-                self.act_dim = act_dim
-                self.act_type = "discrete"
-                self._is_atari = True
-                self.device = device
-        policy = _AtariPolicy(_model)
-        print(f"🎮 OpenAI-ES on {env_name} (CNN, {policy.n_params} params)")
+        n_params = _model.n_params
+        print(f"🎮 OpenAI-ES on {env_name} (CNN, {n_params} params)")
+        def _eval(params_vec):
+            return evaluate_atari(params_vec, env_name, act_dim, eval_episodes, max_steps, device)
     else:
         policy = PolicyNetwork(obs_dim=obs_dim, act_dim=act_dim, act_type=act_type, hidden=hidden)
-        print(f"🔀 OpenAI-ES on {env_name}: {policy.n_params} params")
+        n_params = n_params
+        print(f"🔀 OpenAI-ES on {env_name}: {n_params} params")
+        _eval = None  # use multiprocessing path
 
-    theta = np.random.randn(policy.n_params) * 0.1
+    theta = np.random.randn(n_params) * 0.1
     print(f"Pop: {pop_size} | lr: {lr} | σ: {noise_std} | Workers: {n_workers}")
 
     best_ever = -float("inf")
@@ -59,9 +57,12 @@ def run(params=None, device="cpu", callback=None):
     gen = 0
 
     while total_evals < max_evals:
-        noise = np.random.randn(pop_size, policy.n_params)
+        noise = np.random.randn(pop_size, n_params)
 
-        if n_workers > 1:
+        if is_atari:
+            rewards_pos = np.array([_eval(theta + noise_std * noise[i]) for i in range(pop_size)])
+            rewards_neg = np.array([_eval(theta - noise_std * noise[i]) for i in range(pop_size)])
+        elif n_workers > 1:
             args = []
             for i in range(pop_size):
                 args.append((policy, theta + noise_std * noise[i], env_name, eval_episodes, max_steps))
@@ -82,7 +83,7 @@ def run(params=None, device="cpu", callback=None):
             ranks[idx] = i
         ranks = ranks / (2 * pop_size - 1) - 0.5
 
-        gradient = np.zeros(policy.n_params)
+        gradient = np.zeros(n_params)
         for i in range(pop_size):
             gradient += ranks[i] * noise[i]
             gradient -= ranks[pop_size + i] * noise[i]
@@ -122,7 +123,10 @@ def run(params=None, device="cpu", callback=None):
             break
 
     if best_params is not None:
-        final_scores = [evaluate(policy, best_params, env_name, 1, max_steps) for _ in range(20)]
+        if is_atari:
+            final_scores = [evaluate_atari(best_params, env_name, act_dim, 1, max_steps, device) for _ in range(10)]
+        else:
+            final_scores = [evaluate(policy, best_params, env_name, 1, max_steps) for _ in range(20)]
         final_mean, final_std = float(np.mean(final_scores)), float(np.std(final_scores))
     else:
         final_mean = final_std = 0.0
@@ -135,7 +139,7 @@ def run(params=None, device="cpu", callback=None):
         "final_std": final_std,
         "total_evals": total_evals,
         "generations": gen,
-        "n_params": policy.n_params,
+        "n_params": n_params,
         "elapsed_seconds": round(time.time() - start_time, 1),
         "solved": best_ever >= solved_threshold,
     }
