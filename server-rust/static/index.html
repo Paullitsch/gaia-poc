@@ -485,7 +485,7 @@ async function fetchResults(jobs){
         best_ever:parseFloat(row.data?.best_ever||row.data?.best||0),
         mean:parseFloat(row.data?.mean||0),
         sigma:parseFloat(row.data?.sigma||0),
-        evals:parseInt(row.data?.evals||0),
+        evals:parseInt((row.data?.evals||'0').replace(/,/g,'')),
         time:parseFloat(row.data?.time||0),
       })).sort((a,b)=>a.gen-b.gen);
       const env=resolveEnv(j);
