@@ -142,6 +142,10 @@ def evaluate_atari(params_vec, env_name, n_actions, n_episodes=3,
     if not HAS_TORCH:
         raise RuntimeError("PyTorch required for Atari evaluation")
 
+    # Auto-detect GPU
+    if device == "cpu" and torch.cuda.is_available():
+        device = "cuda"
+
     model = AtariCNN(n_frames=4, n_actions=n_actions)
     model.load_params(params_vec)
     model.to(device)
@@ -169,7 +173,8 @@ def evaluate_atari(params_vec, env_name, n_actions, n_episodes=3,
         total_reward += ep_reward
 
     env.close()
-    return total_reward / n_episodes
+    avg = total_reward / n_episodes
+    return avg
 
 
 def evaluate_atari_batch(params_list, env_name, n_actions, n_episodes=3,
