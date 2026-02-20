@@ -33,6 +33,8 @@ pub enum WorkerStatus {
 pub struct Job {
     pub id: String,
     pub method: String,
+    #[serde(default = "default_environment")]
+    pub environment: String,
     #[serde(default)]
     pub params: serde_json::Value,
     pub script: Option<String>,
@@ -47,6 +49,7 @@ pub struct Job {
 }
 
 fn default_max_evals() -> u64 { 100 }
+fn default_environment() -> String { "LunarLander-v3".to_string() }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -98,6 +101,8 @@ pub struct RegisterRequest {
 #[derive(Debug, Deserialize)]
 pub struct SubmitJobRequest {
     pub method: String,
+    #[serde(default = "default_environment")]
+    pub environment: String,
     #[serde(default)]
     pub params: serde_json::Value,
     pub script: Option<String>,

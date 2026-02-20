@@ -118,6 +118,21 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 /* Empty */
 .empty{color:var(--text2);text-align:center;padding:20px;font-size:.8rem}
 
+/* Env tabs */
+.env-tabs{display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid var(--border)}
+.env-tab{padding:6px 16px;font-size:.75rem;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all .2s}
+.env-tab:hover{color:var(--text)}
+.env-tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+
+/* Leaderboard table */
+.leaderboard{width:100%;border-collapse:collapse;font-size:.8rem}
+.leaderboard th{text-align:left;padding:6px 10px;color:var(--text2);font-size:.7rem;text-transform:uppercase;border-bottom:1px solid var(--border)}
+.leaderboard td{padding:6px 10px;border-bottom:1px solid rgba(42,42,58,.3)}
+.leaderboard tr:hover{background:rgba(99,102,241,.05)}
+.rank-1{color:var(--yellow);font-weight:700}
+.rank-2{color:#c0c0c0;font-weight:600}
+.rank-3{color:#cd7f32;font-weight:600}
+
 /* Scrollbar */
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
@@ -145,18 +160,77 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 </header>
 
 <div class="container">
-  <!-- Tabs -->
   <div class="tabs">
-    <div class="tab active" data-tab="overview">Overview</div>
-    <div class="tab" data-tab="charts">Charts & Analysis</div>
-    <div class="tab" data-tab="compare">🔬 Compare</div>
+    <div class="tab active" data-tab="benchmarks">🏆 Benchmarks</div>
+    <div class="tab" data-tab="overview">Overview</div>
+    <div class="tab" data-tab="charts">Charts</div>
+    <div class="tab" data-tab="history">📋 History</div>
     <div class="tab" data-tab="debug">Debug</div>
-    <div class="tab" data-tab="export">Export</div>
     <div class="tab" data-tab="network">🌐 Network</div>
   </div>
 
+  <!-- TAB: Benchmarks (NEW MAIN TAB) -->
+  <div class="tab-content active" id="tab-benchmarks">
+    <div class="grid">
+      <!-- Submit Job -->
+      <div class="card full-width">
+        <div class="card-header"><h2>⚡ Submit Experiment</h2></div>
+        <div class="card-body">
+          <div class="submit-form" style="margin-top:0;padding-top:0;border-top:none">
+            <select id="env-select">
+              <option value="LunarLander-v3">LunarLander-v3</option>
+              <option value="BipedalWalker-v3">BipedalWalker-v3</option>
+              <option value="BipedalWalkerHardcore-v3">BipedalWalkerHardcore-v3</option>
+            </select>
+            <select id="method-select">
+              <option value="cma_es">CMA-ES</option>
+              <option value="openai_es">OpenAI-ES</option>
+              <option value="neuromod">Neuromod CMA-ES</option>
+              <option value="island_model">Island Model</option>
+              <option value="neuromod_island">Neuromod Island</option>
+              <option value="curriculum">Curriculum</option>
+              <option value="hybrid_cma_ff">Hybrid CMA+FF</option>
+              <option value="indirect_encoding">Indirect Encoding</option>
+              <option value="island_advanced">Island Advanced</option>
+              <option value="gpu_cma">GPU CMA-ES</option>
+              <option value="scaling">Network Scaling</option>
+            </select>
+            <input type="number" id="max-evals-input" value="5000" min="100" step="1000" style="width:90px" placeholder="Max evals">
+            <button onclick="submitJob()">Submit ⚡</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Benchmark Leaderboards -->
+      <div class="card full-width">
+        <div class="card-header"><h2>🏆 Leaderboards</h2></div>
+        <div class="card-body">
+          <div class="env-tabs" id="bench-env-tabs">
+            <div class="env-tab active" data-env="LunarLander-v3">🚀 LunarLander-v3</div>
+            <div class="env-tab" data-env="BipedalWalker-v3">🦿 BipedalWalker-v3</div>
+            <div class="env-tab" data-env="BipedalWalkerHardcore-v3">🔥 BipedalWalkerHardcore-v3</div>
+          </div>
+          <div id="leaderboard-body"><div class="empty">Run experiments to see leaderboards</div></div>
+        </div>
+      </div>
+
+      <!-- Learning Curves per Environment -->
+      <div class="card full-width">
+        <div class="card-header">
+          <h2>📈 Learning Curves</h2>
+          <div class="toolbar">
+            <button class="btn-sm active" data-metric="best_ever" onclick="setMetric(this,'best_ever')">Best Ever</button>
+            <button class="btn-sm" data-metric="mean" onclick="setMetric(this,'mean')">Mean</button>
+            <span style="color:var(--text2);font-size:.7rem;margin-left:4px" id="chart1-info"></span>
+          </div>
+        </div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="learning-canvas"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+
   <!-- TAB: Overview -->
-  <div class="tab-content active" id="tab-overview">
+  <div class="tab-content" id="tab-overview">
     <div class="grid">
       <div class="card">
         <div class="card-header"><h2>⚡ Workers</h2><div class="toolbar"><label style="font-size:.7rem;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="show-offline" onchange="refresh()" style="accent-color:var(--accent)"> Offline</label><span id="worker-count" class="badge badge-idle">0</span></div></div>
@@ -166,12 +240,10 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
         <div class="card-header"><h2>🔬 Jobs</h2><span id="job-count" class="badge badge-queued">0</span></div>
         <div class="card-body" id="jobs-body"><div class="empty">No jobs yet</div></div>
       </div>
-      <!-- Quick Stats -->
       <div class="card full-width">
         <div class="card-header"><h2>📊 Best Scores</h2></div>
         <div class="card-body"><div class="big-numbers" id="best-scores"><div class="empty">Run experiments to see scores</div></div></div>
       </div>
-      <!-- Activity -->
       <div class="card full-width">
         <div class="card-header"><h2>📋 Activity</h2><button class="btn-sm" onclick="activityLog.length=0;renderActivity()">Clear</button></div>
         <div class="card-body"><div class="activity-log" id="activity-log"><div class="empty">Waiting…</div></div></div>
@@ -182,99 +254,39 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
   <!-- TAB: Charts -->
   <div class="tab-content" id="tab-charts">
     <div class="grid">
-      <!-- Learning Curves -->
-      <div class="card full-width">
-        <div class="card-header">
-          <h2>📈 Learning Curves</h2>
-          <div class="toolbar">
-            <button class="btn-sm active" data-metric="best_ever" onclick="setMetric(this,'best_ever')">Best Ever</button>
-            <button class="btn-sm" data-metric="mean" onclick="setMetric(this,'mean')">Mean</button>
-            <button class="btn-sm" data-metric="best" onclick="setMetric(this,'best')">Gen Best</button>
-            <span style="color:var(--text2);font-size:.7rem;margin-left:4px" id="chart1-info"></span>
-            <button class="btn-sm" onclick="exportChart('learning-canvas','gaia-learning-curves.png')" title="Export as PNG">📷 PNG</button>
-          </div>
-        </div>
-        <div class="card-body"><div class="chart-wrap"><canvas id="learning-canvas"></canvas></div></div>
-      </div>
-
-      <!-- Comparison Bars -->
       <div class="card">
-        <div class="card-header">
-          <h2>🏆 Method Comparison</h2>
-          <button class="btn-sm" onclick="exportChart('comparison-canvas','gaia-comparison.png')">📷 PNG</button>
-        </div>
+        <div class="card-header"><h2>🏆 Method Comparison</h2></div>
         <div class="card-body"><div class="chart-wrap" style="height:280px"><canvas id="comparison-canvas"></canvas></div></div>
       </div>
-
-      <!-- Sigma / Convergence -->
       <div class="card">
-        <div class="card-header">
-          <h2>🔬 Convergence (σ)</h2>
-          <button class="btn-sm" onclick="exportChart('sigma-canvas','gaia-sigma.png')">📷 PNG</button>
-        </div>
+        <div class="card-header"><h2>🔬 Convergence (σ)</h2></div>
         <div class="card-body"><div class="chart-wrap" style="height:280px"><canvas id="sigma-canvas"></canvas></div></div>
       </div>
-
-      <!-- Score Distribution -->
       <div class="card full-width">
-        <div class="card-header">
-          <h2>📊 Score Distribution per Generation</h2>
-          <button class="btn-sm" onclick="exportChart('dist-canvas','gaia-distribution.png')">📷 PNG</button>
-        </div>
+        <div class="card-header"><h2>📊 Score Distribution</h2></div>
         <div class="card-body"><div class="chart-wrap" style="height:260px"><canvas id="dist-canvas"></canvas></div></div>
       </div>
     </div>
   </div>
 
-  <!-- TAB: Compare (Experiment Comparison Dashboard) -->
-  <div class="tab-content" id="tab-compare">
+  <!-- TAB: History -->
+  <div class="tab-content" id="tab-history">
     <div class="grid">
-      <!-- Head-to-Head selector -->
       <div class="card full-width">
         <div class="card-header">
-          <h2>🔬 Experiment Comparison Dashboard</h2>
+          <h2>📋 Job History</h2>
           <div class="toolbar">
-            <select id="compare-env" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:.75rem">
+            <select id="history-env-filter" onchange="renderHistory()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:.75rem">
               <option value="all">All Environments</option>
-              <option value="lunarlander">LunarLander</option>
-              <option value="bipedal">BipedalWalker</option>
+              <option value="LunarLander-v3">LunarLander-v3</option>
+              <option value="BipedalWalker-v3">BipedalWalker-v3</option>
+              <option value="BipedalWalkerHardcore-v3">BipedalWalkerHardcore-v3</option>
             </select>
-            <select id="compare-norm" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:.75rem">
-              <option value="raw">Raw Scores</option>
-              <option value="normalized">Normalized (0-1)</option>
-              <option value="evals">By Evaluations</option>
-            </select>
-            <button class="btn-sm" onclick="renderCompare()">🔄 Refresh</button>
+            <button class="btn-sm" onclick="downloadAllCSV()">⬇️ Export All CSV</button>
+            <button class="btn-sm" onclick="downloadSummaryJSON()">⬇️ Summary JSON</button>
           </div>
         </div>
-        <div class="card-body" id="compare-stats"></div>
-      </div>
-
-      <!-- Normalized Learning Curves -->
-      <div class="card full-width">
-        <div class="card-header">
-          <h2>📈 Head-to-Head Learning Curves</h2>
-          <button class="btn-sm" onclick="exportChart('compare-canvas','gaia-h2h-comparison.png')">📷 PNG</button>
-        </div>
-        <div class="card-body"><div class="chart-wrap"><canvas id="compare-canvas"></canvas></div></div>
-      </div>
-
-      <!-- Efficiency Analysis -->
-      <div class="card">
-        <div class="card-header"><h2>⚡ Sample Efficiency</h2></div>
-        <div class="card-body"><div class="chart-wrap" style="height:300px"><canvas id="efficiency-canvas"></canvas></div></div>
-      </div>
-
-      <!-- Convergence Speed -->
-      <div class="card">
-        <div class="card-header"><h2>🏁 Convergence Speed</h2></div>
-        <div class="card-body"><div class="chart-wrap" style="height:300px"><canvas id="convergence-canvas"></canvas></div></div>
-      </div>
-
-      <!-- Detailed Stats Table -->
-      <div class="card full-width">
-        <div class="card-header"><h2>📊 Detailed Method Statistics</h2></div>
-        <div class="card-body" id="compare-table"></div>
+        <div class="card-body" id="history-body"><div class="empty">No jobs yet</div></div>
       </div>
     </div>
   </div>
@@ -293,57 +305,76 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
     </div>
   </div>
 
-  <!-- TAB: Export -->
-  <div class="tab-content" id="tab-export">
-    <div class="grid">
-      <div class="card full-width">
-        <div class="card-header"><h2>💾 Data Export</h2></div>
-        <div class="card-body" id="export-body"><div class="empty">No completed jobs to export</div></div>
-      </div>
-      <div class="card full-width">
-        <div class="card-header"><h2>📷 Chart Export</h2></div>
-        <div class="card-body">
-          <p style="font-size:.8rem;color:var(--text2);margin-bottom:12px">Export all charts as high-resolution PNG images for papers and presentations.</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn-sm" onclick="exportChart('learning-canvas','gaia-learning-curves.png')">📈 Learning Curves</button>
-            <button class="btn-sm" onclick="exportChart('comparison-canvas','gaia-comparison.png')">🏆 Comparison</button>
-            <button class="btn-sm" onclick="exportChart('sigma-canvas','gaia-sigma.png')">🔬 Sigma</button>
-            <button class="btn-sm" onclick="exportChart('dist-canvas','gaia-distribution.png')">📊 Distribution</button>
-            <button class="btn-sm" onclick="exportAllCharts()">⬇️ Export All</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- TAB: Network (P2P) -->
+  <!-- TAB: Network -->
   <div class="tab-content" id="tab-network">
     <div class="grid">
       <div class="card full-width">
         <div class="card-header"><h2>🌐 GAIA P2P Network</h2></div>
-        <div class="card-body" id="network-body">
-          <div class="empty">Loading network status...</div>
-        </div>
+        <div class="card-body" id="network-body"><div class="empty">Loading network status...</div></div>
       </div>
       <div class="card full-width">
         <div class="card-header"><h2>🗺️ Network Topology</h2></div>
-        <div class="card-body">
-          <canvas id="network-canvas" width="800" height="400" style="width:100%;background:var(--surface2);border-radius:8px"></canvas>
-        </div>
+        <div class="card-body"><canvas id="network-canvas" width="800" height="400" style="width:100%;background:var(--surface2);border-radius:8px"></canvas></div>
       </div>
     </div>
   </div>
 </div>
 
 <script>
+// ======= BENCHMARK CONFIG =======
+const BENCHMARKS = {
+  'LunarLander-v3':           { threshold: 200, obs_dim: 8,  act_dim: 4, action_type: 'discrete',   emoji: '🚀' },
+  'BipedalWalker-v3':         { threshold: 300, obs_dim: 24, act_dim: 4, action_type: 'continuous', emoji: '🦿' },
+  'BipedalWalkerHardcore-v3': { threshold: 300, obs_dim: 24, act_dim: 4, action_type: 'continuous', emoji: '🔥' },
+};
+
+const GENERIC_METHODS = [
+  'cma_es','openai_es','neuromod','island_model','neuromod_island',
+  'curriculum','hybrid_cma_ff','indirect_encoding','island_advanced',
+  'gpu_cma','scaling'
+];
+
+const METHOD_NAMES = {
+  cma_es:'CMA-ES', openai_es:'OpenAI-ES', hybrid_cma_ff:'Hybrid CMA+FF',
+  curriculum:'Curriculum', indirect_encoding:'Indirect Enc',
+  neuromod:'Neuromod CMA-ES', island_model:'Island Model',
+  island_advanced:'Island Advanced', neuromod_island:'Neuromod Island',
+  gpu_cma:'GPU CMA-ES', scaling:'Network Scaling',
+  // Legacy
+  bipedal_cma:'CMA-ES (legacy)', bipedal_es:'OpenAI-ES (legacy)',
+  bipedal_pbt:'PBT (legacy)', bipedal_hardcore:'Hardcore (legacy)',
+  gpu_bipedal:'GPU CMA-ES (legacy)', neuromod_island_bipedal:'Neuromod Island (legacy)',
+};
+
+// Legacy method → environment mapping
+const LEGACY_ENV_MAP = {
+  bipedal_cma:'BipedalWalker-v3', bipedal_es:'BipedalWalker-v3',
+  bipedal_pbt:'BipedalWalker-v3', bipedal_hardcore:'BipedalWalkerHardcore-v3',
+  gpu_bipedal:'BipedalWalker-v3', neuromod_island_bipedal:'BipedalWalker-v3',
+};
+
+// Resolve environment for a job (handles legacy + new)
+function resolveEnv(job) {
+  if (job.environment && job.environment !== 'LunarLander-v3') return job.environment;
+  if (LEGACY_ENV_MAP[job.method]) return LEGACY_ENV_MAP[job.method];
+  return job.environment || 'LunarLander-v3';
+}
+
+// Normalize legacy method names to generic
+function normalizeMethod(method) {
+  const map = {bipedal_cma:'cma_es', bipedal_es:'openai_es', bipedal_pbt:'pbt',
+    bipedal_hardcore:'cma_es', gpu_bipedal:'gpu_cma', neuromod_island_bipedal:'neuromod_island'};
+  return map[method] || method;
+}
+
 // ======= STATE =======
-let TOKEN = '', serverStart = null;
+let TOKEN = '', serverStart = null, currentBenchEnv = 'LunarLander-v3';
 const activityLog = [], MAX_LOG = 80;
 let prevWorkerIds = new Set(), prevJobStatuses = {};
-let allJobData = {}; // { jobId: { method, status, points: [{gen,best,best_ever,mean,sigma,evals,time}] } }
+let allJobData = {}; // { jobId: { method, environment, status, points: [...] } }
+let allJobs = []; // raw jobs from API
 let currentMetric = 'best_ever';
-const COLORS = ['#6366f1','#06b6d4','#22c55e','#eab308','#f97316','#ec4899','#ef4444','#a855f7'];
-const METHOD_NAMES = {cma_es:'CMA-ES',openai_es:'OpenAI-ES',hybrid_cma_ff:'Hybrid CMA+FF',curriculum:'Curriculum',indirect_encoding:'Indirect Enc',ga:'GA',pbt:'PBT',random_search:'Random Search',island_model:'Island Model',island_advanced:'Advanced Island',neuromod_island:'Neuromod Island',neuromod:'Neuromod CMA-ES',bipedal_cma:'BipedalWalker CMA',bipedal_es:'BipedalWalker ES',bipedal_pbt:'BipedalWalker PBT',bipedal_hardcore:'BipedalWalker HC',scaling:'Network Scaling'};
+const COLORS = ['#6366f1','#06b6d4','#22c55e','#eab308','#f97316','#ec4899','#ef4444','#a855f7','#14b8a6','#f43f5e'];
 
 // ======= AUTH =======
 function authenticate(){
@@ -363,8 +394,18 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
   t.classList.add('active');
   document.getElementById('tab-'+t.dataset.tab).classList.add('active');
-  // Redraw charts when switching to charts tab
   if(t.dataset.tab==='charts')requestAnimationFrame(drawAllCharts);
+  if(t.dataset.tab==='benchmarks')requestAnimationFrame(()=>{renderLeaderboard();drawLearningCurves()});
+  if(t.dataset.tab==='history')renderHistory();
+}));
+
+// Env tabs
+document.querySelectorAll('#bench-env-tabs .env-tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('#bench-env-tabs .env-tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  currentBenchEnv=t.dataset.env;
+  renderLeaderboard();
+  drawLearningCurves();
 }));
 
 // ======= POLLING =======
@@ -385,6 +426,7 @@ async function refresh(){
     document.getElementById('conn-text').textContent='Connected';
     if(d.server_start_time)serverStart=new Date(d.server_start_time);
     if(serverStart){const s=Math.floor((Date.now()-serverStart)/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60);document.getElementById('uptime').textContent=h>0?h+'h '+m+'m':m+'m'}
+    allJobs=d.jobs||[];
 
     // Activity tracking
     const cw=new Set((d.workers||[]).map(w=>w.id));
@@ -398,7 +440,8 @@ async function refresh(){
     renderActivity();
     await fetchResults(d.jobs||[]);
     renderBestScores();
-    renderExport(d.jobs||[]);
+    renderLeaderboard();
+    if(document.getElementById('tab-benchmarks').classList.contains('active'))drawLearningCurves();
     if(document.getElementById('tab-charts').classList.contains('active'))drawAllCharts();
   }catch(e){document.getElementById('conn-dot').className='dot off';document.getElementById('conn-text').textContent='Disconnected'}
 }
@@ -428,17 +471,15 @@ function renderWorkers(ws){
   el.innerHTML=h+'</div>';
 }
 
-// ======= RENDER: Jobs =======
+// ======= RENDER: Jobs (Overview) =======
 function renderJobs(jobs){
   const el=document.getElementById('jobs-body');
   document.getElementById('job-count').textContent=jobs.length;
-  const run=jobs.filter(j=>j.status==='running'),que=jobs.filter(j=>j.status==='queued'),done=jobs.filter(j=>['completed','failed','timed_out','cancelled'].includes(j.status));
+  const run=jobs.filter(j=>j.status==='running'),que=jobs.filter(j=>j.status==='queued');
   let h='';
-  if(run.length){h+='<div class="job-section"><span style="color:var(--cyan)">▶</span> Running</div>';for(const j of run)h+=`<div class="job-item" style="border-left:2px solid var(--cyan)"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span></div><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--text2);font-size:.75rem">${dur(j.started_at)}</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}
-  if(que.length){h+=`<div class="job-section"><span style="color:var(--accent2)">⏳</span> Queue (${que.length})</div>`;for(const j of que)h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span></div><div style="display:flex;align-items:center;gap:6px"><span class="badge badge-queued">queued</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}
-  if(done.length){done.sort((a,b)=>new Date(b.completed_at||b.created_at)-new Date(a.completed_at||a.created_at));h+='<div class="job-section">✓ History</div>';for(const j of done.slice(0,20)){const qt=j.created_at?fmtTime(j.created_at):'—';const st=j.started_at?fmtTime(j.started_at):'—';const et=j.completed_at?fmtTime(j.completed_at):'—';const runtime=dur(j.started_at,j.completed_at);h+=`<div class="job-item" style="flex-wrap:wrap"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span><span class="badge badge-${j.status}">${j.status}</span></div><div style="display:flex;gap:12px;font-size:.7rem;color:var(--text2)"><span title="Queued">📤${qt}</span><span title="Started">▶️${st}</span><span title="Ended">⏹${et}</span><span title="Runtime">⏱${runtime}</span></div></div>`}if(done.length>20)h+=`<div style="font-size:.7rem;color:var(--text2);text-align:center">+${done.length-20} more</div>`}
-  if(!jobs.length)h='<div class="empty">No jobs</div>';
-  h+=`<div class="submit-form"><select id="method-select"><optgroup label="Phase 7 — LunarLander"><option value="cma_es">CMA-ES</option><option value="openai_es">OpenAI-ES</option><option value="hybrid_cma_ff">Hybrid CMA+FF</option><option value="curriculum">Curriculum</option><option value="indirect_encoding">Indirect Encoding</option><option value="neuromod">Neuromod CMA-ES</option><option value="island_model">Island Model</option><option value="island_advanced">Island Advanced</option><option value="neuromod_island">Neuromod Island</option><option value="gpu_cma">GPU CMA-ES</option></optgroup><optgroup label="Phase 8 — BipedalWalker"><option value="bipedal_cma">BipedalWalker CMA-ES</option><option value="bipedal_es">BipedalWalker OpenAI-ES</option><option value="bipedal_pbt">BipedalWalker PBT</option><option value="bipedal_hardcore">BipedalWalker Hardcore</option><option value="neuromod_island_bipedal">Neuromod Island BipedalWalker</option><option value="gpu_bipedal">GPU BipedalWalker</option></optgroup><optgroup label="Scaling"><option value="scaling">Network Scaling</option></optgroup></select><input type="number" id="max-evals-input" value="5000" min="100" step="1000" style="width:80px"><button onclick="submitJob()">Submit ⚡</button></div>`;
+  if(run.length){h+='<div class="job-section"><span style="color:var(--cyan)">▶</span> Running</div>';for(const j of run){const env=resolveEnv(j);h+=`<div class="job-item" style="border-left:2px solid var(--cyan)"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span><span style="font-size:.7rem;color:var(--text2)">${esc(env)}</span></div><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--text2);font-size:.75rem">${dur(j.started_at)}</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}}
+  if(que.length){h+=`<div class="job-section"><span style="color:var(--accent2)">⏳</span> Queue (${que.length})</div>`;for(const j of que){const env=resolveEnv(j);h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span><span style="font-size:.7rem;color:var(--text2)">${esc(env)}</span></div><div style="display:flex;align-items:center;gap:6px"><span class="badge badge-queued">queued</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}}
+  if(!run.length&&!que.length)h='<div class="empty">No active jobs</div>';
   el.innerHTML=h;
 }
 
@@ -464,44 +505,110 @@ async function fetchResults(jobs){
         evals:parseInt(row.data?.evals||0),
         time:parseFloat(row.data?.time||0),
       })).sort((a,b)=>a.gen-b.gen);
-      allJobData[j.id]={method:j.method,status:j.status,points:pts};
+      const env=resolveEnv(j);
+      allJobData[j.id]={method:j.method,environment:env,status:j.status,points:pts,started_at:j.started_at,completed_at:j.completed_at};
     }catch(e){}
   }
+}
+
+// ======= LEADERBOARD =======
+function renderLeaderboard(){
+  const el=document.getElementById('leaderboard-body');
+  const bench=BENCHMARKS[currentBenchEnv];
+  if(!bench){el.innerHTML='<div class="empty">Unknown benchmark</div>';return}
+
+  // Collect best results per method for this environment
+  const methods={};
+  for(const[id,d]of Object.entries(allJobData)){
+    if(!d.points.length)continue;
+    const env=d.environment||'LunarLander-v3';
+    if(env!==currentBenchEnv)continue;
+    const mKey=normalizeMethod(d.method);
+    const mName=METHOD_NAMES[mKey]||METHOD_NAMES[d.method]||d.method;
+    const best=Math.max(...d.points.map(p=>p.best_ever));
+    const totalEvals=Math.max(...d.points.map(p=>p.evals),d.points.length);
+    const runtime=d.started_at&&d.completed_at?dur(d.started_at,d.completed_at):(d.started_at?dur(d.started_at):'-');
+    if(!methods[mKey]||best>methods[mKey].best){
+      methods[mKey]={name:mName,best,evals:totalEvals,runtime,solved:best>=bench.threshold,jobId:id,status:d.status};
+    }
+  }
+
+  const sorted=Object.values(methods).sort((a,b)=>b.best-a.best);
+  if(!sorted.length){
+    el.innerHTML=`<div class="empty">No results for ${currentBenchEnv} yet.<br>
+      <span style="font-size:.7rem;color:var(--text2)">Threshold: ${bench.threshold} | obs: ${bench.obs_dim} | act: ${bench.act_dim} (${bench.action_type})</span></div>`;
+    return;
+  }
+
+  let h=`<div style="font-size:.7rem;color:var(--text2);margin-bottom:8px">Solved ≥ ${bench.threshold} | obs_dim=${bench.obs_dim} | act_dim=${bench.act_dim} (${bench.action_type})</div>`;
+  h+='<table class="leaderboard"><tr><th>#</th><th>Method</th><th>Best Score</th><th>Evals</th><th>Solved?</th><th>Runtime</th><th>Status</th></tr>';
+  sorted.forEach((m,i)=>{
+    const rankClass=i<3?`rank-${i+1}`:'';
+    const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+    const solvedBadge=m.solved?'<span style="color:var(--green)">✅</span>':'<span style="color:var(--text2)">—</span>';
+    const scoreColor=m.solved?'var(--green)':m.best>bench.threshold*0.8?'var(--yellow)':'var(--text)';
+    h+=`<tr>
+      <td class="${rankClass}">${medal}${i+1}</td>
+      <td style="font-weight:600">${esc(m.name)}</td>
+      <td style="color:${scoreColor};font-weight:700;font-variant-numeric:tabular-nums">${m.best.toFixed(1)}</td>
+      <td style="font-variant-numeric:tabular-nums">${m.evals>1000?(m.evals/1000).toFixed(1)+'K':m.evals}</td>
+      <td>${solvedBadge}</td>
+      <td style="color:var(--text2)">${m.runtime}</td>
+      <td><span class="badge badge-${m.status}">${m.status}</span></td>
+    </tr>`;
+  });
+  h+='</table>';
+  el.innerHTML=h;
 }
 
 // ======= BEST SCORES =======
 function renderBestScores(){
   const el=document.getElementById('best-scores');
-  const methods={};
+  // Per-environment best
+  const envBest={};
   for(const d of Object.values(allJobData)){
     if(!d.points.length)continue;
+    const env=d.environment||'LunarLander-v3';
     const best=Math.max(...d.points.map(p=>p.best_ever));
-    const name=METHOD_NAMES[d.method]||d.method;
-    if(!methods[name]||best>methods[name])methods[name]=best;
+    if(!envBest[env]||best>envBest[env])envBest[env]=best;
   }
-  if(!Object.keys(methods).length){el.innerHTML='<div class="empty">Run experiments to see scores</div>';return}
-  el.innerHTML=Object.entries(methods).map(([m,s])=>{
-    const isBipedal=m.toLowerCase().includes('bipedal')||m.toLowerCase().includes('hardcore');
-    const threshold=isBipedal?300:200;
-    const ok=s>=threshold;
-    return`<div class="big-num"><div class="val ${ok?'solved':''}">${s.toFixed(1)}</div><div class="lbl">${esc(m)}${ok?' 🎉':''}</div></div>`;
+  if(!Object.keys(envBest).length){el.innerHTML='<div class="empty">Run experiments to see scores</div>';return}
+  el.innerHTML=Object.entries(envBest).map(([env,s])=>{
+    const bench=BENCHMARKS[env]||{threshold:200,emoji:'🔬'};
+    const ok=s>=bench.threshold;
+    return`<div class="big-num"><div class="val ${ok?'solved':''}">${s.toFixed(1)}</div><div class="lbl">${bench.emoji} ${esc(env)}${ok?' 🎉':''}</div></div>`;
   }).join('');
 }
 
-// ======= EXPORT TAB =======
-function renderExport(jobs){
-  const el=document.getElementById('export-body');
-  const done=jobs.filter(j=>['completed','failed'].includes(j.status));
-  if(!done.length){el.innerHTML='<div class="empty">No completed jobs to export</div>';return}
-  let h='<table style="font-size:.8rem"><tr><th>Job ID</th><th>Method</th><th>Status</th><th>Gens</th><th>Best</th><th>Actions</th></tr>';
-  for(const j of done){
+// ======= HISTORY =======
+function renderHistory(){
+  const el=document.getElementById('history-body');
+  const filter=document.getElementById('history-env-filter').value;
+  let jobs=[...allJobs].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  if(filter!=='all')jobs=jobs.filter(j=>resolveEnv(j)===filter);
+  if(!jobs.length){el.innerHTML='<div class="empty">No jobs</div>';return}
+
+  let h='<table class="leaderboard"><tr><th>ID</th><th>Environment</th><th>Method</th><th>Status</th><th>Best</th><th>Queued</th><th>Started</th><th>Completed</th><th>Runtime</th><th></th></tr>';
+  for(const j of jobs.slice(0,50)){
+    const env=resolveEnv(j);
     const d=allJobData[j.id];
-    const gens=d?d.points.length:0;
     const best=d&&d.points.length?Math.max(...d.points.map(p=>p.best_ever)).toFixed(1):'—';
-    h+=`<tr><td style="font-family:monospace">${j.id.slice(0,8)}</td><td>${esc(j.method)}</td><td><span class="badge badge-${j.status}">${j.status}</span></td><td>${gens}</td><td>${best}</td><td><button class="btn-sm" onclick="downloadCSV('${j.id}')">CSV ↓</button> <button class="btn-sm" onclick="downloadJSON('${j.id}')">JSON ↓</button></td></tr>`;
+    const runtime=dur(j.started_at,j.completed_at);
+    h+=`<tr>
+      <td style="font-family:monospace;font-size:.75rem">${j.id.slice(0,8)}</td>
+      <td style="font-size:.75rem">${esc(env)}</td>
+      <td>${esc(j.method)}</td>
+      <td><span class="badge badge-${j.status}">${j.status}</span></td>
+      <td style="font-weight:600;font-variant-numeric:tabular-nums">${best}</td>
+      <td style="font-size:.7rem;color:var(--text2)">${fmtTime(j.created_at)}</td>
+      <td style="font-size:.7rem;color:var(--text2)">${fmtTime(j.started_at)}</td>
+      <td style="font-size:.7rem;color:var(--text2)">${fmtTime(j.completed_at)}</td>
+      <td style="font-size:.7rem">${runtime}</td>
+      <td><button class="btn-sm" onclick="downloadCSV('${j.id}')">CSV</button></td>
+    </tr>`;
   }
+  if(jobs.length>50)h+=`<tr><td colspan="10" style="text-align:center;color:var(--text2)">+${jobs.length-50} more</td></tr>`;
   h+='</table>';
-  h+='<div style="margin-top:12px;display:flex;gap:6px"><button class="btn-sm" onclick="downloadAllCSV()">⬇️ Export All CSV</button><button class="btn-sm" onclick="downloadSummaryJSON()">⬇️ Summary JSON</button></div>';
   el.innerHTML=h;
 }
 
@@ -513,7 +620,7 @@ function setMetric(btn,m){
   drawLearningCurves();
 }
 
-function drawAllCharts(){drawLearningCurves();drawComparison();drawSigma();drawDistribution()}
+function drawAllCharts(){drawComparison();drawSigma();drawDistribution()}
 
 function setupCanvas(id){
   const canvas=document.getElementById(id);
@@ -544,11 +651,10 @@ function drawGrid(ctx,pad,w,h,minY,maxY,maxX,xLabel,yLabel,steps=6){
     ctx.fillText(v,pad.left+(v/maxX)*pw,h-pad.bottom+14);
   }
   ctx.fillText(xLabel,w/2,h-2);
-  // Y label
   ctx.save();ctx.translate(10,h/2);ctx.rotate(-Math.PI/2);ctx.fillText(yLabel,0,0);ctx.restore();
 }
 
-function drawSolvedLine(ctx,pad,w,h,minY,maxY,val=200){
+function drawSolvedLine(ctx,pad,w,h,minY,maxY,val){
   if(val<minY||val>maxY)return;
   const ph=h-pad.top-pad.bottom,range=maxY-minY||1;
   const y=pad.top+ph-((val-minY)/range)*ph;
@@ -556,45 +662,36 @@ function drawSolvedLine(ctx,pad,w,h,minY,maxY,val=200){
   ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();
   ctx.setLineDash([]);
   ctx.fillStyle='#22c55e50';ctx.font='8px sans-serif';ctx.textAlign='left';
-  ctx.fillText('SOLVED (200)',pad.left+4,y-3);
+  ctx.fillText(`SOLVED (${val})`,pad.left+4,y-3);
 }
 
-// Chart 1: Learning Curves
+// Learning Curves — filtered by current benchmark env
 function drawLearningCurves(){
   const{ctx,w,h}=setupCanvas('learning-canvas');
-  const entries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0);
-  if(!entries.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('Submit a job to see training progress',w/2,h/2);return}
+  const bench=BENCHMARKS[currentBenchEnv]||{threshold:200};
+  const entries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0&&(d.environment||'LunarLander-v3')===currentBenchEnv);
+  if(!entries.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText(`No data for ${currentBenchEnv} — submit a job`,w/2,h/2);return}
+
   const pad={top:28,right:20,bottom:36,left:56};
   const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
-
   const allPts=entries.flatMap(([_,d])=>d.points);
   const maxGen=Math.max(...allPts.map(p=>p.gen),1);
   const vals=allPts.map(p=>p[currentMetric]||0);
-  const maxV=Math.max(Math.max(...vals),250),minV=Math.min(Math.min(...vals),-300);
+  const maxV=Math.max(Math.max(...vals),bench.threshold*1.2),minV=Math.min(Math.min(...vals),-300);
   const range=maxV-minV||1;
   const toX=g=>pad.left+(g/maxGen)*pw;
   const toY=v=>pad.top+ph-((v-minV)/range)*ph;
 
-  drawGrid(ctx,pad,w,h,minV,maxV,maxGen,'Generation',currentMetric==='best_ever'?'Best Score Ever':currentMetric==='mean'?'Mean Score':'Gen Best');
-  drawSolvedLine(ctx,pad,w,h,minV,maxV);
+  drawGrid(ctx,pad,w,h,minV,maxV,maxGen,'Generation',currentMetric==='best_ever'?'Best Score Ever':'Mean Score');
+  drawSolvedLine(ctx,pad,w,h,minV,maxV,bench.threshold);
 
-  // Zero line
   if(0>=minV&&0<=maxV){ctx.setLineDash([2,2]);ctx.strokeStyle='#fff1';ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(pad.left,toY(0));ctx.lineTo(w-pad.right,toY(0));ctx.stroke();ctx.setLineDash([])}
 
   let ci=0;const legend=[];
   for(const[id,d]of entries){
     const color=COLORS[ci%COLORS.length];
-    const name=METHOD_NAMES[d.method]||d.method;
+    const name=METHOD_NAMES[normalizeMethod(d.method)]||METHOD_NAMES[d.method]||d.method;
     legend.push({name,color,status:d.status});
-
-    // Mean ± std band (if showing best_ever, show mean as faded area)
-    if(currentMetric==='best_ever'&&d.points[0].mean){
-      ctx.fillStyle=color+'08';
-      ctx.beginPath();
-      d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.mean)):ctx.lineTo(toX(p.gen),toY(p.mean))});
-      for(let i=d.points.length-1;i>=0;i--)ctx.lineTo(toX(d.points[i].gen),toY(d.points[i].best_ever));
-      ctx.closePath();ctx.fill();
-    }
 
     // Area under curve
     ctx.fillStyle=color+'0c';
@@ -607,18 +704,12 @@ function drawLearningCurves(){
     d.points.forEach((p,i)=>{const x=toX(p.gen),y=toY(p[currentMetric]||0);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});
     ctx.stroke();
 
-    // Data points
-    if(d.points.length<50){
-      ctx.fillStyle=color;
-      d.points.forEach(p=>{ctx.beginPath();ctx.arc(toX(p.gen),toY(p[currentMetric]||0),2.5,0,Math.PI*2);ctx.fill()});
-    }
+    if(d.points.length<50){ctx.fillStyle=color;d.points.forEach(p=>{ctx.beginPath();ctx.arc(toX(p.gen),toY(p[currentMetric]||0),2.5,0,Math.PI*2);ctx.fill()})}
 
-    // End label
     const last=d.points[d.points.length-1];
     const v=last[currentMetric]||0;
     ctx.fillStyle=color;ctx.font='bold 10px sans-serif';ctx.textAlign='left';
     ctx.fillText(v.toFixed(1),toX(last.gen)+6,toY(v)+3);
-
     ci++;
   }
 
@@ -631,19 +722,20 @@ function drawLearningCurves(){
     ctx.fillText(t,lx+14,pad.top-12);
     lx+=ctx.measureText(t).width+28;
   }
-  document.getElementById('chart1-info').textContent=entries.reduce((s,[_,d])=>s+d.points.length,0)+' pts';
+  document.getElementById('chart1-info').textContent=`${currentBenchEnv} · ${entries.reduce((s,[_,d])=>s+d.points.length,0)} pts`;
 }
 
-// Chart 2: Method Comparison Bars
+// Comparison bars (all envs)
 function drawComparison(){
   const{ctx,w,h}=setupCanvas('comparison-canvas');
   const methods={};
   for(const d of Object.values(allJobData)){
     if(!d.points.length)continue;
-    const name=METHOD_NAMES[d.method]||d.method;
+    const env=d.environment||'LunarLander-v3';
+    const name=(METHOD_NAMES[normalizeMethod(d.method)]||d.method)+'\n'+env.replace('-v3','');
     const best=Math.max(...d.points.map(p=>p.best_ever));
     const lastMean=d.points[d.points.length-1].mean;
-    if(!methods[name]||best>methods[name].best)methods[name]={best,mean:lastMean};
+    if(!methods[name]||best>methods[name].best)methods[name]={best,mean:lastMean,env};
   }
   const names=Object.keys(methods);
   if(!names.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No data yet',w/2,h/2);return}
@@ -651,83 +743,48 @@ function drawComparison(){
   const pad={top:24,right:20,bottom:50,left:50};
   const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
   const vals=[...Object.values(methods).map(m=>m.best),...Object.values(methods).map(m=>m.mean)];
-  const maxV=Math.max(Math.max(...vals),250);
-  const minV=Math.min(Math.min(...vals),-300);
+  const maxV=Math.max(Math.max(...vals),300),minV=Math.min(Math.min(...vals),-300);
   const range=maxV-minV||1;
   const toY=v=>pad.top+ph-((v-minV)/range)*ph;
 
-  // Grid
   ctx.strokeStyle='#1a1a2a';ctx.lineWidth=.5;
-  for(let i=0;i<=5;i++){
-    const y=pad.top+(ph/5)*i;
-    ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();
-    ctx.fillStyle='#666';ctx.font='9px sans-serif';ctx.textAlign='right';
-    ctx.fillText((maxV-(range/5)*i).toFixed(0),pad.left-5,y+3);
-  }
+  for(let i=0;i<=5;i++){const y=pad.top+(ph/5)*i;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();ctx.fillStyle='#666';ctx.font='9px sans-serif';ctx.textAlign='right';ctx.fillText((maxV-(range/5)*i).toFixed(0),pad.left-5,y+3)}
 
-  // Solved line
-  drawSolvedLine(ctx,pad,w,h,minV,maxV);
-
-  // Bars
   const barW=Math.min(40,pw/(names.length*3));
   const gap=pw/(names.length);
   names.forEach((name,i)=>{
     const x=pad.left+gap*i+gap/2;
     const m=methods[name];
-
-    // Best bar
-    const yBest=toY(m.best);
-    const yZero=toY(0);
-    ctx.fillStyle='#6366f1cc';
-    ctx.fillRect(x-barW-1,Math.min(yBest,yZero),barW,Math.abs(yBest-yZero));
-
-    // Mean bar
+    const yBest=toY(m.best),yZero=toY(0);
+    ctx.fillStyle='#6366f1cc';ctx.fillRect(x-barW-1,Math.min(yBest,yZero),barW,Math.abs(yBest-yZero));
     const yMean=toY(m.mean);
-    ctx.fillStyle='#22c55ecc';
-    ctx.fillRect(x+1,Math.min(yMean,yZero),barW,Math.abs(yMean-yZero));
-
-    // Labels
+    ctx.fillStyle='#22c55ecc';ctx.fillRect(x+1,Math.min(yMean,yZero),barW,Math.abs(yMean-yZero));
     ctx.fillStyle='#e0e0e8';ctx.font='bold 9px sans-serif';ctx.textAlign='center';
     ctx.fillText(m.best.toFixed(0),x-barW/2,yBest-4);
-    ctx.fillStyle='#22c55e';
-    ctx.fillText(m.mean.toFixed(0),x+barW/2+1,yMean-4);
-
-    // X label
     ctx.save();ctx.translate(x,h-pad.bottom+6);ctx.rotate(-Math.PI/6);
-    ctx.fillStyle='#aaa';ctx.font='9px sans-serif';ctx.textAlign='right';
-    ctx.fillText(name,0,0);ctx.restore();
+    ctx.fillStyle='#aaa';ctx.font='8px sans-serif';ctx.textAlign='right';
+    const label=name.replace('\n',' · ');
+    ctx.fillText(label,0,0);ctx.restore();
   });
-
-  // Legend
-  ctx.fillStyle='#6366f1';ctx.fillRect(pad.left,pad.top-16,10,3);
-  ctx.fillStyle='#ccc';ctx.font='9px sans-serif';ctx.textAlign='left';ctx.fillText('Best Ever',pad.left+14,pad.top-11);
-  ctx.fillStyle='#22c55e';ctx.fillRect(pad.left+80,pad.top-16,10,3);
-  ctx.fillStyle='#ccc';ctx.fillText('Final Mean',pad.left+94,pad.top-11);
 }
 
-// Chart 3: Sigma convergence
+// Sigma
 function drawSigma(){
   const{ctx,w,h}=setupCanvas('sigma-canvas');
   const entries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0&&d.points[0].sigma>0);
   if(!entries.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No sigma data',w/2,h/2);return}
-
   const pad={top:24,right:20,bottom:36,left:50};
   const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
   const allPts=entries.flatMap(([_,d])=>d.points);
-  const maxGen=Math.max(...allPts.map(p=>p.gen),1);
-  const maxS=Math.max(...allPts.map(p=>p.sigma),1)*1.1;
-  const toX=g=>pad.left+(g/maxGen)*pw;
-  const toY=s=>pad.top+ph-(s/maxS)*ph;
-
+  const maxGen=Math.max(...allPts.map(p=>p.gen),1),maxS=Math.max(...allPts.map(p=>p.sigma),1)*1.1;
+  const toX=g=>pad.left+(g/maxGen)*pw,toY=s=>pad.top+ph-(s/maxS)*ph;
   drawGrid(ctx,pad,w,h,0,maxS,maxGen,'Generation','σ (Step Size)');
-
   let ci=0;
   for(const[id,d]of entries){
     const color=COLORS[ci%COLORS.length];
     ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();
     d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.sigma)):ctx.lineTo(toX(p.gen),toY(p.sigma))});
     ctx.stroke();
-
     const last=d.points[d.points.length-1];
     ctx.fillStyle=color;ctx.font='9px sans-serif';ctx.textAlign='left';
     ctx.fillText((METHOD_NAMES[d.method]||d.method)+' σ='+last.sigma.toFixed(4),toX(last.gen)+4,toY(last.sigma));
@@ -735,12 +792,11 @@ function drawSigma(){
   }
 }
 
-// Chart 4: Score distribution (mean ± range band)
+// Distribution
 function drawDistribution(){
   const{ctx,w,h}=setupCanvas('dist-canvas');
   const entries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0);
   if(!entries.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No data',w/2,h/2);return}
-
   const pad={top:24,right:20,bottom:36,left:56};
   const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
   const allPts=entries.flatMap(([_,d])=>d.points);
@@ -748,180 +804,97 @@ function drawDistribution(){
   const allVals=[...allPts.map(p=>p.best_ever),...allPts.map(p=>p.mean)];
   const maxV=Math.max(...allVals)*1.1,minV=Math.min(...allVals)*1.1;
   const range=maxV-minV||1;
-  const toX=g=>pad.left+(g/maxGen)*pw;
-  const toY=v=>pad.top+ph-((v-minV)/range)*ph;
-
+  const toX=g=>pad.left+(g/maxGen)*pw,toY=v=>pad.top+ph-((v-minV)/range)*ph;
   drawGrid(ctx,pad,w,h,minV,maxV,maxGen,'Generation','Score');
-  drawSolvedLine(ctx,pad,w,h,minV,maxV);
-
   let ci=0;
   for(const[id,d]of entries){
     const color=COLORS[ci%COLORS.length];
-    const name=METHOD_NAMES[d.method]||d.method;
-
-    // Band: mean to best_ever
-    ctx.fillStyle=color+'18';
-    ctx.beginPath();
+    ctx.fillStyle=color+'18';ctx.beginPath();
     d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.best_ever)):ctx.lineTo(toX(p.gen),toY(p.best_ever))});
     for(let i=d.points.length-1;i>=0;i--)ctx.lineTo(toX(d.points[i].gen),toY(d.points[i].mean));
     ctx.closePath();ctx.fill();
-
-    // Best ever line
     ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.beginPath();
     d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.best_ever)):ctx.lineTo(toX(p.gen),toY(p.best_ever))});
     ctx.stroke();
-
-    // Mean line (dashed)
     ctx.strokeStyle=color+'80';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();
     d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.mean)):ctx.lineTo(toX(p.gen),toY(p.mean))});
     ctx.stroke();ctx.setLineDash([]);
-
-    // Label
-    ctx.fillStyle=color;ctx.font='9px sans-serif';ctx.textAlign='left';
     const last=d.points[d.points.length-1];
-    ctx.fillText(name,toX(last.gen)+4,toY(last.best_ever));
+    ctx.fillStyle=color;ctx.font='9px sans-serif';ctx.textAlign='left';
+    ctx.fillText((METHOD_NAMES[d.method]||d.method),toX(last.gen)+4,toY(last.best_ever));
     ci++;
   }
-
-  // Legend
-  ctx.font='9px sans-serif';
-  ctx.strokeStyle='#ccc';ctx.lineWidth=1.5;ctx.setLineDash([]);
-  ctx.beginPath();ctx.moveTo(pad.left,pad.top-14);ctx.lineTo(pad.left+12,pad.top-14);ctx.stroke();
-  ctx.fillStyle='#ccc';ctx.textAlign='left';ctx.fillText('Best Ever (solid)',pad.left+16,pad.top-10);
-  ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(pad.left+100,pad.top-14);ctx.lineTo(pad.left+112,pad.top-14);ctx.stroke();
-  ctx.setLineDash([]);ctx.fillText('Mean (dashed)',pad.left+116,pad.top-10);
-  ctx.fillStyle='#ffffff10';ctx.fillRect(pad.left+200,pad.top-18,12,8);
-  ctx.fillStyle='#ccc';ctx.fillText('Range',pad.left+216,pad.top-10);
 }
 
-// ======= CHART EXPORT =======
-function exportChart(canvasId,filename){
-  const canvas=document.getElementById(canvasId);
-  // Redraw onto export canvas at 2x
-  const link=document.createElement('a');
-  link.download=filename;
-  link.href=canvas.toDataURL('image/png');
-  link.click();
+// ======= ACTIONS =======
+async function submitJob(){
+  const environment=document.getElementById('env-select').value;
+  const method=document.getElementById('method-select').value;
+  const maxEvals=parseInt(document.getElementById('max-evals-input').value)||5000;
+  try{
+    const r=await fetch('/api/jobs/submit',{method:'POST',headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},body:JSON.stringify({method,environment,max_evals:maxEvals,params:{max_evals:maxEvals}})});
+    if(r.ok){addLog(`📤 Submitted: <b>${esc(method)}</b> on <b>${esc(environment)}</b> (${maxEvals} evals)`);refresh()}
+  }catch(e){addLog('❌ Submit failed')}
 }
 
-function exportAllCharts(){
-  ['learning-canvas','comparison-canvas','sigma-canvas','dist-canvas'].forEach((id,i)=>{
-    setTimeout(()=>exportChart(id,'gaia-'+['learning','comparison','sigma','distribution'][i]+'.png'),i*200);
-  });
+async function cancelJob(jobId){
+  if(!confirm('Cancel job '+jobId.slice(0,8)+'?'))return;
+  try{await fetch(`/api/jobs/cancel/${jobId}`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});addLog('🚫 Cancelled job <b>'+jobId.slice(0,8)+'</b>');refresh()}catch(e){addLog('❌ Cancel failed')}
+}
+
+async function toggleWorker(workerId){
+  try{const r=await fetch(`/api/workers/${workerId}/enable`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});const d=await r.json();addLog(d.enabled?'▶️ Worker enabled':'⏸ Worker disabled');refresh()}catch(e){addLog('❌ Toggle failed')}
+}
+
+async function forceUpdate(workerId){
+  if(!confirm('Force update this worker?'))return;
+  try{await fetch(`/api/workers/${workerId}/force-update`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});addLog('🔄 Force update sent');refresh()}catch(e){addLog('❌ Force update failed')}
 }
 
 // ======= DATA EXPORT =======
 async function downloadCSV(jobId){
-  try{
-    const r=await fetch(`/api/results/${jobId}/csv`,{headers:{'Authorization':'Bearer '+TOKEN}});
-    const text=await r.text();
-    dl(text,'text/csv',`gaia-${jobId.slice(0,8)}.csv`);
-  }catch(e){}
-}
-
-function downloadJSON(jobId){
-  const d=allJobData[jobId];
-  if(!d)return;
-  dl(JSON.stringify(d,null,2),'application/json',`gaia-${jobId.slice(0,8)}.json`);
+  try{const r=await fetch(`/api/results/${jobId}/csv`,{headers:{'Authorization':'Bearer '+TOKEN}});const text=await r.text();dl(text,'text/csv',`gaia-${jobId.slice(0,8)}.csv`)}catch(e){}
 }
 
 async function downloadAllCSV(){
-  let allCSV='job_id,method,generation,best,best_ever,mean,sigma,evals,time\n';
+  let csv='job_id,method,environment,generation,best,best_ever,mean,sigma,evals,time\n';
   for(const[id,d]of Object.entries(allJobData)){
-    for(const p of d.points){
-      allCSV+=`${id.slice(0,8)},${d.method},${p.gen},${p.best},${p.best_ever},${p.mean},${p.sigma},${p.evals},${p.time}\n`;
-    }
+    for(const p of d.points)csv+=`${id.slice(0,8)},${d.method},${d.environment||'LunarLander-v3'},${p.gen},${p.best},${p.best_ever},${p.mean},${p.sigma},${p.evals},${p.time}\n`;
   }
-  dl(allCSV,'text/csv','gaia-all-results.csv');
+  dl(csv,'text/csv','gaia-all-results.csv');
 }
 
 function downloadSummaryJSON(){
   const summary={};
   for(const[id,d]of Object.entries(allJobData)){
-    const name=METHOD_NAMES[d.method]||d.method;
     if(!d.points.length)continue;
-    summary[name]={
-      job_id:id,method:d.method,status:d.status,
-      generations:d.points.length,
-      best_ever:Math.max(...d.points.map(p=>p.best_ever)),
-      final_mean:d.points[d.points.length-1].mean,
-      final_sigma:d.points[d.points.length-1].sigma,
-      total_evals:Math.max(...d.points.map(p=>p.evals)),
-    };
+    const key=(METHOD_NAMES[d.method]||d.method)+'@'+(d.environment||'LunarLander-v3');
+    summary[key]={job_id:id,method:d.method,environment:d.environment||'LunarLander-v3',status:d.status,
+      generations:d.points.length,best_ever:Math.max(...d.points.map(p=>p.best_ever)),
+      final_mean:d.points[d.points.length-1].mean,total_evals:Math.max(...d.points.map(p=>p.evals))};
   }
   dl(JSON.stringify(summary,null,2),'application/json','gaia-summary.json');
 }
 
-function dl(content,type,name){
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([content],{type}));
-  a.download=name;a.click();
-}
+function dl(content,type,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click()}
 
-// ======= SUBMIT =======
-async function submitJob(){
-  const method=document.getElementById('method-select').value;
-  const maxEvals=parseInt(document.getElementById('max-evals-input').value)||5000;
-  try{
-    const r=await fetch('/api/jobs/submit',{method:'POST',headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},body:JSON.stringify({method,params:{max_evals:maxEvals}})});
-    if(r.ok){addLog('📤 Submitted: <b>'+esc(method)+'</b> ('+maxEvals+' evals)');refresh()}
-  }catch(e){addLog('❌ Submit failed')}
-}
-
-// Cancel job
-async function cancelJob(jobId){
-  if(!confirm('Cancel job '+jobId.slice(0,8)+'?'))return;
-  try{
-    await fetch(`/api/jobs/cancel/${jobId}`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});
-    addLog('🚫 Cancelled job <b>'+jobId.slice(0,8)+'</b>');
-    refresh();
-  }catch(e){addLog('❌ Cancel failed')}
-}
-
-// Toggle worker enabled/disabled
-async function toggleWorker(workerId){
-  try{
-    const r=await fetch(`/api/workers/${workerId}/enable`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});
-    const d=await r.json();
-    addLog(d.enabled?'▶️ Worker enabled':'⏸ Worker disabled');
-    refresh();
-  }catch(e){addLog('❌ Toggle failed')}
-}
-
-async function forceUpdate(workerId){
-  if(!confirm('Force update this worker? Current job will be aborted.'))return;
-  try{
-    const r=await fetch(`/api/workers/${workerId}/force-update`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});
-    const d=await r.json();
-    addLog('🔄 Force update sent to worker');
-    refresh();
-  }catch(e){addLog('❌ Force update failed')}
-}
-
-// Debug tab
-const debugLog=[];
-const MAX_DEBUG=500;
-function addDebug(msg){debugLog.push({time:new Date().toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit',fractionalSecondDigits:1}),msg});if(debugLog.length>MAX_DEBUG)debugLog.shift()}
+// ======= DEBUG =======
+const debugLog=[],MAX_DEBUG=500;
+function addDebug(msg){debugLog.push({time:new Date().toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}),msg});if(debugLog.length>MAX_DEBUG)debugLog.shift()}
 function renderDebug(){
-  const el=document.getElementById('debug-log');
-  if(!el)return;
+  const el=document.getElementById('debug-log');if(!el)return;
   if(!debugLog.length){el.textContent='Waiting for data…';return}
   el.innerHTML=debugLog.map(e=>`<span style="color:var(--text2)">${e.time}</span> ${e.msg}`).join('\n');
   if(document.getElementById('debug-autoscroll')?.checked)el.scrollTop=el.scrollHeight;
 }
 async function refreshDebugRaw(){
-  try{
-    const r=await fetch('/api/status',{headers:{'Authorization':'Bearer '+TOKEN}});
-    const d=await r.json();
-    document.getElementById('debug-raw').textContent=JSON.stringify(d,null,2);
-  }catch(e){document.getElementById('debug-raw').textContent='Error: '+e}
+  try{const r=await fetch('/api/status',{headers:{'Authorization':'Bearer '+TOKEN}});const d=await r.json();document.getElementById('debug-raw').textContent=JSON.stringify(d,null,2)}catch(e){document.getElementById('debug-raw').textContent='Error: '+e}
 }
 
-// Hook into refresh to feed debug log
+// Feed debug log from refresh
 const _origRefresh=refresh;
 refresh=async function(){
   await _origRefresh();
-  // Feed debug with latest results for running jobs
   for(const[id,d]of Object.entries(allJobData)){
     if(d.status!=='running'||!d.points.length)continue;
     const last=d.points[d.points.length-1];
@@ -929,246 +902,14 @@ refresh=async function(){
     if(!window._debugSeen)window._debugSeen=new Set();
     if(!window._debugSeen.has(key)){
       window._debugSeen.add(key);
-      addDebug(`<span style="color:var(--cyan)">[${d.method}]</span> Gen ${last.gen} | best: ${last.best_ever.toFixed(1)} | mean: ${last.mean.toFixed(1)} | σ: ${last.sigma.toFixed(4)} | evals: ${last.evals}`);
+      addDebug(`<span style="color:var(--cyan)">[${d.method}@${d.environment||'?'}]</span> Gen ${last.gen} | best: ${last.best_ever.toFixed(1)} | mean: ${last.mean.toFixed(1)} | σ: ${last.sigma.toFixed(4)} | evals: ${last.evals}`);
     }
   }
   if(document.getElementById('tab-debug')?.classList.contains('active'))renderDebug();
+  if(document.getElementById('tab-history')?.classList.contains('active'))renderHistory();
 };
 
-window.addEventListener('resize',()=>{if(document.getElementById('tab-charts').classList.contains('active'))drawAllCharts()});
-
-// ======= COMPARE TAB =======
-function renderCompare(){
-  const env=document.getElementById('compare-env').value;
-  const norm=document.getElementById('compare-norm').value;
-  
-  // Filter jobs by environment
-  let jobs=Object.entries(allJobData).filter(([id,d])=>d.points&&d.points.length>0);
-  if(env==='lunarlander')jobs=jobs.filter(([id,d])=>!d.method.includes('bipedal')&&!d.method.includes('Bipedal'));
-  if(env==='bipedal')jobs=jobs.filter(([id,d])=>d.method.includes('bipedal')||d.method.includes('Bipedal'));
-  
-  // Stats summary
-  const statsEl=document.getElementById('compare-stats');
-  if(!jobs.length){statsEl.innerHTML='<div class="empty">No experiment data available</div>';return}
-  
-  // Build method stats
-  const methods=[];
-  for(const[id,d]of jobs){
-    const pts=d.points;
-    const best=Math.max(...pts.map(p=>p.best_ever||p.best||0));
-    const lastMean=pts[pts.length-1].mean||0;
-    const lastSigma=pts[pts.length-1].sigma||0;
-    const totalEvals=pts[pts.length-1].evals||pts.length*100;
-    const solved=best>200;
-    // Find generation where score first exceeded 200
-    const solveGen=pts.findIndex(p=>(p.best_ever||p.best||0)>200);
-    const solveEvals=solveGen>=0?(pts[solveGen].evals||solveGen*100):null;
-    methods.push({id,method:d.method,name:METHOD_NAMES[d.method]||d.method,status:d.status,best,lastMean,lastSigma,totalEvals,solved,solveEvals,points:pts});
-  }
-  methods.sort((a,b)=>b.best-a.best);
-  
-  // Summary cards
-  const solved=methods.filter(m=>m.solved);
-  const bestMethod=methods[0];
-  const fastestSolve=solved.length?solved.reduce((a,b)=>(a.solveEvals||Infinity)<(b.solveEvals||Infinity)?a:b):null;
-  
-  let h=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px">
-    <div class="big-num"><div class="val" style="color:var(--accent)">${methods.length}</div><div class="lbl">Experiments</div></div>
-    <div class="big-num"><div class="val" style="color:var(--green)">${solved.length}</div><div class="lbl">Solved (>200)</div></div>
-    <div class="big-num"><div class="val" style="color:var(--yellow)">${bestMethod?bestMethod.best.toFixed(1):'—'}</div><div class="lbl">Best Score (${bestMethod?bestMethod.name:''})</div></div>
-    <div class="big-num"><div class="val" style="color:var(--cyan)">${fastestSolve?Math.round(fastestSolve.solveEvals/1000)+'K':'—'}</div><div class="lbl">Fastest Solve (${fastestSolve?fastestSolve.name:''})</div></div>
-  </div>`;
-  statsEl.innerHTML=h;
-  
-  // Detailed table
-  let t='<table style="font-size:.8rem"><tr><th>#</th><th>Method</th><th>Best Score</th><th>Last Mean</th><th>σ</th><th>Evals</th><th>Solved?</th><th>Solve @</th><th>Status</th></tr>';
-  methods.forEach((m,i)=>{
-    const solvedBadge=m.solved?'<span style="color:var(--green)">✅ Yes</span>':'<span style="color:var(--text2)">❌ No</span>';
-    const statusColor=m.status==='completed'?'var(--green)':m.status==='running'?'var(--yellow)':'var(--text2)';
-    t+=`<tr>
-      <td>${i+1}</td>
-      <td><span style="color:${COLORS[i%COLORS.length]};font-weight:600">${esc(m.name)}</span></td>
-      <td style="font-weight:700">${m.best.toFixed(1)}</td>
-      <td>${m.lastMean.toFixed(1)}</td>
-      <td>${m.lastSigma.toFixed(4)}</td>
-      <td>${(m.totalEvals/1000).toFixed(0)}K</td>
-      <td>${solvedBadge}</td>
-      <td>${m.solveEvals?Math.round(m.solveEvals/1000)+'K evals':'—'}</td>
-      <td style="color:${statusColor}">${m.status}</td>
-    </tr>`;
-  });
-  t+='</table>';
-  document.getElementById('compare-table').innerHTML=t;
-  
-  // Draw H2H learning curves
-  drawCompareCurves(methods,norm);
-  drawEfficiency(methods);
-  drawConvergence(methods);
-}
-
-function drawCompareCurves(methods,normMode){
-  const canvas=document.getElementById('compare-canvas');
-  if(!canvas)return;
-  const ctx=canvas.getContext('2d');
-  const dpr=window.devicePixelRatio||1;
-  const rect=canvas.parentElement.getBoundingClientRect();
-  canvas.width=rect.width*dpr;canvas.height=(rect.height||380)*dpr;
-  canvas.style.width=rect.width+'px';canvas.style.height=(rect.height||380)+'px';
-  ctx.scale(dpr,dpr);
-  const W=rect.width,H=rect.height||380;
-  const pad={t:30,r:20,b:40,l:60};
-  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
-  
-  ctx.clearRect(0,0,W,H);
-  ctx.fillStyle='var(--surface2)';ctx.fillRect(0,0,W,H);
-  
-  if(!methods.length)return;
-  
-  // Determine axis ranges
-  let maxX=0,minY=Infinity,maxY=-Infinity;
-  for(const m of methods){
-    for(const p of m.points){
-      const x=normMode==='evals'?(p.evals||0):p.gen;
-      const y=p.best_ever||p.best||0;
-      if(x>maxX)maxX=x;
-      if(y<minY)minY=y;
-      if(y>maxY)maxY=y;
-    }
-  }
-  if(normMode==='normalized'){minY=0;maxY=1}
-  else{const margin=(maxY-minY)*0.1;minY-=margin;maxY+=margin}
-  
-  // Grid
-  ctx.strokeStyle='rgba(255,255,255,0.05)';ctx.lineWidth=1;
-  for(let i=0;i<=5;i++){
-    const y=pad.t+cH*(1-i/5);
-    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cW,y);ctx.stroke();
-    ctx.fillStyle='rgba(255,255,255,0.4)';ctx.font='10px system-ui';ctx.textAlign='right';
-    const val=normMode==='normalized'?(i/5).toFixed(1):(minY+(maxY-minY)*i/5).toFixed(0);
-    ctx.fillText(val,pad.l-6,y+4);
-  }
-  
-  // Solved threshold line at 200
-  if(normMode!=='normalized'){
-    const y200=pad.t+cH*(1-(200-minY)/(maxY-minY));
-    if(y200>pad.t&&y200<pad.t+cH){
-      ctx.strokeStyle='rgba(34,197,94,0.4)';ctx.setLineDash([5,5]);
-      ctx.beginPath();ctx.moveTo(pad.l,y200);ctx.lineTo(pad.l+cW,y200);ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle='rgba(34,197,94,0.6)';ctx.font='10px system-ui';ctx.textAlign='left';
-      ctx.fillText('Solved (200)',pad.l+4,y200-4);
-    }
-  }
-  
-  // Draw each method
-  methods.forEach((m,idx)=>{
-    const color=COLORS[idx%COLORS.length];
-    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();
-    let first=true;
-    for(const p of m.points){
-      const rawX=normMode==='evals'?(p.evals||0):p.gen;
-      let rawY=p.best_ever||p.best||0;
-      if(normMode==='normalized')rawY=(rawY-minY)/(maxY-minY||1);
-      const x=pad.l+(rawX/maxX)*cW;
-      const ny=normMode==='normalized'?rawY:(rawY-minY)/(maxY-minY||1);
-      const y=pad.t+cH*(1-ny);
-      if(first){ctx.moveTo(x,y);first=false}else ctx.lineTo(x,y);
-    }
-    ctx.stroke();
-    // Label at end
-    const last=m.points[m.points.length-1];
-    const lx=pad.l+((normMode==='evals'?(last.evals||0):last.gen)/maxX)*cW;
-    let ly_raw=last.best_ever||last.best||0;
-    if(normMode==='normalized')ly_raw=(ly_raw-minY)/(maxY-minY||1);
-    const ly_n=normMode==='normalized'?ly_raw:(ly_raw-minY)/(maxY-minY||1);
-    const ly=pad.t+cH*(1-ly_n);
-    ctx.fillStyle=color;ctx.font='bold 10px system-ui';ctx.textAlign='left';
-    ctx.fillText(m.name+' ('+m.best.toFixed(0)+')',lx+4,ly+4);
-  });
-  
-  // X-axis label
-  ctx.fillStyle='rgba(255,255,255,0.4)';ctx.font='10px system-ui';ctx.textAlign='center';
-  ctx.fillText(normMode==='evals'?'Evaluations':'Generation',pad.l+cW/2,H-6);
-}
-
-function drawEfficiency(methods){
-  const canvas=document.getElementById('efficiency-canvas');
-  if(!canvas)return;
-  const ctx=canvas.getContext('2d');
-  const dpr=window.devicePixelRatio||1;
-  const rect=canvas.parentElement.getBoundingClientRect();
-  canvas.width=rect.width*dpr;canvas.height=(rect.height||300)*dpr;
-  canvas.style.width=rect.width+'px';canvas.style.height=(rect.height||300)+'px';
-  ctx.scale(dpr,dpr);
-  const W=rect.width,H=rect.height||300;
-  const pad={t:20,r:20,b:60,l:50};
-  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
-  ctx.clearRect(0,0,W,H);
-  
-  // Bar chart: score per 1000 evaluations (efficiency)
-  const data=methods.map(m=>({name:m.name,efficiency:m.best/(m.totalEvals/1000),best:m.best}));
-  data.sort((a,b)=>b.efficiency-a.efficiency);
-  const maxEff=Math.max(...data.map(d=>d.efficiency));
-  const barW=Math.min(60,cW/data.length-8);
-  
-  data.forEach((d,i)=>{
-    const x=pad.l+i*(barW+8)+4;
-    const h=(d.efficiency/maxEff)*cH;
-    const y=pad.t+cH-h;
-    ctx.fillStyle=COLORS[i%COLORS.length];
-    ctx.fillRect(x,y,barW,h);
-    ctx.fillStyle='#e0e0e8';ctx.font='bold 10px system-ui';ctx.textAlign='center';
-    ctx.fillText(d.efficiency.toFixed(1),x+barW/2,y-4);
-    ctx.save();ctx.translate(x+barW/2,pad.t+cH+8);ctx.rotate(Math.PI/4);
-    ctx.font='9px system-ui';ctx.textAlign='left';ctx.fillStyle='rgba(255,255,255,0.5)';
-    ctx.fillText(d.name,0,0);ctx.restore();
-  });
-  
-  ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='10px system-ui';ctx.textAlign='center';
-  ctx.fillText('Score per 1K Evaluations (higher = more efficient)',pad.l+cW/2,H-4);
-}
-
-function drawConvergence(methods){
-  const canvas=document.getElementById('convergence-canvas');
-  if(!canvas)return;
-  const ctx=canvas.getContext('2d');
-  const dpr=window.devicePixelRatio||1;
-  const rect=canvas.parentElement.getBoundingClientRect();
-  canvas.width=rect.width*dpr;canvas.height=(rect.height||300)*dpr;
-  canvas.style.width=rect.width+'px';canvas.style.height=(rect.height||300)+'px';
-  ctx.scale(dpr,dpr);
-  const W=rect.width,H=rect.height||300;
-  const pad={t:20,r:20,b:60,l:50};
-  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
-  ctx.clearRect(0,0,W,H);
-  
-  // Horizontal bar chart: evaluations to reach 200 (or max if not solved)
-  const data=methods.map(m=>({name:m.name,evals:m.solveEvals||m.totalEvals,solved:m.solved}));
-  data.sort((a,b)=>a.evals-b.evals);
-  const maxEvals=Math.max(...data.map(d=>d.evals));
-  const barH=Math.min(30,cH/data.length-4);
-  
-  data.forEach((d,i)=>{
-    const y=pad.t+i*(barH+4);
-    const w=(d.evals/maxEvals)*cW;
-    ctx.fillStyle=d.solved?COLORS[i%COLORS.length]:'rgba(255,255,255,0.15)';
-    ctx.fillRect(pad.l,y,w,barH);
-    // Label
-    ctx.fillStyle='#e0e0e8';ctx.font='10px system-ui';ctx.textAlign='right';
-    ctx.fillText(d.name,pad.l-4,y+barH/2+4);
-    ctx.textAlign='left';ctx.font='bold 10px system-ui';
-    ctx.fillText((d.evals/1000).toFixed(0)+'K'+(d.solved?'  ✅':'  ❌'),pad.l+w+4,y+barH/2+4);
-  });
-  
-  ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='10px system-ui';ctx.textAlign='center';
-  ctx.fillText('Evaluations to Solve (lower = faster convergence)',pad.l+cW/2,H-4);
-}
-
-// Hook compare tab
-document.getElementById('compare-env').addEventListener('change',renderCompare);
-document.getElementById('compare-norm').addEventListener('change',renderCompare);
-
-// ======= NETWORK TAB =======
+// ======= NETWORK =======
 async function renderNetwork(){
   const el=document.getElementById('network-body');
   try{
@@ -1176,96 +917,34 @@ async function renderNetwork(){
     if(!r.ok)throw new Error('HTTP '+r.status);
     const d=await r.json();
     if(d.mode==='centralized'){
-      el.innerHTML=`<div style="text-align:center;padding:40px">
-        <div style="font-size:3rem;margin-bottom:16px">🏗️</div>
-        <h3 style="margin-bottom:8px">Centralized Mode</h3>
-        <p style="color:var(--text2);font-size:.875rem">Server running in centralized mode. Start with <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">--gossip</code> to enable P2P.</p>
-        <div style="margin-top:24px;padding:16px;background:var(--surface2);border-radius:8px;text-align:left;font-size:.8rem;font-family:monospace;color:var(--text2)">
-          gaia-server --token YOUR_TOKEN --gossip --seed-peers node1:7435,node2:7435
-        </div>
-      </div>`;
+      el.innerHTML=`<div style="text-align:center;padding:40px"><div style="font-size:3rem;margin-bottom:16px">🏗️</div><h3 style="margin-bottom:8px">Centralized Mode</h3><p style="color:var(--text2);font-size:.875rem">Start with <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">--gossip</code> to enable P2P.</p></div>`;
       return;
     }
     let h=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px">
       <div class="big-num"><div class="val" style="color:var(--accent)">${d.peer_count}</div><div class="lbl">Peers</div></div>
       <div class="big-num"><div class="val" style="color:var(--green)">${d.gpu_nodes}</div><div class="lbl">GPU Nodes</div></div>
       <div class="big-num"><div class="val" style="color:var(--cyan)">${d.total_cpu_cores}</div><div class="lbl">Total CPU Cores</div></div>
-      <div class="big-num"><div class="val" style="color:var(--yellow)">${d.total_gpu_memory_mb?Math.round(d.total_gpu_memory_mb/1024)+'GB':'—'}</div><div class="lbl">Total GPU Memory</div></div>
     </div>`;
-    h+=`<div style="font-size:.75rem;color:var(--text2);margin-bottom:12px">Node ID: ${esc(d.node_id.slice(0,12))}...</div>`;
     if(d.peers&&d.peers.length){
-      h+='<table style="font-size:.8rem"><tr><th>Node</th><th>Address</th><th>GPU</th><th>CPU</th><th>RAM</th><th>Version</th><th>Last Seen</th></tr>';
-      for(const p of d.peers){
-        const c=p.capabilities||{};
-        h+=`<tr>
-          <td><span style="color:var(--accent)">${esc(p.node_id.slice(0,12))}...</span></td>
-          <td>${esc(p.address)}</td>
-          <td>${c.gpu?'🟢 '+esc(c.gpu):'—'}</td>
-          <td>${c.cpu_cores||'?'} cores</td>
-          <td>${c.ram_mb?Math.round(c.ram_mb/1024)+'GB':'?'}</td>
-          <td>${esc(c.version||'?')}</td>
-          <td>${timeSince(p.last_seen)}</td>
-        </tr>`;
-      }
+      h+='<table class="leaderboard"><tr><th>Node</th><th>Address</th><th>GPU</th><th>CPU</th><th>Last Seen</th></tr>';
+      for(const p of d.peers){const c=p.capabilities||{};h+=`<tr><td style="color:var(--accent)">${esc(p.node_id.slice(0,12))}...</td><td>${esc(p.address)}</td><td>${c.gpu?'🟢 '+esc(c.gpu):'—'}</td><td>${c.cpu_cores||'?'} cores</td><td>${timeSince(p.last_seen)}</td></tr>`}
       h+='</table>';
-    }else{
-      h+='<div class="empty">No peers discovered yet. Add seed peers or wait for gossip.</div>';
     }
     el.innerHTML=h;
-    // Draw network topology
-    drawNetworkTopology(d);
-  }catch(e){
-    el.innerHTML=`<div class="empty">Network status unavailable: ${esc(e.message)}</div>`;
-  }
+  }catch(e){el.innerHTML=`<div class="empty">Network unavailable: ${esc(e.message)}</div>`}
 }
 
-function drawNetworkTopology(data){
-  const canvas=document.getElementById('network-canvas');
-  if(!canvas)return;
-  const ctx=canvas.getContext('2d');
-  const W=canvas.width,H=canvas.height;
-  ctx.clearRect(0,0,W,H);
-  const nodes=[{id:data.node_id,label:'This Node',x:W/2,y:H/2,color:'#6366f1',self:true}];
-  const peers=data.peers||[];
-  const n=peers.length;
-  for(let i=0;i<n;i++){
-    const angle=(2*Math.PI*i)/Math.max(n,1);
-    const r=Math.min(W,H)*0.35;
-    nodes.push({
-      id:peers[i].node_id,
-      label:peers[i].capabilities?.gpu?'🖥️ GPU':'💻 CPU',
-      x:W/2+r*Math.cos(angle),
-      y:H/2+r*Math.sin(angle),
-      color:peers[i].capabilities?.gpu?'#22c55e':'#06b6d4',
-      self:false
-    });
-  }
-  // Draw edges
-  ctx.strokeStyle='rgba(99,102,241,0.3)';ctx.lineWidth=1;
-  for(let i=1;i<nodes.length;i++){
-    ctx.beginPath();ctx.moveTo(nodes[0].x,nodes[0].y);ctx.lineTo(nodes[i].x,nodes[i].y);ctx.stroke();
-    // Also draw some peer-to-peer connections
-    if(i>1){ctx.strokeStyle='rgba(6,182,212,0.15)';ctx.beginPath();ctx.moveTo(nodes[i-1].x,nodes[i-1].y);ctx.lineTo(nodes[i].x,nodes[i].y);ctx.stroke();ctx.strokeStyle='rgba(99,102,241,0.3)';}
-  }
-  // Draw nodes
-  for(const nd of nodes){
-    ctx.beginPath();ctx.arc(nd.x,nd.y,nd.self?20:14,0,Math.PI*2);
-    ctx.fillStyle=nd.color;ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=2;ctx.stroke();
-    ctx.fillStyle='#e0e0e8';ctx.font=(nd.self?'bold 11px':'10px')+' system-ui';ctx.textAlign='center';
-    ctx.fillText(nd.label,nd.x,nd.y+30);
-    ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='9px monospace';
-    ctx.fillText(nd.id.slice(0,8),nd.x,nd.y+42);
-  }
-}
-
-// Hook network tab into refresh
+// Hook network tab
 const _origRefresh2=refresh;
 refresh=async function(){
   await _origRefresh2();
-  if(document.getElementById('tab-compare')?.classList.contains('active'))renderCompare();
   if(document.getElementById('tab-network')?.classList.contains('active'))renderNetwork();
 };
+
+window.addEventListener('resize',()=>{
+  if(document.getElementById('tab-benchmarks').classList.contains('active'))drawLearningCurves();
+  if(document.getElementById('tab-charts').classList.contains('active'))drawAllCharts();
+});
 </script>
 </body>
 </html>

@@ -166,6 +166,8 @@ def generate_plots(results_dir):
 def main():
     parser = argparse.ArgumentParser(description="GAIA Phase 7: Gradient-Free LunarLander")
     parser.add_argument("--method", choices=list(METHODS.keys()), help="Run single method")
+    parser.add_argument("--environment", type=str, default=None,
+                        help="Gym environment (e.g. LunarLander-v3, BipedalWalker-v3). Overrides method default.")
     parser.add_argument("--max-evals", type=int, default=100000, help="Max evaluations per method")
     parser.add_argument("--eval-episodes", type=int, default=5, help="Episodes per evaluation")
     parser.add_argument("--quick", action="store_true", help="Quick test (10K evals)")
@@ -183,6 +185,8 @@ def main():
         "max_evals": args.max_evals,
         "eval_episodes": args.eval_episodes,
     }
+    if args.environment:
+        params["environment"] = args.environment
 
     print(f"""
 ╔══════════════════════════════════════════════════════╗

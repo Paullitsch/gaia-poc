@@ -36,10 +36,20 @@ pub async fn execute_job(
         .and_then(|v| v.as_u64())
         .unwrap_or(job.max_evals as u64);
 
+    // Resolve environment: legacy methods like bipedal_* imply the environment
+    let environment = if !job.environment.is_empty() && job.environment != "LunarLander-v3" {
+        job.environment.clone()
+    } else if job.method.starts_with("bipedal_") || job.method.contains("bipedal") {
+        "BipedalWalker-v3".to_string()
+    } else {
+        job.environment.clone()
+    };
+
     let mut cmd = Command::new(&cfg.python_bin);
     cmd.arg("-u") // Force unbuffered stdout
         .arg(script)
         .arg("--method").arg(&job.method)
+        .arg("--environment").arg(&environment)
         .arg("--max-evals").arg(max_evals.to_string())
         .arg("--no-plots")
         .current_dir(&work_dir)
@@ -55,8 +65,8 @@ pub async fn execute_job(
         cmd.arg("--results-dir").arg(dir);
     }
 
-    tracing::info!(job_id = %job_id, "Spawning: {} {} --method {} --max-evals {}", 
-        cfg.python_bin, script, job.method, max_evals);
+    tracing::info!(job_id = %job_id, "Spawning: {} {} --method {} --environment {} --max-evals {}", 
+        cfg.python_bin, script, job.method, environment, max_evals);
 
     let mut child = match cmd.spawn() {
         Ok(c) => c,

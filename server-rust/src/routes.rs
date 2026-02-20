@@ -154,6 +154,7 @@ async fn next_job(
             Some(json!({
                 "id": job.id,
                 "method": job.method,
+                "environment": job.environment,
                 "params": job.params,
                 "script": job.script,
                 "max_evals": job.max_evals,
@@ -191,6 +192,7 @@ async fn submit_job(
     let job = Job {
         id: id.clone(),
         method: req.method,
+        environment: req.environment,
         params: req.params,
         script: req.script,
         max_evals: req.max_evals,
