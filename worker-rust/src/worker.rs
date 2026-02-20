@@ -81,6 +81,25 @@ pub async fn execute_job(
         lines
     });
 
+    // Early stopping config
+    let early_stop_threshold: f64 = job.params
+        .get("early_stop_threshold")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(200.0); // Default: solved = 200
+    let early_stop_patience: u64 = job.params
+        .get("early_stop_patience")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(50); // Stop after 50 gens without improvement past threshold
+    let plateau_patience: u64 = job.params
+        .get("plateau_patience")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(200); // Stop after 200 gens without ANY improvement
+
+    let mut best_ever_score: f64 = f64::NEG_INFINITY;
+    let mut gens_since_improvement: u64 = 0;
+    let mut gens_since_solve: u64 = 0;
+    let mut is_solved = false;
+
     // Read stdout, parse generation output, stream results
     let mut generation: u64 = 0;
     let mut reader = BufReader::new(stdout).lines();
@@ -121,6 +140,56 @@ pub async fn execute_job(
                 if let Err(e) = client.stream_result(&job_id, worker_id, generation, &row).await {
                     tracing::warn!("Failed to stream result: {e}");
                 }
+                // Track best_ever for early stopping
+                if let Some(best_str) = row.get("best_ever") {
+                    if let Ok(score) = best_str.parse::<f64>() {
+                        if score > best_ever_score {
+                            best_ever_score = score;
+                            gens_since_improvement = 0;
+                            if score >= early_stop_threshold && !is_solved {
+                                is_solved = true;
+                                gens_since_solve = 0;
+                                tracing::info!(job_id = %job_id, score = score, "🎯 Threshold reached, starting patience countdown");
+                            }
+                        } else {
+                            gens_since_improvement += 1;
+                            if is_solved {
+                                gens_since_solve += 1;
+                            }
+                        }
+                    }
+                }
+
+                // Early stopping: solved + no improvement for patience gens
+                if is_solved && gens_since_solve >= early_stop_patience {
+                    tracing::info!(
+                        job_id = %job_id,
+                        best = best_ever_score,
+                        patience = early_stop_patience,
+                        "✅ Early stop: solved and converged (no improvement for {} gens)",
+                        early_stop_patience
+                    );
+                    let _ = child.kill().await;
+                    let _ = stderr_task.await;
+                    client.complete_job(&job_id, worker_id, "completed", None).await?;
+                    return Ok(());
+                }
+
+                // Plateau detection: no improvement at all for a long time
+                if gens_since_improvement >= plateau_patience {
+                    tracing::info!(
+                        job_id = %job_id,
+                        best = best_ever_score,
+                        plateau = plateau_patience,
+                        "📊 Early stop: plateau detected (no improvement for {} gens)",
+                        plateau_patience
+                    );
+                    let _ = child.kill().await;
+                    let _ = stderr_task.await;
+                    client.complete_job(&job_id, worker_id, "completed", None).await?;
+                    return Ok(());
+                }
+
                 // Check for cancellation every 10 generations
                 if generation % 10 == 0 {
                     if client.check_job_cancelled(&job_id).await {
