@@ -149,7 +149,8 @@ def run(params=None, device="cpu", callback=None):
 
         raw_str = f" | Raw: {raw_best:8.1f}" if raw_best > -999 else ""
         solved_str = "✅ SOLVED!" if best_ever_raw >= 200 else ""
-        print(f"Gen {cma.gen:4d} | Best: {gen_best:8.1f} | Ever: {best_ever:8.1f}{raw_str} | "
+        print(f"Gen {cma.gen:4d} | Best: {gen_best:8.1f} | Ever: {best_ever:8.1f} | "
+              f"Mean: {np.mean(fitnesses):8.1f} | σ: {cma.sigma:.4f} | "
               f"Diff: {difficulty:.2f} | Evals: {total_evals:6d} | {elapsed:6.1f}s {solved_str}")
 
         if best_ever_raw >= 200:
