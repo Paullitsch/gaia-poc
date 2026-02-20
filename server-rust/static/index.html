@@ -405,6 +405,19 @@ function startPolling(){refresh();setInterval(refresh,3000)}
 
 function addLog(m,ts){const d=ts?new Date(ts):new Date();activityLog.unshift({ts:d.getTime(),time:d.toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}),msg:m});activityLog.sort((a,b)=>b.ts-a.ts);if(activityLog.length>MAX_LOG)activityLog.pop()}
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+function fmtParams(p){
+  if(!p||typeof p!=='object')return'';
+  const skip=new Set(['max_evals','eval_episodes']);
+  const items=Object.entries(p).filter(([k])=>!skip.has(k));
+  if(!items.length)return'';
+  return'<span style="font-size:.65rem;color:var(--accent2);margin-left:4px">'+items.map(([k,v])=>esc(k)+'='+esc(String(v))).join(' ')+'</span>';
+}
+function fmtParamsInline(p){
+  if(!p||typeof p!=='object')return'—';
+  const items=Object.entries(p);
+  if(!items.length)return'—';
+  return items.map(([k,v])=>k+'='+v).join(', ');
+}
 function timeSince(iso){if(!iso)return'—';const s=Math.floor((Date.now()-new Date(iso).getTime())/1000);if(s<0)return'now';if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m';if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'d'}
 function dur(a,b){if(!a)return'—';const s=Math.floor(((b?new Date(b):new Date).getTime()-new Date(a).getTime())/1000);if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m'+s%60+'s';return Math.floor(s/3600)+'h'+Math.floor(s%3600/60)+'m'}
 function fmtTime(t){if(!t)return'—';const d=new Date(t);return d.toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})}
@@ -469,8 +482,8 @@ function renderJobs(jobs){
   document.getElementById('job-count').textContent=jobs.length;
   const run=jobs.filter(j=>j.status==='running'),que=jobs.filter(j=>j.status==='queued');
   let h='';
-  if(run.length){h+='<div class="job-section"><span style="color:var(--cyan)">▶</span> Running</div>';for(const j of run){const env=resolveEnv(j);h+=`<div class="job-item" style="border-left:2px solid var(--cyan)"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span><span style="font-size:.7rem;color:var(--text2)">${esc(env)}</span></div><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--text2);font-size:.75rem">${dur(j.started_at)}</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}}
-  if(que.length){h+=`<div class="job-section"><span style="color:var(--accent2)">⏳</span> Queue (${que.length})</div>`;for(const j of que){const env=resolveEnv(j);h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span><span style="font-size:.7rem;color:var(--text2)">${esc(env)}</span></div><div style="display:flex;align-items:center;gap:6px"><span class="badge badge-queued">queued</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}}
+  if(run.length){h+='<div class="job-section"><span style="color:var(--cyan)">▶</span> Running</div>';for(const j of run){const env=resolveEnv(j);h+=`<div class="job-item" style="border-left:2px solid var(--cyan)"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span><span style="font-size:.7rem;color:var(--text2)">${esc(env)}</span>${fmtParams(j.params)}</div><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--text2);font-size:.75rem">${dur(j.started_at)}</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}}
+  if(que.length){h+=`<div class="job-section"><span style="color:var(--accent2)">⏳</span> Queue (${que.length})</div>`;for(const j of que){const env=resolveEnv(j);h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span><span style="font-size:.7rem;color:var(--text2)">${esc(env)}</span>${fmtParams(j.params)}</div><div style="display:flex;align-items:center;gap:6px"><span class="badge badge-queued">queued</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}}
   if(!run.length&&!que.length)h='<div class="empty">No active jobs</div>';
   el.innerHTML=h;
 }
@@ -583,21 +596,21 @@ function renderHistory(){
   if(filter!=='all')jobs=jobs.filter(j=>resolveEnv(j)===filter);
   if(!jobs.length){el.innerHTML='<div class="empty">No jobs</div>';return}
 
-  let h='<table class="leaderboard"><tr><th>ID</th><th>Environment</th><th>Method</th><th>Status</th><th>Best</th><th>Queued</th><th>Started</th><th>Completed</th><th>Runtime</th><th></th></tr>';
+  let h='<table class="leaderboard"><tr><th>ID</th><th>Environment</th><th>Method</th><th>Params</th><th>Status</th><th>Best</th><th>Queued</th><th>Runtime</th><th></th></tr>';
   for(const j of jobs.slice(0,50)){
     const env=resolveEnv(j);
     const d=allJobData[j.id];
     const best=d&&d.points.length?Math.max(...d.points.map(p=>p.best_ever)).toFixed(1):'—';
     const runtime=dur(j.started_at,j.completed_at);
+    const errTip=j.error?` title="${esc(j.error.slice(-120))}"`:'';
     h+=`<tr>
       <td style="font-family:monospace;font-size:.75rem">${j.id.slice(0,8)}</td>
       <td style="font-size:.75rem">${esc(env)}</td>
       <td>${esc(j.method)}</td>
-      <td><span class="badge badge-${j.status}">${j.status}</span></td>
+      <td style="font-size:.65rem;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtParamsInline(j.params)}</td>
+      <td><span class="badge badge-${j.status}"${errTip}>${j.status}</span></td>
       <td style="font-weight:600;font-variant-numeric:tabular-nums">${best}</td>
       <td style="font-size:.7rem;color:var(--text2)">${fmtTime(j.created_at)}</td>
-      <td style="font-size:.7rem;color:var(--text2)">${fmtTime(j.started_at)}</td>
-      <td style="font-size:.7rem;color:var(--text2)">${fmtTime(j.completed_at)}</td>
       <td style="font-size:.7rem">${runtime}</td>
       <td><button class="btn-sm" onclick="downloadCSV('${j.id}')">CSV</button></td>
     </tr>`;
