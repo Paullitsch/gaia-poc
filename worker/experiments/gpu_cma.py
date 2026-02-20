@@ -64,7 +64,7 @@ class BatchEvaluator:
         self.act_dim = act_dim
         
         # Create vectorized environment
-        self.envs = gym.vector.make(env_name, num_envs=n_envs)
+        self.envs = gym.vector.SyncVectorEnv([lambda e=env_name: gym.make(e) for _ in range(n_envs)])
         
         # Policy on GPU (shared, we swap params per candidate)
         self.policy = TorchPolicy(obs_dim, act_dim, hidden1, hidden2).to(device)

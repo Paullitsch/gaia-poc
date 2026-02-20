@@ -42,7 +42,7 @@ class ContinuousPolicy(nn.Module):
 class GPUBipedalEvaluator:
     def __init__(self, n_envs, device, hidden1=128, hidden2=64, hardcore=False):
         env_name = "BipedalWalkerHardcore-v3" if hardcore else "BipedalWalker-v3"
-        self.envs = gym.vector.make(env_name, num_envs=n_envs)
+        self.envs = gym.vector.SyncVectorEnv([lambda e=env_name: gym.make(e) for _ in range(n_envs)])
         self.n_envs = n_envs
         self.device = device
         self.policy = ContinuousPolicy(24, 4, hidden1, hidden2).to(device)
