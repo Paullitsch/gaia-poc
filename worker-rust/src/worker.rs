@@ -37,7 +37,8 @@ pub async fn execute_job(
         .unwrap_or(job.max_evals as u64);
 
     let mut cmd = Command::new(&cfg.python_bin);
-    cmd.arg(script)
+    cmd.arg("-u") // Force unbuffered stdout
+        .arg(script)
         .arg("--method").arg(&job.method)
         .arg("--max-evals").arg(max_evals.to_string())
         .arg("--no-plots")

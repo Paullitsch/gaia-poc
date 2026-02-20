@@ -1,0 +1,32 @@
+{
+  "method": "Island Model CMA-ES",
+  "best_ever": -48.86710730345661,
+  "final_mean": -199.53257192769087,
+  "final_std": 5.684341886080802e-14,
+  "total_evals": 2160,
+  "generations": 4,
+  "n_params": 2788,
+  "n_islands": 4,
+  "total_migrations": 0,
+  "elapsed_seconds": 4.0,
+  "solved": false,
+  "island_configs": [
+    {
+      "sigma0": 0.2964640427772161,
+      "best": -112.36490939780876
+    },
+    {
+      "sigma0": 0.4940980916727104,
+      "best": -48.86710730345661
+    },
+    {
+      "sigma0": 0.7905423402681401,
+      "best": -103.59919115203404
+    },
+    {
+      "sigma0": 1.185803655175394,
+      "best": -123.34654114350874
+    }
+  ],
+  "wall_time": 4.0
+}
