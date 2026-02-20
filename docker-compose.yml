@@ -3,11 +3,12 @@ version: "3.8"
 services:
   server:
     build:
-      context: ./server-rust
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: server-rust/Dockerfile
     container_name: gaia-server
     ports:
       - "7434:7434"
+      - "7435:7435"
     volumes:
       - gaia-data:/data
     environment:

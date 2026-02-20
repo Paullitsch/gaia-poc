@@ -15,6 +15,7 @@ use tokio_util::io::ReaderStream;
 use crate::models::*;
 use crate::state::AppState;
 use crate::storage;
+use gaia_protocol::{GossipMessage, gossip::GossipResponse};
 
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
@@ -39,6 +40,9 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/releases/latest/:filename", get(download_latest))
         .route("/releases/:tag", get(get_release))
         .route("/releases/:tag/:filename", get(download_release))
+        // P2P Gossip protocol
+        .route("/gossip", post(gossip_endpoint))
+        .route("/api/network", get(network_status))
         .with_state(state)
         .layer(axum::extract::DefaultBodyLimit::max(100 * 1024 * 1024))
 }
@@ -556,4 +560,38 @@ async fn serve_release_file(
         ],
         body,
     ))
+}
+
+// --- P2P Gossip Protocol ---
+
+async fn gossip_endpoint(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(msg): Json<GossipMessage>,
+) -> Result<Json<GossipResponse>, StatusCode> {
+    check_auth(&state, &headers)?;
+
+    if let Some(gossip) = &state.gossip_node {
+        let response = gossip.handle_message(msg).await;
+        Ok(Json(response))
+    } else {
+        Err(StatusCode::SERVICE_UNAVAILABLE)
+    }
+}
+
+async fn network_status(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, StatusCode> {
+    check_auth(&state, &headers)?;
+
+    if let Some(gossip) = &state.gossip_node {
+        let status = gossip.network_status().await;
+        Ok(Json(json!(status)))
+    } else {
+        Ok(Json(json!({
+            "mode": "centralized",
+            "message": "Gossip protocol not enabled. Start with --gossip to enable P2P mode."
+        })))
+    }
 }

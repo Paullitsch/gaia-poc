@@ -151,6 +151,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
     <div class="tab" data-tab="charts">Charts & Analysis</div>
     <div class="tab" data-tab="debug">Debug</div>
     <div class="tab" data-tab="export">Export</div>
+    <div class="tab" data-tab="network">🌐 Network</div>
   </div>
 
   <!-- TAB: Overview -->
@@ -256,6 +257,24 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
             <button class="btn-sm" onclick="exportChart('dist-canvas','gaia-distribution.png')">📊 Distribution</button>
             <button class="btn-sm" onclick="exportAllCharts()">⬇️ Export All</button>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Network (P2P) -->
+  <div class="tab-content" id="tab-network">
+    <div class="grid">
+      <div class="card full-width">
+        <div class="card-header"><h2>🌐 GAIA P2P Network</h2></div>
+        <div class="card-body" id="network-body">
+          <div class="empty">Loading network status...</div>
+        </div>
+      </div>
+      <div class="card full-width">
+        <div class="card-header"><h2>🗺️ Network Topology</h2></div>
+        <div class="card-body">
+          <canvas id="network-canvas" width="800" height="400" style="width:100%;background:var(--surface2);border-radius:8px"></canvas>
         </div>
       </div>
     </div>
@@ -862,6 +881,104 @@ refresh=async function(){
 };
 
 window.addEventListener('resize',()=>{if(document.getElementById('tab-charts').classList.contains('active'))drawAllCharts()});
+
+// ======= NETWORK TAB =======
+async function renderNetwork(){
+  const el=document.getElementById('network-body');
+  try{
+    const r=await fetch('/api/network',{headers:{'Authorization':'Bearer '+TOKEN}});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    if(d.mode==='centralized'){
+      el.innerHTML=`<div style="text-align:center;padding:40px">
+        <div style="font-size:3rem;margin-bottom:16px">🏗️</div>
+        <h3 style="margin-bottom:8px">Centralized Mode</h3>
+        <p style="color:var(--text2);font-size:.875rem">Server running in centralized mode. Start with <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">--gossip</code> to enable P2P.</p>
+        <div style="margin-top:24px;padding:16px;background:var(--surface2);border-radius:8px;text-align:left;font-size:.8rem;font-family:monospace;color:var(--text2)">
+          gaia-server --token YOUR_TOKEN --gossip --seed-peers node1:7435,node2:7435
+        </div>
+      </div>`;
+      return;
+    }
+    let h=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px">
+      <div class="big-num"><div class="val" style="color:var(--accent)">${d.peer_count}</div><div class="lbl">Peers</div></div>
+      <div class="big-num"><div class="val" style="color:var(--green)">${d.gpu_nodes}</div><div class="lbl">GPU Nodes</div></div>
+      <div class="big-num"><div class="val" style="color:var(--cyan)">${d.total_cpu_cores}</div><div class="lbl">Total CPU Cores</div></div>
+      <div class="big-num"><div class="val" style="color:var(--yellow)">${d.total_gpu_memory_mb?Math.round(d.total_gpu_memory_mb/1024)+'GB':'—'}</div><div class="lbl">Total GPU Memory</div></div>
+    </div>`;
+    h+=`<div style="font-size:.75rem;color:var(--text2);margin-bottom:12px">Node ID: ${esc(d.node_id.slice(0,12))}...</div>`;
+    if(d.peers&&d.peers.length){
+      h+='<table style="font-size:.8rem"><tr><th>Node</th><th>Address</th><th>GPU</th><th>CPU</th><th>RAM</th><th>Version</th><th>Last Seen</th></tr>';
+      for(const p of d.peers){
+        const c=p.capabilities||{};
+        h+=`<tr>
+          <td><span style="color:var(--accent)">${esc(p.node_id.slice(0,12))}...</span></td>
+          <td>${esc(p.address)}</td>
+          <td>${c.gpu?'🟢 '+esc(c.gpu):'—'}</td>
+          <td>${c.cpu_cores||'?'} cores</td>
+          <td>${c.ram_mb?Math.round(c.ram_mb/1024)+'GB':'?'}</td>
+          <td>${esc(c.version||'?')}</td>
+          <td>${timeSince(p.last_seen)}</td>
+        </tr>`;
+      }
+      h+='</table>';
+    }else{
+      h+='<div class="empty">No peers discovered yet. Add seed peers or wait for gossip.</div>';
+    }
+    el.innerHTML=h;
+    // Draw network topology
+    drawNetworkTopology(d);
+  }catch(e){
+    el.innerHTML=`<div class="empty">Network status unavailable: ${esc(e.message)}</div>`;
+  }
+}
+
+function drawNetworkTopology(data){
+  const canvas=document.getElementById('network-canvas');
+  if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const nodes=[{id:data.node_id,label:'This Node',x:W/2,y:H/2,color:'#6366f1',self:true}];
+  const peers=data.peers||[];
+  const n=peers.length;
+  for(let i=0;i<n;i++){
+    const angle=(2*Math.PI*i)/Math.max(n,1);
+    const r=Math.min(W,H)*0.35;
+    nodes.push({
+      id:peers[i].node_id,
+      label:peers[i].capabilities?.gpu?'🖥️ GPU':'💻 CPU',
+      x:W/2+r*Math.cos(angle),
+      y:H/2+r*Math.sin(angle),
+      color:peers[i].capabilities?.gpu?'#22c55e':'#06b6d4',
+      self:false
+    });
+  }
+  // Draw edges
+  ctx.strokeStyle='rgba(99,102,241,0.3)';ctx.lineWidth=1;
+  for(let i=1;i<nodes.length;i++){
+    ctx.beginPath();ctx.moveTo(nodes[0].x,nodes[0].y);ctx.lineTo(nodes[i].x,nodes[i].y);ctx.stroke();
+    // Also draw some peer-to-peer connections
+    if(i>1){ctx.strokeStyle='rgba(6,182,212,0.15)';ctx.beginPath();ctx.moveTo(nodes[i-1].x,nodes[i-1].y);ctx.lineTo(nodes[i].x,nodes[i].y);ctx.stroke();ctx.strokeStyle='rgba(99,102,241,0.3)';}
+  }
+  // Draw nodes
+  for(const nd of nodes){
+    ctx.beginPath();ctx.arc(nd.x,nd.y,nd.self?20:14,0,Math.PI*2);
+    ctx.fillStyle=nd.color;ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle='#e0e0e8';ctx.font=(nd.self?'bold 11px':'10px')+' system-ui';ctx.textAlign='center';
+    ctx.fillText(nd.label,nd.x,nd.y+30);
+    ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='9px monospace';
+    ctx.fillText(nd.id.slice(0,8),nd.x,nd.y+42);
+  }
+}
+
+// Hook network tab into refresh
+const _origRefresh2=refresh;
+refresh=async function(){
+  await _origRefresh2();
+  if(document.getElementById('tab-network')?.classList.contains('active'))renderNetwork();
+};
 </script>
 </body>
 </html>
