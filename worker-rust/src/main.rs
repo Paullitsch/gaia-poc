@@ -1,5 +1,6 @@
 mod client;
 mod config;
+pub mod experiments;
 mod gpu;
 mod updater;
 mod worker;
