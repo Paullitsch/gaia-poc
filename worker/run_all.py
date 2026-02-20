@@ -174,7 +174,10 @@ def main():
         "act_type": env_cfg["act_type"],
         "solved_threshold": env_cfg["solved"],
         "max_steps": env_cfg["max_steps"],
-        "hidden": env_cfg["hidden"],
+        "hidden": env_cfg.get("hidden"),
+        # Pixel env support (Atari)
+        "obs_type": env_cfg.get("obs_type", "vector"),
+        "n_frames": env_cfg.get("n_frames", 4),
     }
 
     label, module = METHODS[args.method]

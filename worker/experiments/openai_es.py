@@ -30,10 +30,27 @@ def run(params=None, device="cpu", callback=None):
     solved_threshold = params.get("solved_threshold", 200)
     n_workers = params.get("n_workers", min(os.cpu_count() or 1, 16))
 
-    policy = PolicyNetwork(obs_dim=obs_dim, act_dim=act_dim, act_type=act_type, hidden=hidden)
-    theta = np.random.randn(policy.n_params) * 0.1
+    obs_type = params.get("obs_type", "vector")
 
-    print(f"🔀 OpenAI-ES on {env_name}: {policy.n_params} params, pop={pop_size}, lr={lr}, σ={noise_std}")
+    if obs_type == "pixel":
+        from experiments.atari_eval import AtariCNN
+        n_frames = params.get("n_frames", 4)
+        _model = AtariCNN(n_frames=n_frames, n_actions=act_dim)
+        class _AtariPolicy:
+            def __init__(self, model):
+                self.n_params = model.n_params
+                self.act_dim = act_dim
+                self.act_type = "discrete"
+                self._is_atari = True
+                self.device = device
+        policy = _AtariPolicy(_model)
+        print(f"🎮 OpenAI-ES on {env_name} (CNN, {policy.n_params} params)")
+    else:
+        policy = PolicyNetwork(obs_dim=obs_dim, act_dim=act_dim, act_type=act_type, hidden=hidden)
+        print(f"🔀 OpenAI-ES on {env_name}: {policy.n_params} params")
+
+    theta = np.random.randn(policy.n_params) * 0.1
+    print(f"Pop: {pop_size} | lr: {lr} | σ: {noise_std} | Workers: {n_workers}")
 
     best_ever = -float("inf")
     best_params = None

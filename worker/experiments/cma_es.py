@@ -53,7 +53,18 @@ class PolicyNetwork:
 
 
 def evaluate(policy, params, env_name, n_episodes=5, max_steps=1000):
-    """Evaluate a parameter vector on any environment."""
+    """Evaluate a parameter vector on any environment.
+    
+    For pixel-based envs (Atari), uses CNN + frame stacking via atari_eval.
+    For vector envs, uses direct numpy forward pass.
+    """
+    # Detect Atari environments
+    if hasattr(policy, '_is_atari') and policy._is_atari:
+        from experiments.atari_eval import evaluate_atari
+        device = getattr(policy, 'device', 'cpu')
+        return evaluate_atari(params, env_name, policy.act_dim,
+                              n_episodes, max_steps, device)
+
     env = gym.make(env_name)
     total = 0.0
     for ep in range(n_episodes):
@@ -160,12 +171,31 @@ def run(params=None, device="cpu", callback=None):
     solved_threshold = params.get("solved_threshold", 200)
     n_workers = params.get("n_workers", min(os.cpu_count() or 1, 16))
 
-    policy = PolicyNetwork(obs_dim=obs_dim, act_dim=act_dim, act_type=act_type, hidden=hidden)
-    cma = CMAES(policy.n_params, sigma0=sigma0)
+    obs_type = params.get("obs_type", "vector")
 
-    print(f"🧬 CMA-ES on {env_name}")
-    print(f"Network: {obs_dim}→{'→'.join(map(str,hidden))}→{act_dim} ({policy.n_params} params, {act_type})")
-    print(f"Budget: {max_evals:,} evals | Pop: {cma.lam} | Workers: {n_workers}")
+    if obs_type == "pixel":
+        # Atari: use CNN policy via PyTorch
+        from experiments.atari_eval import AtariCNN
+        import torch
+        n_frames = params.get("n_frames", 4)
+        _model = AtariCNN(n_frames=n_frames, n_actions=act_dim)
+        # Create a lightweight adapter so evaluate() knows it's Atari
+        class _AtariPolicy:
+            def __init__(self, model):
+                self.n_params = model.n_params
+                self.act_dim = act_dim
+                self.act_type = "discrete"
+                self._is_atari = True
+                self.device = device
+        policy = _AtariPolicy(_model)
+        print(f"🎮 CMA-ES on {env_name} (CNN, {policy.n_params} params)")
+    else:
+        policy = PolicyNetwork(obs_dim=obs_dim, act_dim=act_dim, act_type=act_type, hidden=hidden)
+        print(f"🧬 CMA-ES on {env_name}")
+        print(f"Network: {obs_dim}→{'→'.join(map(str,hidden))}→{act_dim} ({policy.n_params} params, {act_type})")
+
+    cma = CMAES(policy.n_params, sigma0=sigma0)
+    print(f"Budget: {max_evals:,} evals | Pop: {cma.lam} | Workers: {n_workers} | Diagonal: {cma.use_diagonal}")
 
     best_ever = -float("inf")
     best_params = None
