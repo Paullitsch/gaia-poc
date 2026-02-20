@@ -51,6 +51,33 @@ fn extract_params(env_name: &str, params: &Value) -> (usize, usize, f64, Vec<usi
     (max_evals, eval_episodes, sigma0, hidden)
 }
 
+/// Optimal hidden sizes for CMA-ES methods (keep params < 5K for full covariance).
+/// CMA-ES O(n²) makes large nets infeasible — use smaller nets with more compute.
+fn cma_optimal_hidden(env_name: &str) -> Vec<usize> {
+    match env_name {
+        "CartPole-v1" => vec![32, 16],
+        "LunarLander-v3" => vec![64, 32],          // 2,788 params ← Phase 7 sweet spot
+        "BipedalWalker-v3" => vec![64, 32],         // 2,788 params ← Phase 8 sweet spot
+        _ => vec![64, 32],
+    }
+}
+
+/// Extract params but use CMA-optimal net size unless explicitly overridden.
+fn extract_cma_params(env_name: &str, params: &Value) -> (usize, usize, f64, Vec<usize>) {
+    let max_evals = params.get("max_evals").and_then(|v| v.as_u64()).unwrap_or(100000) as usize;
+    let eval_episodes = params.get("eval_episodes").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
+    let sigma0 = params.get("sigma0").and_then(|v| v.as_f64()).unwrap_or(0.5);
+    let hidden = if let Some(h) = params.get("hidden").and_then(|v| v.as_array()) {
+        h.iter().filter_map(|v| v.as_u64().map(|n| n as usize)).collect()
+    } else if params.get("config").is_some() {
+        // Scaling test — use extract_params
+        return extract_params(env_name, params);
+    } else {
+        cma_optimal_hidden(env_name)
+    };
+    (max_evals, eval_episodes, sigma0, hidden)
+}
+
 fn final_eval(env_name: &str, policy: &Policy, best_params: &Option<Vec<f64>>, max_steps: usize) -> (f64, f64) {
     if let Some(ref bp) = best_params {
         let pf32: Vec<f32> = bp.iter().map(|&v| v as f32).collect();
@@ -65,17 +92,21 @@ fn final_eval(env_name: &str, policy: &Policy, best_params: &Option<Vec<f64>>, m
 
 pub fn run_cma_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
     let env_cfg = env::get_env_config(env_name).expect("Unknown env");
-    let (max_evals, eval_episodes, sigma0, hidden) = extract_params(env_name, params);
+    let (max_evals, eval_episodes, sigma0, hidden) = extract_cma_params(env_name, params);
     let policy = Policy::new(env_cfg.obs_dim, env_cfg.action_space.size(), &hidden, env_cfg.action_space);
     let mut cma = CmaEs::new(policy.n_params, sigma0, None);
     let max_steps = env_cfg.max_steps;
     let solved = env_cfg.solved_threshold;
 
-    eprintln!("🦀 CMA-ES on {} | {} params | pop={}", env_name, policy.n_params, cma.pop_size);
+    let patience = params.get("patience").and_then(|v| v.as_u64()).unwrap_or(200) as usize;
+
+    eprintln!("🦀 CMA-ES on {} | {} params | pop={} | patience={}", env_name, policy.n_params, cma.pop_size, patience);
 
     let mut best_ever = f64::NEG_INFINITY;
     let mut best_params: Option<Vec<f64>> = None;
     let mut total_evals = 0usize;
+    let mut stale_gens = 0usize;
+    let mut restarts = 0usize;
     let start = Instant::now();
 
     while total_evals < max_evals {
@@ -92,8 +123,11 @@ pub fn run_cma_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResu
         let gen_best = fitnesses.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         if gen_best > best_ever {
             best_ever = gen_best;
+            stale_gens = 0;
             let idx = fitnesses.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()).unwrap().0;
             best_params = Some(candidates[idx].clone());
+        } else {
+            stale_gens += 1;
         }
 
         on_gen(GenResult {
@@ -102,6 +136,19 @@ pub fn run_cma_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResu
         });
 
         if best_ever >= solved { break; }
+
+        // Restart if stuck (patience exhausted or sigma collapsed)
+        if stale_gens >= patience || cma.sigma < 1e-8 {
+            restarts += 1;
+            eprintln!("  🔄 Restart #{} at gen {} (stale={}, σ={:.2e})", restarts, cma.gen, stale_gens, cma.sigma);
+            // Inject best known solution into new CMA
+            let new_sigma = sigma0 * (1.0 + 0.2 * restarts as f64);
+            cma = CmaEs::new(policy.n_params, new_sigma, None);
+            if let Some(ref bp) = best_params {
+                for (i, v) in bp.iter().enumerate() { cma.mean[i] = *v; }
+            }
+            stale_gens = 0;
+        }
     }
 
     let (fm, fs) = final_eval(env_name, &policy, &best_params, max_steps);
@@ -120,8 +167,9 @@ pub fn run_openai_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenR
     let solved = env_cfg.solved_threshold;
 
     let pop_size = params.get("pop_size").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
-    let lr = params.get("lr").and_then(|v| v.as_f64()).unwrap_or(0.01) as f64;
-    let noise_std = params.get("noise_std").and_then(|v| v.as_f64()).unwrap_or(0.1) as f64;
+    let lr = params.get("lr").and_then(|v| v.as_f64()).unwrap_or(0.02) as f64;
+    let noise_std = params.get("noise_std").and_then(|v| v.as_f64()).unwrap_or(0.05) as f64;
+    let weight_decay = params.get("weight_decay").and_then(|v| v.as_f64()).unwrap_or(0.005);
 
     eprintln!("🦀 OpenAI-ES on {} | {} params | pop={} | lr={} | σ={}", env_name, n, pop_size, lr, noise_std);
 
@@ -158,7 +206,7 @@ pub fn run_openai_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenR
             }
         }
         for j in 0..n {
-            theta[j] += lr / (pop_size as f64 * noise_std) * grad[j];
+            theta[j] = theta[j] * (1.0 - weight_decay) + lr / (pop_size as f64 * noise_std) * grad[j];
         }
 
         // Evaluate current theta
@@ -189,7 +237,7 @@ pub fn run_openai_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenR
 
 pub fn run_curriculum(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
     let env_cfg = env::get_env_config(env_name).expect("Unknown env");
-    let (max_evals, eval_episodes, sigma0, hidden) = extract_params(env_name, params);
+    let (max_evals, eval_episodes, sigma0, hidden) = extract_cma_params(env_name, params);
     let policy = Policy::new(env_cfg.obs_dim, env_cfg.action_space.size(), &hidden, env_cfg.action_space);
     let mut cma = CmaEs::new(policy.n_params, sigma0, None);
     let max_steps = env_cfg.max_steps;
@@ -252,7 +300,7 @@ pub fn run_curriculum(env_name: &str, params: &Value, mut on_gen: impl FnMut(Gen
 
 pub fn run_neuromod(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
     let env_cfg = env::get_env_config(env_name).expect("Unknown env");
-    let (max_evals, eval_episodes, sigma0, hidden) = extract_params(env_name, params);
+    let (max_evals, eval_episodes, sigma0, hidden) = extract_cma_params(env_name, params);
     let policy = Policy::new(env_cfg.obs_dim, env_cfg.action_space.size(), &hidden, env_cfg.action_space);
     let n_layers = hidden.len() + 1;
     // Neuromod: evolve weights + per-layer modulation params (eta, A, B per layer)
@@ -309,7 +357,7 @@ pub fn run_neuromod(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenRe
 
 pub fn run_island_model(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
     let env_cfg = env::get_env_config(env_name).expect("Unknown env");
-    let (max_evals, eval_episodes, sigma0, hidden) = extract_params(env_name, params);
+    let (max_evals, eval_episodes, sigma0, hidden) = extract_cma_params(env_name, params);
     let policy = Policy::new(env_cfg.obs_dim, env_cfg.action_space.size(), &hidden, env_cfg.action_space);
     let max_steps = env_cfg.max_steps;
     let solved = env_cfg.solved_threshold;
@@ -402,7 +450,7 @@ pub fn run_island_model(env_name: &str, params: &Value, mut on_gen: impl FnMut(G
 
 pub fn run_meta_learning(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
     let env_cfg = env::get_env_config(env_name).expect("Unknown env");
-    let (max_evals, eval_episodes, sigma0, hidden) = extract_params(env_name, params);
+    let (max_evals, eval_episodes, sigma0, hidden) = extract_cma_params(env_name, params);
     let policy = Policy::new(env_cfg.obs_dim, env_cfg.action_space.size(), &hidden, env_cfg.action_space);
     let n_layers = hidden.len() + 1;
     let rule_params = n_layers * 5; // A, B, C, D, eta per layer
