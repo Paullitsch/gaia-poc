@@ -14,16 +14,16 @@ use tracing_subscriber::EnvFilter;
 #[command(name = "gaia-worker", about = "GAIA distributed experiment worker")]
 struct Cli {
     /// Server URL (e.g. https://your-vps:7434)
-    #[arg(long, env = "GAIA_SERVER")]
-    server: String,
+    #[arg(long, env = "GAIA_SERVER", required_unless_present = "bench_cartpole")]
+    server: Option<String>,
 
     /// Auth token
-    #[arg(long, env = "GAIA_TOKEN")]
-    token: String,
+    #[arg(long, env = "GAIA_TOKEN", required_unless_present = "bench_cartpole")]
+    token: Option<String>,
 
     /// Worker name (e.g. paul-rtx5070)
-    #[arg(long, env = "GAIA_WORKER_NAME")]
-    name: String,
+    #[arg(long, env = "GAIA_WORKER_NAME", required_unless_present = "bench_cartpole")]
+    name: Option<String>,
 
     /// Poll interval in seconds
     #[arg(long, default_value = "5")]
@@ -48,6 +48,14 @@ struct Cli {
     /// Sync experiment files from server on startup and updates
     #[arg(long, default_value = "false")]
     sync_experiments: bool,
+
+    /// Run native Rust benchmark instead of connecting to server
+    #[arg(long)]
+    bench_cartpole: bool,
+
+    /// Max evals for benchmark
+    #[arg(long, default_value = "50000")]
+    bench_evals: usize,
 }
 
 #[tokio::main]
@@ -57,10 +65,20 @@ async fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
+
+    // Native benchmark mode — no server needed
+    if cli.bench_cartpole {
+        println!("━━━ GAIA Native Benchmark: CartPole ━━━");
+        let result = experiments::bench_cartpole::run(cli.bench_evals);
+        println!("\n━━━ Result ━━━");
+        println!("{:#?}", result);
+        return Ok(());
+    }
+
     let cfg = config::Config {
-        server_url: cli.server,
-        auth_token: cli.token,
-        worker_name: cli.name,
+        server_url: cli.server.unwrap(),
+        auth_token: cli.token.unwrap(),
+        worker_name: cli.name.unwrap(),
         poll_interval_secs: cli.poll_interval,
         experiments_dir: cli.experiments_dir,
         python_bin: cli.python,

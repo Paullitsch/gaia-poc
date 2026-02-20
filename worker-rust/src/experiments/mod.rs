@@ -9,3 +9,4 @@
 pub mod env;
 pub mod policy;
 pub mod optim;
+pub mod bench_cartpole;
