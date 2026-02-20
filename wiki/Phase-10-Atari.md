@@ -1,8 +1,8 @@
 # Phase 10: Atari + GPU Acceleration
 
-> Pixel-basierte Environments — der erste echte GPU-Test für GAIA
+> ⚠️ **DEPRIORITIZED** — `env.step()` (CPU-bound ALE Emulator) ist der Bottleneck, nicht GPU. Atari war eine Ablenkung. Fokus liegt jetzt auf Meta-Learning + Rust-Migration.
 
-## Motivation
+## Motivation (ursprünglich)
 
 Bisherige Envs (LunarLander, BipedalWalker) sind CPU-bound: kleine Netze (2K-10K params), Bottleneck ist `gym.step()` (Box2D Physik). GPU bringt da nichts.
 

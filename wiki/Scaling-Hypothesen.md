@@ -77,9 +77,31 @@ Für >8 Workers: unabhängige CMA-ES-Instanzen pro Worker, periodische Migration
 | Neuromod | 🟡 Vielversprechend | ❓ Ungetestet | ❓ Ungetestet |
 | GA | ❌ Schlecht | ❌ Schlecht | ❌ Schlecht |
 
+## Empirische Ergebnisse (NEU)
+
+### LunarLander Scaling → Kein Breakpoint!
+
+| Params | CMA-ES Score | Modus |
+|--------|-------------|-------|
+| 1.000 | +215.1 | Full Covariance |
+| 10.000 | +227.2 | Diagonal |
+| 33.000 | +204.5 | Diagonal |
+| 100.000 | +225.0 | Diagonal |
+
+**Ergebnis:** Alle Netzgrößen lösen LunarLander. Das Problem ist zu einfach für einen Breakpoint. Die Hypothese "CMA-ES degradiert ab ~10K" stimmt bei LunarLander **nicht** — Diagonal-Modus kompensiert.
+
+### Nächster Schritt: BipedalWalker Scaling
+
+BipedalWalker ist härter (24D obs, 4D continuous action, ~300 threshold). Scaling-Tests mit 1K, 10K, 33K, 100K Params laufen. Hier erwarten wir den Breakpoint.
+
+### Meta-Learning als Skalierungslösung
+
+Statt größere Netze direkt zu evolvieren → **evolve Lernregeln** (21 Parameter), die beliebig große Netze trainieren. Siehe [[Meta-Learning]].
+
 ## Offene Fragen
 
-1. **Gibt es einen Crossover-Punkt** wo gradientenfreie Methoden effizienter als Backprop werden?
-2. **Können lokale Lernregeln + Evolution** die Credit-Assignment-Lücke schließen?
-3. **Skaliert das Island-Modell** auf 100+ heterogene Knoten?
-4. **Welche Rolle spielt GPU** bei Environment-Simulation (Brax) vs. Network-Inference?
+1. **Wo liegt der BipedalWalker Breakpoint?** — Scaling-Tests laufen
+2. **Können 21 Lernregel-Parameter beliebig große Netze trainieren?** — Pure Meta-Learning Tests laufen
+3. **Gibt es einen Crossover-Punkt** wo gradientenfreie Methoden effizienter als Backprop werden?
+4. **Skaliert das Island-Modell** auf 100+ heterogene Knoten?
+5. **Transferieren Lernregeln zwischen Environments?**
