@@ -217,15 +217,6 @@ def run(params=None, device="cpu", callback=None):
     max_steps = params.get("max_steps", 1000)
     solved_threshold = params.get("solved_threshold", 200)
 
-    obs_type = params.get("obs_type", "vector")
-    if obs_type == "pixel":
-        return {
-            "method": "PPO (Backprop)",
-            "environment": env_name,
-            "error": "PPO Atari CNN not yet implemented — use ES methods for pixel envs",
-            "uses_backprop": True,
-            "solved": False,
-        }
 
     policy = PPOPolicy(obs_dim, act_dim, act_type, hidden)
     optimizer = optim.Adam(policy.parameters(), lr=3e-4)

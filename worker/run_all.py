@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from experiments import (cma_es, openai_es, hybrid_ff, curriculum, indirect,
                         scaling, neuromod, island_model, island_advanced, neuromod_island,
-                        ppo_baseline)
+                        ppo_baseline, meta_learning, scaling_test)
 
 # ─── Environment configs ───────────────────────────────────────────────
 ENVIRONMENTS = {
@@ -49,37 +49,7 @@ ENVIRONMENTS = {
         "max_steps": 2000,
         "hidden": [256, 128],
     },
-    # ─── Atari (Phase 10) ──────────────────────────────────────────
-    "ALE/Pong-v5": {
-        "obs_type": "pixel",
-        "obs_dim": (4, 84, 84),  # 4 stacked grayscale frames
-        "act_dim": 6,
-        "act_type": "discrete",
-        "solved": 21,
-        "max_steps": 10000,
-        "hidden": None,  # CNN, not MLP
-        "n_frames": 4,
-    },
-    "ALE/Breakout-v5": {
-        "obs_type": "pixel",
-        "obs_dim": (4, 84, 84),
-        "act_dim": 4,
-        "act_type": "discrete",
-        "solved": 30,
-        "max_steps": 10000,
-        "hidden": None,
-        "n_frames": 4,
-    },
-    "ALE/SpaceInvaders-v5": {
-        "obs_type": "pixel",
-        "obs_dim": (4, 84, 84),
-        "act_dim": 6,
-        "act_type": "discrete",
-        "solved": 500,
-        "max_steps": 10000,
-        "hidden": None,
-        "n_frames": 4,
-    },
+
 }
 
 # ─── Methods ───────────────────────────────────────────────────────────
@@ -95,6 +65,8 @@ METHODS = {
     "island_advanced":   ("Island Advanced", island_advanced),
     "neuromod_island":   ("Neuromod Island", neuromod_island),
     "ppo_baseline":      ("PPO (Backprop)", ppo_baseline),
+    "meta_learning":     ("Meta-Learning (Evolved Rules)", meta_learning),
+    "scaling_test":      ("Scaling Test", scaling_test),
 }
 
 
@@ -176,8 +148,6 @@ def main():
         "max_steps": env_cfg["max_steps"],
         "hidden": env_cfg.get("hidden"),
         # Pixel env support (Atari)
-        "obs_type": env_cfg.get("obs_type", "vector"),
-        "n_frames": env_cfg.get("n_frames", 4),
     }
 
     # Merge extra params from GAIA_JOB_PARAMS env var (set by worker)

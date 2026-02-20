@@ -181,13 +181,12 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
               <option value="LunarLander-v3">LunarLander-v3</option>
               <option value="BipedalWalker-v3">BipedalWalker-v3</option>
               <option value="BipedalWalkerHardcore-v3">BipedalWalkerHardcore-v3</option>
-              <option value="ALE/Pong-v5">ALE/Pong-v5 🎮</option>
-              <option value="ALE/Breakout-v5">ALE/Breakout-v5 🎮</option>
-              <option value="ALE/SpaceInvaders-v5">ALE/SpaceInvaders-v5 🎮</option>
             </select>
             <select id="method-select">
               <optgroup label="⚡ Backpropagation (Control)">
                 <option value="ppo_baseline">PPO (Backprop) — Control Group</option>
+                <option value="meta_learning">Meta-Learning (Evolved Rules) 🧬</option>
+                <option value="scaling_test">Scaling Test 📏</option>
               </optgroup>
               <optgroup label="🧬 Gradient-Free (GAIA)">
                 <option value="cma_es">CMA-ES</option>
@@ -292,9 +291,6 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
               <option value="LunarLander-v3">LunarLander-v3</option>
               <option value="BipedalWalker-v3">BipedalWalker-v3</option>
               <option value="BipedalWalkerHardcore-v3">BipedalWalkerHardcore-v3</option>
-              <option value="ALE/Pong-v5">ALE/Pong-v5 🎮</option>
-              <option value="ALE/Breakout-v5">ALE/Breakout-v5 🎮</option>
-              <option value="ALE/SpaceInvaders-v5">ALE/SpaceInvaders-v5 🎮</option>
             </select>
             <button class="btn-sm" onclick="downloadAllCSV()">⬇️ Export All CSV</button>
             <button class="btn-sm" onclick="downloadSummaryJSON()">⬇️ Summary JSON</button>

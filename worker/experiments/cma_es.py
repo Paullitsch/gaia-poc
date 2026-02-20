@@ -15,7 +15,7 @@ import os
 class PolicyNetwork:
     """Environment-agnostic policy network."""
 
-    def __init__(self, obs_dim=8, act_dim=4, act_type="discrete", hidden=None):
+    def __init__(self, obs_dim=8, act_dim=4, hidden=None, act_type="discrete"):
         hidden = hidden or [64, 32]
         self.obs_dim = obs_dim
         self.act_dim = act_dim
@@ -39,32 +39,21 @@ class PolicyNetwork:
             b = params[idx:idx + self.sizes[i+1]]
             idx += self.sizes[i+1]
             x = x @ w + b
-            if i < len(self.shapes) - 2:  # hidden layers
+            if i < len(self.shapes) - 2:
                 x = np.tanh(x)
         if self.act_type == "continuous":
-            x = np.tanh(x)  # bound to [-1, 1]
+            x = np.tanh(x)
         return x
 
     def act(self, obs, params):
         out = self.forward(obs, params)
         if self.act_type == "discrete":
             return int(np.argmax(out))
-        return out  # continuous
+        return out
 
 
 def evaluate(policy, params, env_name, n_episodes=5, max_steps=1000):
-    """Evaluate a parameter vector on any environment.
-    
-    For pixel-based envs (Atari), uses CNN + frame stacking via atari_eval.
-    For vector envs, uses direct numpy forward pass.
-    """
-    # Detect Atari environments
-    if hasattr(policy, '_is_atari') and policy._is_atari:
-        from experiments.atari_eval import evaluate_atari
-        device = getattr(policy, 'device', 'cpu')
-        return evaluate_atari(params, env_name, policy.act_dim,
-                              n_episodes, max_steps, device)
-
+    """Evaluate a parameter vector on any environment."""
     env = gym.make(env_name)
     total = 0.0
     for ep in range(n_episodes):
@@ -171,22 +160,11 @@ def run(params=None, device="cpu", callback=None):
     solved_threshold = params.get("solved_threshold", 200)
     n_workers = params.get("n_workers", min(os.cpu_count() or 1, 16))
 
-    obs_type = params.get("obs_type", "vector")
-    is_atari = obs_type == "pixel"
+    policy = PolicyNetwork(obs_dim=obs_dim, act_dim=act_dim, act_type=act_type, hidden=hidden)
+    cma = CMAES(policy.n_params, sigma0=sigma0)
 
-    if is_atari:
-        from experiments.atari_eval import AtariCNN
-        n_frames = params.get("n_frames", 4)
-        _model = AtariCNN(n_frames=n_frames, n_actions=act_dim)
-        n_params = _model.n_params
-        print(f"🎮 CMA-ES on {env_name} (CNN, {n_params} params)")
-    else:
-        policy = PolicyNetwork(obs_dim=obs_dim, act_dim=act_dim, act_type=act_type, hidden=hidden)
-        n_params = policy.n_params
-        print(f"🧬 CMA-ES on {env_name}")
-        print(f"Network: {obs_dim}→{'→'.join(map(str,hidden))}→{act_dim} ({n_params} params, {act_type})")
-
-    cma = CMAES(n_params, sigma0=sigma0)
+    print(f"🧬 CMA-ES on {env_name}")
+    print(f"Network: {obs_dim}→{'→'.join(map(str,hidden))}→{act_dim} ({policy.n_params} params, {act_type})")
     print(f"Budget: {max_evals:,} evals | Pop: {cma.lam} | Workers: {n_workers} | Diagonal: {cma.use_diagonal}")
 
     best_ever = -float("inf")
@@ -194,19 +172,10 @@ def run(params=None, device="cpu", callback=None):
     total_evals = 0
     start_time = time.time()
 
-    if is_atari:
-        from experiments.atari_eval import evaluate_atari, evaluate_population_gpu
-
     while total_evals < max_evals:
         candidates = cma.ask()
 
-        if is_atari:
-            # GPU batch eval: all candidates + vectorized envs in parallel
-            fitnesses = np.array(evaluate_population_gpu(
-                candidates, env_name, act_dim, eval_episodes, max_steps, device,
-                n_parallel=min(len(candidates), 20)
-            ))
-        elif n_workers > 1:
+        if n_workers > 1:
             with mp.Pool(n_workers) as pool:
                 fitnesses = pool.starmap(evaluate, [(policy, c, env_name, eval_episodes, max_steps) for c in candidates])
             fitnesses = np.array(fitnesses)
@@ -244,11 +213,7 @@ def run(params=None, device="cpu", callback=None):
             break
 
     if best_params is not None:
-        if is_atari:
-            final_scores = evaluate_population_gpu(
-                [best_params] * 10, env_name, act_dim, 1, max_steps, device, n_parallel=10)
-        else:
-            final_scores = [evaluate(policy, best_params, env_name, 1, max_steps) for _ in range(20)]
+        final_scores = [evaluate(policy, best_params, env_name, 1, max_steps) for _ in range(20)]
         final_mean, final_std = float(np.mean(final_scores)), float(np.std(final_scores))
     else:
         final_mean = final_std = 0.0
