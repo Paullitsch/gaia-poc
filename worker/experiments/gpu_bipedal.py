@@ -1,92 +1,76 @@
 """
-GPU-Accelerated CMA-ES for BipedalWalker — continuous control on GPU.
+High-Performance CMA-ES for BipedalWalker — max CPU parallelism.
 
-Same GPU optimization as gpu_cma.py but with:
-- Continuous action space (4D tanh output)
-- Larger network (11.5K params)
-- Vectorized BipedalWalker environments
+Box2D physics is CPU-bound. GPU doesn't help for forward passes on
+small networks (11K params). Multiprocessing over all cores is the key.
+
+For GPU-native physics, use brax/JAX (separate experiment).
 """
 
 import numpy as np
 import gymnasium as gym
 import time
-import torch
-import torch.nn as nn
+import multiprocessing as mp
+import os
+
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
 
 
-class ContinuousPolicy(nn.Module):
-    """Policy for continuous action spaces."""
+class ContinuousPolicy:
+    """Numpy policy for continuous action spaces."""
     def __init__(self, obs_dim=24, act_dim=4, hidden1=128, hidden2=64):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(obs_dim, hidden1),
-            nn.Tanh(),
-            nn.Linear(hidden1, hidden2),
-            nn.Tanh(),
-            nn.Linear(hidden2, act_dim),
-            nn.Tanh(),  # Actions bounded to [-1, 1]
-        )
-        self.n_params = sum(p.numel() for p in self.parameters())
-    
-    def forward(self, x):
-        return self.net(x)
-    
-    def load_flat_params(self, flat_params):
+        self.shapes = [
+            (obs_dim, hidden1), (hidden1,),
+            (hidden1, hidden2), (hidden2,),
+            (hidden2, act_dim), (act_dim,),
+        ]
+        self.sizes = [np.prod(s) for s in self.shapes]
+        self.n_params = sum(self.sizes)
+
+    def forward(self, x, params):
         idx = 0
-        for p in self.parameters():
-            size = p.numel()
-            p.data = torch.from_numpy(flat_params[idx:idx+size].reshape(p.shape)).float().to(p.device)
-            idx += size
+        for i in range(0, len(self.shapes), 2):
+            w = params[idx:idx+self.sizes[i]].reshape(self.shapes[i])
+            idx += self.sizes[i]
+            b = params[idx:idx+self.sizes[i+1]]
+            idx += self.sizes[i+1]
+            x = x @ w + b
+            if i < len(self.shapes) - 2:
+                x = np.tanh(x)
+        return np.tanh(x)  # Bounded actions [-1, 1]
+
+    def act(self, obs, params):
+        return self.forward(obs, params)
 
 
-class GPUBipedalEvaluator:
-    def __init__(self, n_envs, device, hidden1=128, hidden2=64, hardcore=False):
-        env_name = "BipedalWalkerHardcore-v3" if hardcore else "BipedalWalker-v3"
-        self.envs = gym.vector.SyncVectorEnv([lambda e=env_name: gym.make(e) for _ in range(n_envs)])
-        self.n_envs = n_envs
-        self.device = device
-        self.policy = ContinuousPolicy(24, 4, hidden1, hidden2).to(device)
-        self.policy.eval()
-    
-    def evaluate_batch(self, candidates, n_episodes=3):
-        fitnesses = []
-        for params in candidates:
-            self.policy.load_flat_params(params)
-            fitness = self._eval(n_episodes)
-            fitnesses.append(fitness)
-        return np.array(fitnesses)
-    
-    def _eval(self, n_episodes):
-        n = min(n_episodes, self.n_envs)
-        obs_np, _ = self.envs.reset()
-        rewards = np.zeros(self.n_envs)
-        done_flags = np.zeros(self.n_envs, dtype=bool)
-        
-        for _ in range(1600):
-            if done_flags[:n].all():
-                break
-            with torch.no_grad():
-                obs_t = torch.from_numpy(obs_np).float().to(self.device)
-                actions = self.policy(obs_t).cpu().numpy()
-            obs_np, r, term, trunc, _ = self.envs.step(actions)
-            for i in range(n):
-                if not done_flags[i]:
-                    rewards[i] += r[i]
-                    if term[i] or trunc[i]:
-                        done_flags[i] = True
-        
-        return float(np.mean(rewards[:n]))
-    
-    def close(self):
-        self.envs.close()
+def evaluate(policy, params, n_episodes=3, hardcore=False):
+    env_name = "BipedalWalkerHardcore-v3" if hardcore else "BipedalWalker-v3"
+    env = gym.make(env_name)
+    total = 0.0
+    for ep in range(n_episodes):
+        obs, _ = env.reset(seed=ep * 1000)
+        done, steps, ep_r = False, 0, 0.0
+        while not done and steps < 1600:
+            action = policy.act(obs, params)
+            obs, reward, terminated, truncated, _ = env.step(action)
+            ep_r += reward
+            done = terminated or truncated
+            steps += 1
+        total += ep_r
+    env.close()
+    return total / n_episodes
 
 
 class CMAES:
-    def __init__(self, n_params, sigma0=0.5, pop_size=None):
+    def __init__(self, n_params, sigma0=0.5):
         self.n = n_params
         self.sigma = sigma0
         self.mean = np.random.randn(n_params) * 0.1
-        self.lam = pop_size or (4 + int(3 * np.log(n_params)))
+        self.lam = 4 + int(3 * np.log(n_params))
         self.mu = self.lam // 2
         w = np.log(self.mu + 0.5) - np.log(np.arange(1, self.mu + 1))
         self.weights = w / w.sum()
@@ -127,36 +111,41 @@ def run(params=None, device="cpu", callback=None):
     params = params or {}
     max_evals = params.get("max_evals", 500000)
     eval_episodes = params.get("eval_episodes", 3)
-    n_envs = params.get("n_envs", 16)
+    hardcore = params.get("hardcore", False)
     hidden1 = params.get("hidden1", 128)
     hidden2 = params.get("hidden2", 64)
-    hardcore = params.get("hardcore", False)
+    n_workers = params.get("n_workers", min(os.cpu_count() or 1, 32))
     
-    if device == "cpu" and torch.cuda.is_available():
-        device = "cuda"
-    dev = torch.device(device)
+    gpu_name = "none"
+    if HAS_TORCH and torch.cuda.is_available():
+        gpu_name = torch.cuda.get_device_name(0)
     
     env_label = "BipedalWalker-Hardcore" if hardcore else "BipedalWalker"
-    print(f"🖥️  GPU CMA-ES for {env_label} on {dev}")
-    print(f"Parallel envs: {n_envs}")
+    threshold = 200 if hardcore else 300
     
-    evaluator = GPUBipedalEvaluator(n_envs, dev, hidden1, hidden2, hardcore)
-    n_params = evaluator.policy.n_params
-    print(f"Network: {n_params} params | Budget: {max_evals} evals")
+    print(f"🖥️  High-Performance CMA-ES for {env_label}")
+    print(f"CPU workers: {n_workers} | GPU: {gpu_name} (Box2D is CPU-bound)")
     
-    cma = CMAES(n_params, sigma0=0.5)
+    policy = ContinuousPolicy(24, 4, hidden1, hidden2)
+    print(f"Network: {policy.n_params} params | Budget: {max_evals} evals")
+    
+    cma = CMAES(policy.n_params, sigma0=0.5)
     print(f"CMA-ES population: {cma.lam}")
     
     best_ever = -float("inf")
     best_params = None
     total_evals = 0
     start = time.time()
-    threshold = 300 if not hardcore else 200
     
     while total_evals < max_evals:
         candidates = cma.ask()
-        fitnesses = evaluator.evaluate_batch(candidates, eval_episodes)
+        
+        with mp.Pool(n_workers) as pool:
+            fitnesses = pool.starmap(evaluate, 
+                [(policy, c, eval_episodes, hardcore) for c in candidates])
+        fitnesses = np.array(fitnesses)
         total_evals += len(candidates) * eval_episodes
+        
         cma.tell(candidates, fitnesses)
         
         gb = np.max(fitnesses)
@@ -187,19 +176,23 @@ def run(params=None, device="cpu", callback=None):
               f"{eps:.0f} e/s | {elapsed:6.1f}s {solved}")
         
         if best_ever >= threshold:
-            print(f"\n🎉🖥️  SOLVED {env_label} on GPU! Score: {best_ever:.1f} @ {eps:.0f} e/s")
+            print(f"\n🎉 SOLVED {env_label}! Score: {best_ever:.1f} at {eps:.0f} e/s")
             break
     
-    evaluator.close()
-    elapsed = time.time() - start
+    if best_params is not None:
+        final_scores = [evaluate(policy, best_params, 1, hardcore) for _ in range(20)]
+        final_mean, final_std = float(np.mean(final_scores)), float(np.std(final_scores))
+    else:
+        final_mean = final_std = 0.0
     
+    elapsed = time.time() - start
     return {
-        "method": f"GPU CMA-ES ({env_label})",
-        "device": str(dev),
+        "method": f"HP CMA-ES ({env_label})",
+        "gpu": gpu_name, "cpu_workers": n_workers,
         "best_ever": float(best_ever),
-        "total_evals": total_evals,
-        "generations": cma.gen,
-        "n_params": n_params,
+        "final_mean": final_mean, "final_std": final_std,
+        "total_evals": total_evals, "generations": cma.gen,
+        "n_params": policy.n_params,
         "evals_per_second": round(total_evals / elapsed, 1),
         "elapsed_seconds": round(elapsed, 1),
         "solved": best_ever >= threshold,
