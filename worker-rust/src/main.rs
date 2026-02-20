@@ -14,15 +14,15 @@ use tracing_subscriber::EnvFilter;
 #[command(name = "gaia-worker", about = "GAIA distributed experiment worker")]
 struct Cli {
     /// Server URL (e.g. https://your-vps:7434)
-    #[arg(long, env = "GAIA_SERVER", required_unless_present = "bench_cartpole")]
+    #[arg(long, env = "GAIA_SERVER", required_unless_present = "bench")]
     server: Option<String>,
 
     /// Auth token
-    #[arg(long, env = "GAIA_TOKEN", required_unless_present = "bench_cartpole")]
+    #[arg(long, env = "GAIA_TOKEN", required_unless_present = "bench")]
     token: Option<String>,
 
     /// Worker name (e.g. paul-rtx5070)
-    #[arg(long, env = "GAIA_WORKER_NAME", required_unless_present = "bench_cartpole")]
+    #[arg(long, env = "GAIA_WORKER_NAME", required_unless_present = "bench")]
     name: Option<String>,
 
     /// Poll interval in seconds
@@ -49,12 +49,12 @@ struct Cli {
     #[arg(long, default_value = "false")]
     sync_experiments: bool,
 
-    /// Run native Rust benchmark instead of connecting to server
+    /// Run native Rust benchmark (cartpole or lunarlander)
     #[arg(long)]
-    bench_cartpole: bool,
+    bench: Option<String>,
 
     /// Max evals for benchmark
-    #[arg(long, default_value = "50000")]
+    #[arg(long, default_value = "100000")]
     bench_evals: usize,
 }
 
@@ -67,11 +67,24 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Native benchmark mode — no server needed
-    if cli.bench_cartpole {
-        println!("━━━ GAIA Native Benchmark: CartPole ━━━");
-        let result = experiments::bench_cartpole::run(cli.bench_evals);
-        println!("\n━━━ Result ━━━");
-        println!("{:#?}", result);
+    if let Some(ref bench_env) = cli.bench {
+        match bench_env.as_str() {
+            "cartpole" => {
+                println!("━━━ GAIA Native Benchmark: CartPole ━━━");
+                let result = experiments::bench_cartpole::run(cli.bench_evals);
+                println!("\n━━━ Result ━━━");
+                println!("{:#?}", result);
+            }
+            "lunarlander" => {
+                println!("━━━ GAIA Native Benchmark: LunarLander ━━━");
+                let result = experiments::bench_cartpole::run_env("LunarLander-v3", cli.bench_evals);
+                println!("\n━━━ Result ━━━");
+                println!("{:#?}", result);
+            }
+            other => {
+                eprintln!("Unknown benchmark: {}. Available: cartpole, lunarlander", other);
+            }
+        }
         return Ok(());
     }
 

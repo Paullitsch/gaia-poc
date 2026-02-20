@@ -7,11 +7,12 @@ use super::policy::Policy;
 use super::optim::CmaEs;
 use std::time::Instant;
 
-/// Evaluate a parameter vector on CartPole.
-fn evaluate(policy: &Policy, params: &[f32], n_episodes: usize, max_steps: usize) -> f64 {
+/// Evaluate a parameter vector on any environment.
+fn evaluate(env_name: &str, policy: &Policy, params: &[f32], n_episodes: usize, max_steps: usize) -> f64 {
     let mut total = 0.0;
     for ep in 0..n_episodes {
-        let mut env = env::cartpole::CartPole::new(Some(ep as u64 * 1000));
+        let mut env = env::make(env_name, Some(ep as u64 * 1000))
+            .unwrap_or_else(|| panic!("Unknown env: {}", env_name));
         let obs = env.reset(Some(ep as u64 * 1000));
         let mut obs = obs;
         let mut ep_reward = 0.0;
@@ -30,10 +31,15 @@ fn evaluate(policy: &Policy, params: &[f32], n_episodes: usize, max_steps: usize
     total / n_episodes as f64
 }
 
-/// Run CMA-ES on CartPole and return results.
+/// Run CMA-ES on CartPole.
 pub fn run(max_evals: usize) -> BenchResult {
-    let env_cfg = env::get_env_config("CartPole-v1").unwrap();
-    let hidden = env::default_hidden("CartPole-v1");
+    run_env("CartPole-v1", max_evals)
+}
+
+/// Run CMA-ES on any environment and return results.
+pub fn run_env(env_name: &str, max_evals: usize) -> BenchResult {
+    let env_cfg = env::get_env_config(env_name).unwrap();
+    let hidden = env::default_hidden(env_name);
     let policy = Policy::new(
         env_cfg.obs_dim,
         env_cfg.action_space.size(),
@@ -41,7 +47,7 @@ pub fn run(max_evals: usize) -> BenchResult {
         env_cfg.action_space,
     );
 
-    println!("🦀 Rust CMA-ES on CartPole-v1");
+    println!("🦀 Rust CMA-ES on {}", env_name);
     println!("Network: {} ({} params)", policy.arch_string(), policy.n_params);
 
     let mut cma = CmaEs::new(policy.n_params, 0.5, None);
@@ -62,7 +68,7 @@ pub fn run(max_evals: usize) -> BenchResult {
         let fitnesses: Vec<f64> = candidates.iter()
             .map(|c| {
                 let params_f32: Vec<f32> = c.iter().map(|&v| v as f32).collect();
-                evaluate(&policy, &params_f32, eval_episodes, max_steps)
+                evaluate(env_name, &policy, &params_f32, eval_episodes, max_steps)
             })
             .collect();
 
@@ -97,20 +103,7 @@ pub fn run(max_evals: usize) -> BenchResult {
     let (final_mean, final_std) = if let Some(ref bp) = best_params {
         let params_f32: Vec<f32> = bp.iter().map(|&v| v as f32).collect();
         let scores: Vec<f64> = (0..20)
-            .map(|i| {
-                let mut env = env::cartpole::CartPole::new(Some(99999 + i));
-                let obs = env.reset(Some(99999 + i));
-                let mut obs = obs;
-                let mut r = 0.0;
-                for _ in 0..max_steps {
-                    let action = policy.forward(&obs, &params_f32);
-                    let result = env.step(&action);
-                    r += result.reward;
-                    if result.done() { break; }
-                    obs = result.observation;
-                }
-                r
-            })
+            .map(|i| evaluate(env_name, &policy, &params_f32, 1, max_steps))
             .collect();
         let mean = scores.iter().sum::<f64>() / scores.len() as f64;
         let std = (scores.iter().map(|s| (s - mean).powi(2)).sum::<f64>() / scores.len() as f64).sqrt();

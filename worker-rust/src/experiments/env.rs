@@ -61,7 +61,9 @@ pub struct EnvConfig {
 }
 
 /// The core Environment trait.
-pub trait Environment: Send {
+/// Note: not Send because Box2D worlds contain raw pointers.
+/// For parallelism, create one environment per thread.
+pub trait Environment {
     /// Reset the environment to initial state, returns observation.
     fn reset(&mut self, seed: Option<u64>) -> Vec<f32>;
 
@@ -117,7 +119,7 @@ pub fn default_hidden(name: &str) -> Vec<usize> {
 pub fn make(name: &str, seed: Option<u64>) -> Option<Box<dyn Environment>> {
     match name {
         "CartPole-v1" => Some(Box::new(cartpole::CartPole::new(seed))),
-        // LunarLander and BipedalWalker need Box2D — will be added later
+        "LunarLander-v3" => Some(Box::new(super::lunar_lander::LunarLander::new(seed))),
         _ => None,
     }
 }

@@ -9,4 +9,5 @@
 pub mod env;
 pub mod policy;
 pub mod optim;
+pub mod lunar_lander;
 pub mod bench_cartpole;
