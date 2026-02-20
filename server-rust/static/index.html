@@ -149,6 +149,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
   <div class="tabs">
     <div class="tab active" data-tab="overview">Overview</div>
     <div class="tab" data-tab="charts">Charts & Analysis</div>
+    <div class="tab" data-tab="compare">🔬 Compare</div>
     <div class="tab" data-tab="debug">Debug</div>
     <div class="tab" data-tab="export">Export</div>
     <div class="tab" data-tab="network">🌐 Network</div>
@@ -225,6 +226,59 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
     </div>
   </div>
 
+  <!-- TAB: Compare (Experiment Comparison Dashboard) -->
+  <div class="tab-content" id="tab-compare">
+    <div class="grid">
+      <!-- Head-to-Head selector -->
+      <div class="card full-width">
+        <div class="card-header">
+          <h2>🔬 Experiment Comparison Dashboard</h2>
+          <div class="toolbar">
+            <select id="compare-env" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:.75rem">
+              <option value="all">All Environments</option>
+              <option value="lunarlander">LunarLander</option>
+              <option value="bipedal">BipedalWalker</option>
+            </select>
+            <select id="compare-norm" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:.75rem">
+              <option value="raw">Raw Scores</option>
+              <option value="normalized">Normalized (0-1)</option>
+              <option value="evals">By Evaluations</option>
+            </select>
+            <button class="btn-sm" onclick="renderCompare()">🔄 Refresh</button>
+          </div>
+        </div>
+        <div class="card-body" id="compare-stats"></div>
+      </div>
+
+      <!-- Normalized Learning Curves -->
+      <div class="card full-width">
+        <div class="card-header">
+          <h2>📈 Head-to-Head Learning Curves</h2>
+          <button class="btn-sm" onclick="exportChart('compare-canvas','gaia-h2h-comparison.png')">📷 PNG</button>
+        </div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="compare-canvas"></canvas></div></div>
+      </div>
+
+      <!-- Efficiency Analysis -->
+      <div class="card">
+        <div class="card-header"><h2>⚡ Sample Efficiency</h2></div>
+        <div class="card-body"><div class="chart-wrap" style="height:300px"><canvas id="efficiency-canvas"></canvas></div></div>
+      </div>
+
+      <!-- Convergence Speed -->
+      <div class="card">
+        <div class="card-header"><h2>🏁 Convergence Speed</h2></div>
+        <div class="card-body"><div class="chart-wrap" style="height:300px"><canvas id="convergence-canvas"></canvas></div></div>
+      </div>
+
+      <!-- Detailed Stats Table -->
+      <div class="card full-width">
+        <div class="card-header"><h2>📊 Detailed Method Statistics</h2></div>
+        <div class="card-body" id="compare-table"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- TAB: Debug -->
   <div class="tab-content" id="tab-debug">
     <div class="grid">
@@ -289,7 +343,7 @@ let prevWorkerIds = new Set(), prevJobStatuses = {};
 let allJobData = {}; // { jobId: { method, status, points: [{gen,best,best_ever,mean,sigma,evals,time}] } }
 let currentMetric = 'best_ever';
 const COLORS = ['#6366f1','#06b6d4','#22c55e','#eab308','#f97316','#ec4899','#ef4444','#a855f7'];
-const METHOD_NAMES = {cma_es:'CMA-ES',openai_es:'OpenAI-ES',hybrid_cma_ff:'Hybrid CMA+FF',curriculum:'Curriculum',indirect_encoding:'Indirect Enc',ga:'GA',pbt:'PBT',random_search:'Random Search'};
+const METHOD_NAMES = {cma_es:'CMA-ES',openai_es:'OpenAI-ES',hybrid_cma_ff:'Hybrid CMA+FF',curriculum:'Curriculum',indirect_encoding:'Indirect Enc',ga:'GA',pbt:'PBT',random_search:'Random Search',island_model:'Island Model',bipedal_cma:'BipedalWalker CMA',bipedal_es:'BipedalWalker ES',bipedal_pbt:'BipedalWalker PBT',scaling:'Network Scaling'};
 
 // ======= AUTH =======
 function authenticate(){
@@ -882,6 +936,237 @@ refresh=async function(){
 
 window.addEventListener('resize',()=>{if(document.getElementById('tab-charts').classList.contains('active'))drawAllCharts()});
 
+// ======= COMPARE TAB =======
+function renderCompare(){
+  const env=document.getElementById('compare-env').value;
+  const norm=document.getElementById('compare-norm').value;
+  
+  // Filter jobs by environment
+  let jobs=Object.entries(allJobData).filter(([id,d])=>d.points&&d.points.length>0);
+  if(env==='lunarlander')jobs=jobs.filter(([id,d])=>!d.method.includes('bipedal')&&!d.method.includes('Bipedal'));
+  if(env==='bipedal')jobs=jobs.filter(([id,d])=>d.method.includes('bipedal')||d.method.includes('Bipedal'));
+  
+  // Stats summary
+  const statsEl=document.getElementById('compare-stats');
+  if(!jobs.length){statsEl.innerHTML='<div class="empty">No experiment data available</div>';return}
+  
+  // Build method stats
+  const methods=[];
+  for(const[id,d]of jobs){
+    const pts=d.points;
+    const best=Math.max(...pts.map(p=>p.best_ever||p.best||0));
+    const lastMean=pts[pts.length-1].mean||0;
+    const lastSigma=pts[pts.length-1].sigma||0;
+    const totalEvals=pts[pts.length-1].evals||pts.length*100;
+    const solved=best>200;
+    // Find generation where score first exceeded 200
+    const solveGen=pts.findIndex(p=>(p.best_ever||p.best||0)>200);
+    const solveEvals=solveGen>=0?(pts[solveGen].evals||solveGen*100):null;
+    methods.push({id,method:d.method,name:METHOD_NAMES[d.method]||d.method,status:d.status,best,lastMean,lastSigma,totalEvals,solved,solveEvals,points:pts});
+  }
+  methods.sort((a,b)=>b.best-a.best);
+  
+  // Summary cards
+  const solved=methods.filter(m=>m.solved);
+  const bestMethod=methods[0];
+  const fastestSolve=solved.length?solved.reduce((a,b)=>(a.solveEvals||Infinity)<(b.solveEvals||Infinity)?a:b):null;
+  
+  let h=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px">
+    <div class="big-num"><div class="val" style="color:var(--accent)">${methods.length}</div><div class="lbl">Experiments</div></div>
+    <div class="big-num"><div class="val" style="color:var(--green)">${solved.length}</div><div class="lbl">Solved (>200)</div></div>
+    <div class="big-num"><div class="val" style="color:var(--yellow)">${bestMethod?bestMethod.best.toFixed(1):'—'}</div><div class="lbl">Best Score (${bestMethod?bestMethod.name:''})</div></div>
+    <div class="big-num"><div class="val" style="color:var(--cyan)">${fastestSolve?Math.round(fastestSolve.solveEvals/1000)+'K':'—'}</div><div class="lbl">Fastest Solve (${fastestSolve?fastestSolve.name:''})</div></div>
+  </div>`;
+  statsEl.innerHTML=h;
+  
+  // Detailed table
+  let t='<table style="font-size:.8rem"><tr><th>#</th><th>Method</th><th>Best Score</th><th>Last Mean</th><th>σ</th><th>Evals</th><th>Solved?</th><th>Solve @</th><th>Status</th></tr>';
+  methods.forEach((m,i)=>{
+    const solvedBadge=m.solved?'<span style="color:var(--green)">✅ Yes</span>':'<span style="color:var(--text2)">❌ No</span>';
+    const statusColor=m.status==='completed'?'var(--green)':m.status==='running'?'var(--yellow)':'var(--text2)';
+    t+=`<tr>
+      <td>${i+1}</td>
+      <td><span style="color:${COLORS[i%COLORS.length]};font-weight:600">${esc(m.name)}</span></td>
+      <td style="font-weight:700">${m.best.toFixed(1)}</td>
+      <td>${m.lastMean.toFixed(1)}</td>
+      <td>${m.lastSigma.toFixed(4)}</td>
+      <td>${(m.totalEvals/1000).toFixed(0)}K</td>
+      <td>${solvedBadge}</td>
+      <td>${m.solveEvals?Math.round(m.solveEvals/1000)+'K evals':'—'}</td>
+      <td style="color:${statusColor}">${m.status}</td>
+    </tr>`;
+  });
+  t+='</table>';
+  document.getElementById('compare-table').innerHTML=t;
+  
+  // Draw H2H learning curves
+  drawCompareCurves(methods,norm);
+  drawEfficiency(methods);
+  drawConvergence(methods);
+}
+
+function drawCompareCurves(methods,normMode){
+  const canvas=document.getElementById('compare-canvas');
+  if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  const rect=canvas.parentElement.getBoundingClientRect();
+  canvas.width=rect.width*dpr;canvas.height=(rect.height||380)*dpr;
+  canvas.style.width=rect.width+'px';canvas.style.height=(rect.height||380)+'px';
+  ctx.scale(dpr,dpr);
+  const W=rect.width,H=rect.height||380;
+  const pad={t:30,r:20,b:40,l:60};
+  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
+  
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='var(--surface2)';ctx.fillRect(0,0,W,H);
+  
+  if(!methods.length)return;
+  
+  // Determine axis ranges
+  let maxX=0,minY=Infinity,maxY=-Infinity;
+  for(const m of methods){
+    for(const p of m.points){
+      const x=normMode==='evals'?(p.evals||0):p.gen;
+      const y=p.best_ever||p.best||0;
+      if(x>maxX)maxX=x;
+      if(y<minY)minY=y;
+      if(y>maxY)maxY=y;
+    }
+  }
+  if(normMode==='normalized'){minY=0;maxY=1}
+  else{const margin=(maxY-minY)*0.1;minY-=margin;maxY+=margin}
+  
+  // Grid
+  ctx.strokeStyle='rgba(255,255,255,0.05)';ctx.lineWidth=1;
+  for(let i=0;i<=5;i++){
+    const y=pad.t+cH*(1-i/5);
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cW,y);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.4)';ctx.font='10px system-ui';ctx.textAlign='right';
+    const val=normMode==='normalized'?(i/5).toFixed(1):(minY+(maxY-minY)*i/5).toFixed(0);
+    ctx.fillText(val,pad.l-6,y+4);
+  }
+  
+  // Solved threshold line at 200
+  if(normMode!=='normalized'){
+    const y200=pad.t+cH*(1-(200-minY)/(maxY-minY));
+    if(y200>pad.t&&y200<pad.t+cH){
+      ctx.strokeStyle='rgba(34,197,94,0.4)';ctx.setLineDash([5,5]);
+      ctx.beginPath();ctx.moveTo(pad.l,y200);ctx.lineTo(pad.l+cW,y200);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle='rgba(34,197,94,0.6)';ctx.font='10px system-ui';ctx.textAlign='left';
+      ctx.fillText('Solved (200)',pad.l+4,y200-4);
+    }
+  }
+  
+  // Draw each method
+  methods.forEach((m,idx)=>{
+    const color=COLORS[idx%COLORS.length];
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();
+    let first=true;
+    for(const p of m.points){
+      const rawX=normMode==='evals'?(p.evals||0):p.gen;
+      let rawY=p.best_ever||p.best||0;
+      if(normMode==='normalized')rawY=(rawY-minY)/(maxY-minY||1);
+      const x=pad.l+(rawX/maxX)*cW;
+      const ny=normMode==='normalized'?rawY:(rawY-minY)/(maxY-minY||1);
+      const y=pad.t+cH*(1-ny);
+      if(first){ctx.moveTo(x,y);first=false}else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    // Label at end
+    const last=m.points[m.points.length-1];
+    const lx=pad.l+((normMode==='evals'?(last.evals||0):last.gen)/maxX)*cW;
+    let ly_raw=last.best_ever||last.best||0;
+    if(normMode==='normalized')ly_raw=(ly_raw-minY)/(maxY-minY||1);
+    const ly_n=normMode==='normalized'?ly_raw:(ly_raw-minY)/(maxY-minY||1);
+    const ly=pad.t+cH*(1-ly_n);
+    ctx.fillStyle=color;ctx.font='bold 10px system-ui';ctx.textAlign='left';
+    ctx.fillText(m.name+' ('+m.best.toFixed(0)+')',lx+4,ly+4);
+  });
+  
+  // X-axis label
+  ctx.fillStyle='rgba(255,255,255,0.4)';ctx.font='10px system-ui';ctx.textAlign='center';
+  ctx.fillText(normMode==='evals'?'Evaluations':'Generation',pad.l+cW/2,H-6);
+}
+
+function drawEfficiency(methods){
+  const canvas=document.getElementById('efficiency-canvas');
+  if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  const rect=canvas.parentElement.getBoundingClientRect();
+  canvas.width=rect.width*dpr;canvas.height=(rect.height||300)*dpr;
+  canvas.style.width=rect.width+'px';canvas.style.height=(rect.height||300)+'px';
+  ctx.scale(dpr,dpr);
+  const W=rect.width,H=rect.height||300;
+  const pad={t:20,r:20,b:60,l:50};
+  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
+  ctx.clearRect(0,0,W,H);
+  
+  // Bar chart: score per 1000 evaluations (efficiency)
+  const data=methods.map(m=>({name:m.name,efficiency:m.best/(m.totalEvals/1000),best:m.best}));
+  data.sort((a,b)=>b.efficiency-a.efficiency);
+  const maxEff=Math.max(...data.map(d=>d.efficiency));
+  const barW=Math.min(60,cW/data.length-8);
+  
+  data.forEach((d,i)=>{
+    const x=pad.l+i*(barW+8)+4;
+    const h=(d.efficiency/maxEff)*cH;
+    const y=pad.t+cH-h;
+    ctx.fillStyle=COLORS[i%COLORS.length];
+    ctx.fillRect(x,y,barW,h);
+    ctx.fillStyle='#e0e0e8';ctx.font='bold 10px system-ui';ctx.textAlign='center';
+    ctx.fillText(d.efficiency.toFixed(1),x+barW/2,y-4);
+    ctx.save();ctx.translate(x+barW/2,pad.t+cH+8);ctx.rotate(Math.PI/4);
+    ctx.font='9px system-ui';ctx.textAlign='left';ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.fillText(d.name,0,0);ctx.restore();
+  });
+  
+  ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='10px system-ui';ctx.textAlign='center';
+  ctx.fillText('Score per 1K Evaluations (higher = more efficient)',pad.l+cW/2,H-4);
+}
+
+function drawConvergence(methods){
+  const canvas=document.getElementById('convergence-canvas');
+  if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  const rect=canvas.parentElement.getBoundingClientRect();
+  canvas.width=rect.width*dpr;canvas.height=(rect.height||300)*dpr;
+  canvas.style.width=rect.width+'px';canvas.style.height=(rect.height||300)+'px';
+  ctx.scale(dpr,dpr);
+  const W=rect.width,H=rect.height||300;
+  const pad={t:20,r:20,b:60,l:50};
+  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
+  ctx.clearRect(0,0,W,H);
+  
+  // Horizontal bar chart: evaluations to reach 200 (or max if not solved)
+  const data=methods.map(m=>({name:m.name,evals:m.solveEvals||m.totalEvals,solved:m.solved}));
+  data.sort((a,b)=>a.evals-b.evals);
+  const maxEvals=Math.max(...data.map(d=>d.evals));
+  const barH=Math.min(30,cH/data.length-4);
+  
+  data.forEach((d,i)=>{
+    const y=pad.t+i*(barH+4);
+    const w=(d.evals/maxEvals)*cW;
+    ctx.fillStyle=d.solved?COLORS[i%COLORS.length]:'rgba(255,255,255,0.15)';
+    ctx.fillRect(pad.l,y,w,barH);
+    // Label
+    ctx.fillStyle='#e0e0e8';ctx.font='10px system-ui';ctx.textAlign='right';
+    ctx.fillText(d.name,pad.l-4,y+barH/2+4);
+    ctx.textAlign='left';ctx.font='bold 10px system-ui';
+    ctx.fillText((d.evals/1000).toFixed(0)+'K'+(d.solved?'  ✅':'  ❌'),pad.l+w+4,y+barH/2+4);
+  });
+  
+  ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='10px system-ui';ctx.textAlign='center';
+  ctx.fillText('Evaluations to Solve (lower = faster convergence)',pad.l+cW/2,H-4);
+}
+
+// Hook compare tab
+document.getElementById('compare-env').addEventListener('change',renderCompare);
+document.getElementById('compare-norm').addEventListener('change',renderCompare);
+
 // ======= NETWORK TAB =======
 async function renderNetwork(){
   const el=document.getElementById('network-body');
@@ -977,6 +1262,7 @@ function drawNetworkTopology(data){
 const _origRefresh2=refresh;
 refresh=async function(){
   await _origRefresh2();
+  if(document.getElementById('tab-compare')?.classList.contains('active'))renderCompare();
   if(document.getElementById('tab-network')?.classList.contains('active'))renderNetwork();
 };
 </script>
