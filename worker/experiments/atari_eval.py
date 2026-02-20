@@ -9,6 +9,13 @@ import numpy as np
 import gymnasium as gym
 import time
 
+# Register ALE environments
+try:
+    import ale_py
+    gym.register_envs(ale_py)
+except ImportError:
+    pass
+
 try:
     import torch
     import torch.nn as nn
