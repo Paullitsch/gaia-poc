@@ -1,15 +1,16 @@
 """
-Atari evaluation utilities.
+Atari evaluation with GPU batch inference + vectorized environments.
 
-Handles frame preprocessing, episode running, and GPU batch evaluation.
-Works with any gradient-free method that produces flat parameter vectors.
+Key architecture:
+- N parallel Atari envs via AsyncVectorEnv (CPU, parallel processes)
+- Batch observations → single GPU forward pass → distribute actions
+- Result: N× speedup over sequential evaluation
 """
 
 import numpy as np
 import gymnasium as gym
 import time
 
-# Register ALE environments
 try:
     import ale_py
     gym.register_envs(ale_py)
@@ -46,24 +47,40 @@ def preprocess_frame(obs, size=84):
     return resized.astype(np.float32) / 255.0
 
 
-class FrameStack:
-    """Maintains a stack of N preprocessed frames."""
+class FrameStacker:
+    """Maintains frame stacks for N parallel environments."""
 
-    def __init__(self, n_frames=4, size=84):
+    def __init__(self, n_envs, n_frames=4, size=84):
+        self.n_envs = n_envs
         self.n_frames = n_frames
         self.size = size
-        self.frames = []
+        self.stacks = np.zeros((n_envs, n_frames, size, size), dtype=np.float32)
 
-    def reset(self, obs):
-        frame = preprocess_frame(obs, self.size)
-        self.frames = [frame] * self.n_frames
-        return np.array(self.frames)
+    def reset(self, obs_batch, env_indices=None):
+        """Reset frame stacks. obs_batch: (N, 210, 160, 3) or subset."""
+        if env_indices is None:
+            env_indices = range(self.n_envs)
+        for i, idx in enumerate(env_indices):
+            frame = preprocess_frame(obs_batch[i])
+            self.stacks[idx] = np.stack([frame] * self.n_frames)
+        if env_indices is None:
+            return self.stacks.copy()
+        return self.stacks[list(env_indices)].copy()
 
-    def step(self, obs):
-        frame = preprocess_frame(obs, self.size)
-        self.frames.append(frame)
-        self.frames = self.frames[-self.n_frames:]
-        return np.array(self.frames)
+    def step(self, obs_batch, env_indices=None):
+        """Add new frames. obs_batch: (N, 210, 160, 3) or subset."""
+        if env_indices is None:
+            env_indices = range(self.n_envs)
+        for i, idx in enumerate(env_indices):
+            frame = preprocess_frame(obs_batch[i])
+            self.stacks[idx] = np.roll(self.stacks[idx], -1, axis=0)
+            self.stacks[idx, -1] = frame
+        if env_indices is None:
+            return self.stacks.copy()
+        return self.stacks[list(env_indices)].copy()
+
+    def get_all(self):
+        return self.stacks.copy()
 
 
 # ─── PyTorch CNN Policy ────────────────────────────────────────────────
@@ -73,15 +90,8 @@ if HAS_TORCH:
         """Nature DQN-style CNN for Atari.
 
         Input: (batch, 4, 84, 84)
-        Architecture:
-        - Conv2d(4, 16, 8, stride=4) → ReLU  [84→20]
-        - Conv2d(16, 32, 4, stride=2) → ReLU  [20→9]
-        - Flatten → 2592
-        - Linear(2592, 256) → ReLU
-        - Linear(256, n_actions)
-
-        Total: ~666K params (vs 3K for MLP)
-        With smaller variant: ~85K params
+        Output: (batch, n_actions)
+        ~85K params
         """
 
         def __init__(self, n_frames=4, n_actions=6):
@@ -92,8 +102,7 @@ if HAS_TORCH:
                 nn.Conv2d(16, 32, 4, stride=2),
                 nn.ReLU(),
             )
-            # 84 → 20 → 9, flat = 32*9*9 = 2592
-            self.flat_size = 32 * 9 * 9
+            self.flat_size = 32 * 9 * 9  # 84→20→9
             self.fc = nn.Sequential(
                 nn.Linear(self.flat_size, 256),
                 nn.ReLU(),
@@ -108,7 +117,6 @@ if HAS_TORCH:
             return self.fc(x)
 
         def load_params(self, flat_params):
-            """Load flat numpy vector into network weights."""
             idx = 0
             with torch.no_grad():
                 for p in self.parameters():
@@ -117,32 +125,30 @@ if HAS_TORCH:
                         flat_params[idx:idx + size]).reshape(p.shape))
                     idx += size
 
-        def get_params(self):
-            """Extract flat numpy vector from network weights."""
-            return np.concatenate([
-                p.data.cpu().numpy().flatten() for p in self.parameters()
-            ])
-
         @torch.no_grad()
-        def act(self, obs_np):
-            """obs_np: (4, 84, 84) → action int."""
+        def batch_act(self, obs_batch_np):
+            """Batch forward: (N, 4, 84, 84) → N actions.
+            
+            THIS is where GPU shines — one forward pass for all envs.
+            """
             device = next(self.parameters()).device
-            obs = torch.FloatTensor(obs_np).unsqueeze(0).to(device)
-            return self(obs).argmax(dim=1).item()
+            obs = torch.FloatTensor(obs_batch_np).to(device)
+            logits = self(obs)
+            return logits.argmax(dim=1).cpu().numpy()
 
 
-# ─── Evaluation ────────────────────────────────────────────────────────
+# ─── Vectorized Evaluation ─────────────────────────────────────────────
 
 def evaluate_atari(params_vec, env_name, n_actions, n_episodes=3,
                    max_steps=10000, device="cpu"):
-    """Evaluate a flat parameter vector on an Atari environment.
-
-    Returns mean reward across episodes.
+    """Evaluate using vectorized envs + GPU batch inference.
+    
+    Runs n_episodes environments IN PARALLEL, batches all observations
+    through a single GPU forward pass each step.
     """
     if not HAS_TORCH:
         raise RuntimeError("PyTorch required for Atari evaluation")
 
-    # Auto-detect GPU
     if device == "cpu" and torch.cuda.is_available():
         device = "cuda"
 
@@ -151,80 +157,156 @@ def evaluate_atari(params_vec, env_name, n_actions, n_episodes=3,
     model.to(device)
     model.eval()
 
-    stacker = FrameStack(n_frames=4)
-    env = gym.make(env_name, render_mode=None)
+    # Vectorized environments — all episodes run in parallel!
+    n_envs = n_episodes
+    try:
+        envs = gym.vector.make(env_name, num_envs=n_envs)
+    except Exception:
+        # Fallback: sequential if vectorized fails
+        return _evaluate_sequential(model, env_name, n_episodes, max_steps, device)
 
-    total_reward = 0.0
+    stacker = FrameStacker(n_envs, n_frames=4)
+
+    obs_batch, _ = envs.reset()
+    stacked = stacker.reset(obs_batch, range(n_envs))
+
+    rewards = np.zeros(n_envs)
+    dones = np.zeros(n_envs, dtype=bool)
+    steps = 0
+
+    while not np.all(dones) and steps < max_steps:
+        # GPU batch forward — all envs in ONE pass
+        active = ~dones
+        if not np.any(active):
+            break
+
+        actions = model.batch_act(stacked)
+
+        obs_batch, reward_batch, term_batch, trunc_batch, _ = envs.step(actions)
+        stacked = stacker.step(obs_batch, range(n_envs))
+
+        done_batch = term_batch | trunc_batch
+        rewards += reward_batch * active  # only count active envs
+        dones |= done_batch
+        steps += 1
+
+    envs.close()
+    return float(np.mean(rewards))
+
+
+def _evaluate_sequential(model, env_name, n_episodes, max_steps, device):
+    """Fallback sequential evaluation."""
+    stacker = FrameStacker(1, n_frames=4)
+    total = 0.0
+
     for ep in range(n_episodes):
+        env = gym.make(env_name)
         obs, _ = env.reset(seed=ep * 1000)
-        stacked = stacker.reset(obs)
+        stacked = stacker.reset(np.array([obs]), [0])
         done = False
         ep_reward = 0.0
         steps = 0
 
         while not done and steps < max_steps:
-            action = model.act(stacked)
-            obs, reward, terminated, truncated, _ = env.step(action)
-            stacked = stacker.step(obs)
+            actions = model.batch_act(stacked)
+            obs, reward, terminated, truncated, _ = env.step(actions[0])
+            stacked = stacker.step(np.array([obs]), [0])
             ep_reward += reward
             done = terminated or truncated
             steps += 1
 
-        total_reward += ep_reward
+        env.close()
+        total += ep_reward
 
-    env.close()
-    avg = total_reward / n_episodes
-    return avg
+    return total / n_episodes
 
 
-def evaluate_atari_batch(params_list, env_name, n_actions, n_episodes=3,
-                         max_steps=10000, device="cpu"):
-    """Evaluate multiple parameter vectors.
+# ─── Batch evaluation for ES populations ───────────────────────────────
 
-    For now sequential, but the model forward passes use GPU.
-    Future: true parallel env stepping with gymnasium.vector.
+def evaluate_population_gpu(params_list, env_name, n_actions, n_episodes=1,
+                            max_steps=10000, device="cpu", n_parallel=8):
+    """Evaluate an entire ES population efficiently.
+    
+    Runs n_parallel candidates simultaneously, each with vectorized envs.
+    This is the KEY function for ES+GPU — evaluates the whole population fast.
+    
+    Args:
+        params_list: list of flat parameter vectors (the ES population)
+        n_parallel: how many candidates to evaluate simultaneously
+    
+    Returns:
+        list of fitness values
     """
-    return [evaluate_atari(p, env_name, n_actions, n_episodes, max_steps, device)
-            for p in params_list]
+    if not HAS_TORCH:
+        raise RuntimeError("PyTorch required")
 
+    if device == "cpu" and torch.cuda.is_available():
+        device = "cuda"
 
-# ─── Adapter for existing methods ──────────────────────────────────────
-
-class AtariPolicyAdapter:
-    """Makes AtariCNN compatible with existing method interfaces.
-
-    Methods expect:
-    - policy.n_params → int
-    - policy.act(obs, params) → action
-    - evaluate(policy, params, env_name, n_episodes, max_steps) → float
-
-    This adapter bridges the CNN policy to that interface.
-    """
-
-    def __init__(self, n_frames=4, n_actions=6, device="cpu"):
-        if not HAS_TORCH:
-            raise RuntimeError("PyTorch required for Atari")
-        self.model = AtariCNN(n_frames, n_actions)
-        self.device = device
-        self.n_params = self.model.n_params
-        self.n_actions = n_actions
-        self.act_type = "discrete"
-        # Stacker per-thread — will be created in evaluate
-        self._stacker = FrameStack(n_frames)
-
-    def act(self, obs, params=None):
-        """obs is already preprocessed (4, 84, 84)."""
-        if params is not None:
-            self.model.load_params(params)
-            self.model.to(self.device)
-            self.model.eval()
-        return self.model.act(obs)
-
-
-def evaluate_atari_compat(policy_adapter, params, env_name,
-                          n_episodes=3, max_steps=10000):
-    """Drop-in replacement for cma_es.evaluate() for Atari envs."""
-    return evaluate_atari(
-        params, env_name, policy_adapter.n_actions,
-        n_episodes, max_steps, policy_adapter.device
-    )
+    fitnesses = []
+    
+    # Process in batches of n_parallel
+    for batch_start in range(0, len(params_list), n_parallel):
+        batch_params = params_list[batch_start:batch_start + n_parallel]
+        batch_size = len(batch_params)
+        
+        # Total parallel envs: batch_size candidates × n_episodes each
+        total_envs = batch_size * n_episodes
+        
+        try:
+            envs = gym.vector.make(env_name, num_envs=total_envs)
+        except Exception:
+            # Fallback to sequential
+            for p in batch_params:
+                fitnesses.append(evaluate_atari(p, env_name, n_actions, 
+                                                n_episodes, max_steps, device))
+            continue
+        
+        # Create one model per candidate, all on GPU
+        models = []
+        for p in batch_params:
+            m = AtariCNN(n_frames=4, n_actions=n_actions)
+            m.load_params(p)
+            m.to(device)
+            m.eval()
+            models.append(m)
+        
+        stacker = FrameStacker(total_envs, n_frames=4)
+        obs_batch, _ = envs.reset()
+        stacked = stacker.reset(obs_batch, range(total_envs))
+        
+        rewards = np.zeros(total_envs)
+        dones = np.zeros(total_envs, dtype=bool)
+        steps = 0
+        
+        while not np.all(dones) and steps < max_steps:
+            # Batch forward for each candidate's envs
+            all_actions = np.zeros(total_envs, dtype=np.int64)
+            
+            for i, model in enumerate(models):
+                env_start = i * n_episodes
+                env_end = env_start + n_episodes
+                env_obs = stacked[env_start:env_end]
+                
+                if not np.all(dones[env_start:env_end]):
+                    actions = model.batch_act(env_obs)
+                    all_actions[env_start:env_end] = actions
+            
+            obs_batch, reward_batch, term_batch, trunc_batch, _ = envs.step(all_actions)
+            stacked = stacker.step(obs_batch, range(total_envs))
+            
+            done_batch = term_batch | trunc_batch
+            active = ~dones
+            rewards += reward_batch * active
+            dones |= done_batch
+            steps += 1
+        
+        envs.close()
+        
+        # Average rewards per candidate
+        for i in range(batch_size):
+            env_start = i * n_episodes
+            env_end = env_start + n_episodes
+            fitnesses.append(float(np.mean(rewards[env_start:env_end])))
+    
+    return fitnesses
