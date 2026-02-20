@@ -34,6 +34,17 @@ impl ServerClient {
         }
     }
 
+    pub fn from_url_token(url: &str, token: &str) -> Self {
+        Self {
+            http: reqwest::Client::new(),
+            base_url: url.trim_end_matches('/').to_string(),
+            token: token.to_string(),
+        }
+    }
+
+    pub fn server_url(&self) -> &str { &self.base_url }
+    pub fn token(&self) -> &str { &self.token }
+
     pub fn http_client(&self) -> &reqwest::Client {
         &self.http
     }

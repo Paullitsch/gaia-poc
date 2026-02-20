@@ -266,28 +266,38 @@ async fn execute_native(
     let method = job.method.clone();
     let params = job.params.clone();
 
-    // Run in blocking thread (Box2D is not async)
-    let results = tokio::task::spawn_blocking(move || {
-        let mut results: Vec<crate::experiments::native_runner::GenResult> = Vec::new();
+    // Stream results in real-time via channel
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<crate::experiments::native_runner::GenResult>();
+
+    let handle = tokio::task::spawn_blocking(move || {
         crate::experiments::native_runner::run(
             &method, &env_name, &params,
-            |gr| { results.push(gr); },
-        );
-        results
-    }).await?;
+            |gr| { let _ = tx.send(gr); },
+        )
+    });
 
-    // Stream results to server
-    for gr in &results {
-        let mut data = std::collections::HashMap::new();
-        data.insert("best".into(), format!("{:.1}", gr.best));
-        data.insert("best_ever".into(), format!("{:.1}", gr.best_ever));
-        data.insert("mean".into(), format!("{:.1}", gr.mean));
-        data.insert("sigma".into(), format!("{:.4}", gr.sigma));
-        data.insert("evals".into(), format!("{}", gr.evals));
-        data.insert("generation".into(), format!("{}", gr.generation));
-        data.insert("time".into(), format!("{:.1}", gr.time));
-        let _ = client.stream_result(&job_id, worker_id, gr.generation as u64, &data).await;
-    }
+    // Stream results as they arrive
+    let job_id2 = job_id.clone();
+    let wid2 = worker_id.to_string();
+    let server_url = client.server_url().to_string();
+    let token = client.token().to_string();
+    let stream_client = crate::client::ServerClient::from_url_token(&server_url, &token);
+    let stream_task = tokio::spawn(async move {
+        while let Some(gr) = rx.recv().await {
+            let mut data = std::collections::HashMap::new();
+            data.insert("best".into(), format!("{:.1}", gr.best));
+            data.insert("best_ever".into(), format!("{:.1}", gr.best_ever));
+            data.insert("mean".into(), format!("{:.1}", gr.mean));
+            data.insert("sigma".into(), format!("{:.4}", gr.sigma));
+            data.insert("evals".into(), format!("{}", gr.evals));
+            data.insert("generation".into(), format!("{}", gr.generation));
+            data.insert("time".into(), format!("{:.1}", gr.time));
+            let _ = stream_client.stream_result(&job_id2, &wid2, gr.generation as u64, &data).await;
+        }
+    });
+
+    let _run_result = handle.await?;
+    stream_task.await?;
 
     client.complete_job(&job_id, worker_id, "completed", None).await?;
     tracing::info!(job_id = %job_id, "Native job completed");
