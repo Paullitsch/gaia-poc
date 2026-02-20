@@ -223,8 +223,7 @@ def run(params=None, device="cpu", callback=None):
             break
 
     if best_params is not None:
-        from experiments.cma_es import evaluate as raw_eval
-        final_scores = [raw_eval(policy, best_params, 1) for _ in range(20)]
+        final_scores = [evaluate_neuromod(policy, best_params, 1) for _ in range(20)]
         final_mean = float(np.mean(final_scores))
         final_std = float(np.std(final_scores))
     else:

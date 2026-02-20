@@ -42,6 +42,7 @@ pub async fn execute_job(
         .arg("--max-evals").arg(max_evals.to_string())
         .arg("--no-plots")
         .current_dir(&work_dir)
+        .env("PYTHONUNBUFFERED", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
