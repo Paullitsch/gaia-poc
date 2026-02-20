@@ -2,7 +2,7 @@
 
 > Gradientenfreie Optimierung als Alternative zur Backpropagation
 
-**Status:** Phase 8 gestartet — BipedalWalker + Auto-Update Infrastruktur 🚀
+**Status:** Phase 10 — Atari + GPU Acceleration 🎮
 
 ---
 
@@ -12,30 +12,49 @@ Beweisen, dass neuronale Netze **ohne Backpropagation** trainiert werden können
 
 ## 📊 Ergebnisse
 
-| Methode | Best Score | Status |
-|---------|-----------|--------|
-| Curriculum + CMA-ES | **+274.0** | ✅ SOLVED |
-| CMA-ES | **+235.3** | ✅ SOLVED |
-| OpenAI-ES | **+206.6** | ✅ SOLVED |
-| Indirect Encoding | -9.4 | ❌ |
+### LunarLander-v3 — 9/10 Methoden gelöst ✅
+
+| Methode | Best Score | Evals | Backprop? |
+|---------|-----------|-------|-----------|
+| 🏆 Curriculum CMA-ES | **+341.9** | 8K | ❌ |
+| Neuromod CMA-ES | **+264.5** | 13K | ❌ |
+| Neuromod Island | **+256.3** | 48K | ❌ |
+| CMA-ES | **+235.3** | 12K | ❌ |
+| Island Model | **+235.0** | 46K | ❌ |
+| GPU CMA-ES | **+232.5** | 17K | ❌ |
+| Scaling (XL) | **+215.5** | 12K | ❌ |
+| Hybrid CMA+FF | **+209.5** | 9K | ❌ |
+| OpenAI-ES | **+206.6** | 56K | ❌ |
+| Island Advanced | **+201.7** | 70K | ❌ |
+| Indirect Encoding | +9.1 | — | ❌ |
+| PPO (Baseline) | +264.8 | — | ✅ |
+
+### BipedalWalker-v3 — GELÖST ✅
+
+| Methode | Best Score | Evals |
+|---------|-----------|-------|
+| 🏆 CMA-ES | **+566.6** | 40K |
+| Curriculum CMA-ES | **+338.5** | — |
+| CMA-ES (standard) | **+265.9** | 8K |
 
 ## 📚 Wiki-Seiten
 
 ### Theorie & Forschung
 - [[Hypothesen-Evolution]] — Von v1 bis v4
-- [[Experimentelle Phasen]] — Alle 7 Phasen im Detail
+- [[Experimentelle Phasen]] — Phase 1-10 im Detail
 - [[Epistemische Architektur]] — Was wir wissen vs. vermuten
-- [[Methoden]] — CMA-ES, OpenAI-ES, Forward-Forward, Neuromodulation
+- [[Methoden]] — Alle 11 Methoden erklärt
 
 ### Infrastruktur
 - [[Architektur]] — Server-Worker-System
 - [[Server API]] — REST Endpoints
-- [[Dashboard]] — Web UI Features
 - [[Deployment]] — Docker, Binaries, Setup
+- [[Auto-Update System]] — Self-Updating Worker
 
-### Roadmap
-- [[Phase 8 Plan]] — BipedalWalker + Auto-Update Infrastruktur
-- [[Auto-Update System]] — Self-Updating Worker (v0.4.x)
+### Phasen
+- [[Phase 8 Plan]] — BipedalWalker + Auto-Update
+- [[Phase 9 Dezentralisierung]] — Island Model + P2P Gossip
+- [[Phase 10 Atari]] — CNN + GPU Acceleration
 - [[Scaling Hypothesen]] — Wo liegen die Grenzen?
 
 ---
