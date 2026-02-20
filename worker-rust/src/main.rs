@@ -156,6 +156,13 @@ async fn main() -> Result<()> {
         // Poll for job
         match client.fetch_job(&worker_id).await {
             Ok(Some(job)) => {
+                // Sync experiments before each job (hot-reload without restart)
+                if sync_experiments {
+                    match updater::sync_experiments(client.http_client(), &cfg.server_url, &cfg.auth_token, &cfg.experiments_dir).await {
+                        Ok(true) => tracing::info!("Experiments synced"),
+                        Ok(false) | Err(_) => {}
+                    }
+                }
                 tracing::info!(job_id = %job.id, method = %job.method, "Got job");
                 // Send heartbeats during job execution (every 15s)
                 // Also watch for force_update signal from server

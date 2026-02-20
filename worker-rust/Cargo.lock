@@ -377,7 +377,7 @@ dependencies = [
 
 [[package]]
 name = "gaia-worker"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "anyhow",
  "chrono",
