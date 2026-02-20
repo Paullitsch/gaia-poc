@@ -261,7 +261,7 @@ def run(params=None, device="cpu", callback=None):
 
         solved = "✅ SOLVED!" if best_ever >= solved_threshold else ""
         print(f"Gen {gen:4d} | Best: {gen_best:8.1f} | Ever: {best_ever:8.1f} | "
-              f"Mean: {gen_mean:8.1f} | Steps: {total_evals:>8,} | {elapsed:6.1f}s {solved}")
+              f"Mean: {gen_mean:8.1f} | Evals: {total_evals:>8,} | {elapsed:6.1f}s {solved}")
 
         if best_ever >= solved_threshold:
             # Verify with robust eval
