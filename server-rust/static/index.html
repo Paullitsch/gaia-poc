@@ -2,266 +2,318 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GAIA Mission Control</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>GAIA – Mission Control</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>🧬</text></svg>">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#0a0a0f;--surface:#12121a;--surface2:#1a1a26;--border:#2a2a3a;
-  --text:#e0e0e8;--text2:#8888a0;--accent:#6366f1;--accent2:#818cf8;
-  --green:#22c55e;--red:#ef4444;--yellow:#eab308;--blue:#3b82f6;
-  --orange:#f97316;--cyan:#06b6d4;
+  --bg:#09090b;--surface:#111113;--surface2:#18181b;--surface3:#1f1f23;
+  --border:#27272a;--border2:#3f3f46;
+  --text:#fafafa;--text2:#a1a1aa;--text3:#71717a;
+  --accent:#8b5cf6;--accent2:#a78bfa;--accent-bg:rgba(139,92,246,.08);
+  --green:#22c55e;--green-bg:rgba(34,197,94,.1);
+  --red:#ef4444;--red-bg:rgba(239,68,68,.1);
+  --yellow:#eab308;--yellow-bg:rgba(234,179,8,.1);
+  --blue:#3b82f6;--cyan:#06b6d4;--orange:#f97316;--pink:#ec4899;
+  --radius:10px;--radius-sm:6px;
 }
-body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;line-height:1.5;min-height:100vh}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;line-height:1.5;min-height:100dvh;font-size:14px;overflow-x:hidden}
 
 /* Auth */
-#auth-overlay{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+#auth-overlay{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px}
 #auth-overlay.hidden{display:none}
-#auth-overlay h1{font-size:2rem;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-#auth-overlay input{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;color:var(--text);font-size:1rem;width:300px;outline:none}
+#auth-overlay .logo-big{font-size:3rem;margin-bottom:-8px}
+#auth-overlay h1{font-size:1.5rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#auth-overlay p{color:var(--text3);font-size:.875rem}
+#auth-overlay input{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;color:var(--text);font-size:1rem;width:min(320px,85vw);outline:none;transition:border .2s}
 #auth-overlay input:focus{border-color:var(--accent)}
-#auth-overlay button{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 32px;font-size:1rem;cursor:pointer}
-#auth-error{color:var(--red);font-size:.875rem;min-height:1.25rem}
-
-.container{max-width:1440px;margin:0 auto;padding:16px}
+#auth-overlay button{background:var(--accent);color:#fff;border:none;border-radius:var(--radius);padding:12px 32px;font-size:.95rem;cursor:pointer;font-weight:600;transition:opacity .2s}
+#auth-overlay button:hover{opacity:.9}
+#auth-error{color:var(--red);font-size:.8rem;min-height:1.2rem}
 
 /* Header */
-header{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
-.logo{display:flex;align-items:center;gap:10px}
-.logo svg{width:26px;height:26px}
-.logo h1{font-size:1.05rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.header-right{display:flex;align-items:center;gap:16px;font-size:.8rem;color:var(--text2)}
-.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px}
-.dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
-.dot.off{background:var(--red)}
+header{display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.logo{display:flex;align-items:center;gap:8px}
+.logo span{font-size:1.25rem}
+.logo h1{font-size:.95rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header-meta{display:flex;align-items:center;gap:12px;font-size:.75rem;color:var(--text3)}
+.header-meta .sep{width:1px;height:16px;background:var(--border)}
+.status-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px}
+.status-dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+.status-dot.off{background:var(--red)}
+
+.container{max-width:1400px;margin:0 auto;padding:12px}
 
 /* Tabs */
-.tabs{display:flex;gap:0;margin-top:16px;border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .tabs::-webkit-scrollbar{display:none}
-.tab{padding:8px 20px;font-size:.8125rem;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all .2s;white-space:nowrap;flex-shrink:0}
-.tab:hover{color:var(--text)}
+.tab{padding:10px 18px;font-size:.8rem;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.tab:hover{color:var(--text2)}
 .tab.active{color:var(--accent2);border-bottom-color:var(--accent)}
-.tab-content{display:none}
+.tab-content{display:none;padding-top:16px}
 .tab-content.active{display:block}
 
 /* Grid */
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
-@media(max-width:768px){
-  .grid{grid-template-columns:1fr}
-  .container{padding:8px}
-  header{padding:8px 12px}
-  .card-body{padding:10px 12px}
-  .card-header{padding:10px 12px}
-  .chart-wrap{height:260px}
-  .leaderboard{font-size:.7rem}
-  .leaderboard th,.leaderboard td{padding:4px 6px}
-  .submit-form{flex-direction:column;align-items:stretch}
-  .submit-form select,.submit-form input,.submit-form button{width:100%}
-  .toolbar{flex-wrap:wrap}
-  .worker-grid{grid-template-columns:1fr}
-}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .full-width{grid-column:1/-1}
 
 /* Cards */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
-.card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.card-header h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;min-height:44px}
+.card-header h2{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
 .card-body{padding:14px 16px}
 
+/* Stat cards */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px}
+.stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center}
+.stat-card .val{font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
+.stat-card .lbl{font-size:.65rem;color:var(--text3);margin-top:2px;text-transform:uppercase;letter-spacing:.04em}
+.stat-card .sub{font-size:.7rem;color:var(--text3);margin-top:4px}
+.solved{color:var(--green)!important}
+
 /* Badges */
-.badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:.7rem;font-weight:600;text-transform:uppercase}
-.badge-idle{background:rgba(34,197,94,.12);color:var(--green)}
-.badge-busy{background:rgba(234,179,8,.12);color:var(--yellow)}
-.badge-offline{background:rgba(239,68,68,.12);color:var(--red)}
-.badge-queued{background:rgba(99,102,241,.12);color:var(--accent2)}
-.badge-running{background:rgba(6,182,212,.12);color:var(--cyan)}
-.badge-completed{background:rgba(34,197,94,.12);color:var(--green)}
-.badge-failed{background:rgba(239,68,68,.12);color:var(--red)}
-.badge-timed_out{background:rgba(249,115,22,.12);color:var(--orange)}
-.badge-cancelled{background:rgba(136,136,160,.12);color:var(--text2)}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.badge-idle{background:var(--green-bg);color:var(--green)}
+.badge-busy{background:var(--yellow-bg);color:var(--yellow)}
+.badge-offline{background:var(--red-bg);color:var(--red)}
+.badge-queued{background:var(--accent-bg);color:var(--accent2)}
+.badge-running{background:rgba(6,182,212,.1);color:var(--cyan)}
+.badge-completed{background:var(--green-bg);color:var(--green)}
+.badge-failed{background:var(--red-bg);color:var(--red)}
+.badge-timed_out{background:var(--yellow-bg);color:var(--orange)}
 
 /* Worker cards */
-.worker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
-.worker-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.worker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px}
+.worker-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;transition:border-color .2s}
 .worker-card.busy{border-left:3px solid var(--cyan)}
 .worker-card.idle{border-left:3px solid var(--green)}
-.worker-name{font-weight:600;font-size:.875rem;display:flex;align-items:center;justify-content:space-between}
-.worker-details{margin-top:6px;font-size:.75rem;color:var(--text2);display:grid;grid-template-columns:auto 1fr;gap:3px 10px}
-.worker-details .v{color:var(--text)}
+.worker-card.offline{border-left:3px solid var(--red);opacity:.5}
+.worker-name{font-weight:600;font-size:.85rem;display:flex;align-items:center;justify-content:space-between}
+.worker-details{margin-top:8px;font-size:.75rem;color:var(--text3);display:grid;grid-template-columns:auto 1fr;gap:2px 10px}
+.worker-details .v{color:var(--text2)}
 .pulse{width:7px;height:7px;border-radius:50%;display:inline-block}
 .pulse.live{background:var(--green);animation:pulse 2s infinite}
 .pulse.stale{background:var(--yellow)}
 .pulse.dead{background:var(--red)}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-
-/* Job items */
-.job-section{font-size:.75rem;font-weight:600;color:var(--text2);margin:10px 0 4px;display:flex;align-items:center;gap:6px}
-.job-section:first-child{margin-top:0}
-.job-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:7px;margin-bottom:5px;font-size:.8rem}
-.job-left{display:flex;align-items:center;gap:8px}
-.job-id{font-family:monospace;color:var(--text2);font-size:.75rem}
-
-/* Big numbers */
-.big-numbers{display:flex;gap:10px;flex-wrap:wrap}
-.big-num{flex:1;min-width:100px;background:var(--surface2);border-radius:8px;padding:12px;text-align:center}
-.big-num .val{font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums}
-.big-num .lbl{font-size:.65rem;color:var(--text2);margin-top:2px;text-transform:uppercase}
-.solved{color:var(--green)!important}
-
-/* Charts */
-.chart-wrap{position:relative;width:100%;height:320px;margin-top:10px}
-.chart-wrap canvas{width:100%!important;height:100%!important;touch-action:none}
-
-/* Submit form */
-.submit-form{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
-.submit-form select,.submit-form input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:.8rem;outline:none}
-.submit-form button{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:.8rem;font-weight:500}
-.submit-form button:hover{background:var(--accent2)}
-
-/* Toolbar */
-.toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.btn-sm{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 10px;color:var(--text2);cursor:pointer;font-size:.7rem}
-.btn-sm:hover{background:var(--border);color:var(--text)}
-.btn-sm.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-
-/* Activity */
-.activity-log{max-height:180px;overflow-y:auto;font-size:.7rem;font-family:monospace}
-.activity-log .entry{padding:2px 0;border-bottom:1px solid rgba(42,42,58,.3);display:flex;gap:8px}
-.activity-log .time{color:var(--text2);min-width:60px}
-
-/* Empty */
-.empty{color:var(--text2);text-align:center;padding:20px;font-size:.8rem}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
 /* Env tabs */
-.env-tabs{display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.env-tabs{display:flex;gap:0;margin-bottom:10px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .env-tabs::-webkit-scrollbar{display:none}
-.env-tab{padding:6px 16px;font-size:.75rem;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all .2s;white-space:nowrap;flex-shrink:0}
-.env-tab:hover{color:var(--text)}
+.env-tab{padding:6px 14px;font-size:.75rem;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.env-tab:hover{color:var(--text2)}
 .env-tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
 
-/* Leaderboard table */
+/* Tables */
 .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .leaderboard{width:100%;border-collapse:collapse;font-size:.8rem;min-width:600px}
-.leaderboard th{text-align:left;padding:6px 10px;color:var(--text2);font-size:.7rem;text-transform:uppercase;border-bottom:1px solid var(--border)}
-.leaderboard td{padding:6px 10px;border-bottom:1px solid rgba(42,42,58,.3)}
-.leaderboard tr:hover{background:rgba(99,102,241,.05)}
+.leaderboard th{text-align:left;padding:8px 10px;color:var(--text3);font-size:.65rem;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);font-weight:600}
+.leaderboard td{padding:8px 10px;border-bottom:1px solid var(--border)}
+.leaderboard tr:hover{background:rgba(139,92,246,.03)}
 .rank-1{color:var(--yellow);font-weight:700}
 .rank-2{color:#c0c0c0;font-weight:600}
 .rank-3{color:#cd7f32;font-weight:600}
 
+/* Charts */
+.chart-wrap{position:relative;width:100%;height:320px;margin-top:8px}
+.chart-wrap canvas{width:100%!important;height:100%!important;touch-action:none}
+
+/* Submit form */
+.submit-row{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+.submit-row select,.submit-row input{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text);font-size:.8rem;outline:none;transition:border .2s}
+.submit-row select:focus,.submit-row input:focus{border-color:var(--accent)}
+.submit-row .btn-submit{background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);padding:8px 20px;cursor:pointer;font-size:.8rem;font-weight:600;white-space:nowrap;transition:opacity .15s}
+.submit-row .btn-submit:hover{opacity:.85}
+.param-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;margin-top:10px}
+.param-grid label{font-size:.7rem;color:var(--text3);display:flex;flex-direction:column;gap:3px}
+.param-grid input,.param-grid select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;color:var(--text);font-size:.8rem;outline:none;width:100%}
+
+/* Buttons */
+.btn-sm{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 10px;color:var(--text3);cursor:pointer;font-size:.7rem;transition:all .15s}
+.btn-sm:hover{background:var(--border);color:var(--text)}
+.btn-sm.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* Toolbar */
+.toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+
+/* Jobs */
+.job-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2);border-radius:var(--radius-sm);margin-bottom:4px;font-size:.8rem;border:1px solid var(--border)}
+.job-item.running{border-left:3px solid var(--cyan)}
+.job-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.job-id{font-family:'JetBrains Mono',monospace;color:var(--text3);font-size:.7rem}
+
+/* Activity */
+.activity-log{max-height:160px;overflow-y:auto;font-size:.7rem;font-family:'JetBrains Mono',monospace}
+.activity-log .entry{padding:3px 0;border-bottom:1px solid rgba(39,39,42,.5);display:flex;gap:8px}
+.activity-log .time{color:var(--text3);min-width:60px}
+
+/* Empty */
+.empty{color:var(--text3);text-align:center;padding:24px;font-size:.8rem}
+
+/* Mobile */
+@media(max-width:768px){
+  .grid{grid-template-columns:1fr}
+  .container{padding:8px}
+  header{padding:0 10px;height:48px}
+  .card-body{padding:10px}
+  .card-header{padding:10px}
+  .chart-wrap{height:240px}
+  .submit-row{flex-direction:column;align-items:stretch}
+  .submit-row select,.submit-row input,.submit-row .btn-submit{width:100%}
+  .stats-row{grid-template-columns:repeat(2,1fr)}
+  .stat-card .val{font-size:1.3rem}
+  .worker-grid{grid-template-columns:1fr}
+  .leaderboard{font-size:.7rem;min-width:500px}
+  .leaderboard th,.leaderboard td{padding:5px 6px}
+  .tab{padding:8px 12px;font-size:.75rem}
+  .header-meta .hide-mobile{display:none}
+}
+@media(max-width:380px){
+  .stats-row{grid-template-columns:1fr 1fr}
+  .stat-card{padding:10px}
+}
+
 /* Scrollbar */
-::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+::-webkit-scrollbar-track{background:transparent}
 </style>
 </head>
 <body>
 
+<!-- Auth -->
 <div id="auth-overlay">
-  <svg width="48" height="48" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="url(#g)" stroke-width="2"/><path d="M10 16l4 4 8-8" stroke="url(#g)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs></svg>
+  <div class="logo-big">🧬</div>
   <h1>GAIA Mission Control</h1>
-  <input type="password" id="token-input" placeholder="Enter auth token" autofocus>
+  <p>Decentralized AI Research Platform</p>
+  <input type="password" id="token-input" placeholder="Auth token" autofocus>
   <div id="auth-error"></div>
   <button onclick="authenticate()">Connect</button>
 </div>
 
+<!-- Header -->
 <header>
   <div class="logo">
-    <svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="url(#g2)" stroke-width="2"/><path d="M10 16l4 4 8-8" stroke="url(#g2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="g2" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs></svg>
-    <h1>GAIA Mission Control</h1>
+    <span>🧬</span>
+    <h1>GAIA</h1>
   </div>
-  <div class="header-right">
-    <span>⏱ <strong id="uptime">—</strong></span>
-    <span><span class="dot" id="conn-dot"></span><span id="conn-text">…</span></span>
+  <div class="header-meta">
+    <span class="hide-mobile">v0.10.0</span>
+    <span class="hide-mobile sep"></span>
+    <span class="hide-mobile">⏱ <strong id="uptime">—</strong></span>
+    <span><span class="status-dot" id="conn-dot"></span><span id="conn-text">…</span></span>
   </div>
 </header>
 
 <div class="container">
+  <!-- Tabs -->
   <div class="tabs">
     <div class="tab active" data-tab="benchmarks">🏆 Benchmarks</div>
-    <div class="tab" data-tab="overview">Overview</div>
-    <div class="tab" data-tab="charts">Charts</div>
+    <div class="tab" data-tab="overview">⚡ Overview</div>
+    <div class="tab" data-tab="charts">📊 Charts</div>
     <div class="tab" data-tab="history">📋 History</div>
-    <div class="tab" data-tab="debug">Debug</div>
     <div class="tab" data-tab="network">🌐 Network</div>
   </div>
 
-  <!-- TAB: Benchmarks (NEW MAIN TAB) -->
+  <!-- ═══════ TAB: BENCHMARKS ═══════ -->
   <div class="tab-content active" id="tab-benchmarks">
+    <!-- Stats -->
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card"><div class="val" id="stat-workers">0</div><div class="lbl">Workers</div></div>
+      <div class="stat-card"><div class="val" id="stat-jobs">0</div><div class="lbl">Active Jobs</div></div>
+      <div class="stat-card"><div class="val" id="stat-completed">0</div><div class="lbl">Completed</div></div>
+      <div class="stat-card"><div class="val" id="stat-envs">0</div><div class="lbl">Environments</div></div>
+    </div>
+
     <div class="grid">
-      <!-- Submit Job -->
+      <!-- Submit -->
       <div class="card full-width">
         <div class="card-header"><h2>⚡ Submit Experiment</h2></div>
         <div class="card-body">
-          <div class="submit-form" style="margin-top:0;padding-top:0;border-top:none;flex-wrap:wrap">
+          <div class="submit-row">
             <select id="env-select" style="min-width:160px">
-              <option value="CartPole-v1">CartPole-v1</option>
-              <option value="LunarLander-v3">LunarLander-v3</option>
-              <option value="BipedalWalker-v3">BipedalWalker-v3</option>
-              <option value="BipedalWalkerHardcore-v3">BipedalWalkerHardcore-v3</option>
+              <optgroup label="🎮 Classic Control">
+                <option value="CartPole-v1">CartPole-v1</option>
+              </optgroup>
+              <optgroup label="🚀 Discrete Control">
+                <option value="LunarLander-v3">LunarLander-v3</option>
+              </optgroup>
+              <optgroup label="🦿 Continuous Control (CPU)">
+                <option value="BipedalWalker-v3">BipedalWalker-v3</option>
+              </optgroup>
+              <optgroup label="🚀 GPU-Native Continuous">
+                <option value="Swimmer-v1">Swimmer-v1</option>
+                <option value="Pendulum-2Link">Pendulum-2Link</option>
+                <option value="Pendulum-3Link">Pendulum-3Link</option>
+                <option value="Pendulum-5Link">Pendulum-5Link</option>
+              </optgroup>
             </select>
-            <select id="method-select" onchange="updateMethodParams()" style="min-width:200px">
+            <select id="method-select" onchange="updateMethodParams()" style="min-width:180px">
               <optgroup label="🧬 Gradient-Free (GAIA)">
                 <option value="cma_es">CMA-ES</option>
                 <option value="openai_es">OpenAI-ES</option>
-                <option value="curriculum">Curriculum</option>
+                <option value="curriculum">Curriculum CMA-ES</option>
                 <option value="neuromod">Neuromod CMA-ES</option>
                 <option value="island_model">Island Model</option>
-                <option value="neuromod_island">Neuromod Island</option>
-                <option value="island_advanced">Island Advanced</option>
-                <option value="meta_learning">Meta-Learning 🧬</option>
-                <option value="meta_learning_pure">Pure Meta-Learning 🧠</option>
-                <option value="scaling_test">Scaling Test 📏</option>
-                <option value="hybrid_cma_ff">Hybrid CMA+FF</option>
-                <option value="indirect_encoding">Indirect Encoding</option>
+                <option value="meta_learning">Meta-Learning</option>
               </optgroup>
-              <optgroup label="⚡ Backpropagation (Control)">
+              <optgroup label="🚀 GPU Full-Episode">
+                <option value="gpu_full_cma_es">GPU CMA-ES</option>
+                <option value="gpu_full_openai_es">GPU OpenAI-ES</option>
+                <option value="gpu_full_benchmark">GPU Benchmark</option>
+              </optgroup>
+              <optgroup label="⚡ Backprop Baseline">
                 <option value="ppo_baseline">PPO (Backprop)</option>
               </optgroup>
             </select>
-            <button onclick="submitJob()" style="white-space:nowrap">Submit ⚡</button>
+            <button class="btn-submit" onclick="submitJob()">Submit ⚡</button>
           </div>
-          <div id="method-params" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;margin-top:8px"></div>
+          <div class="param-grid" id="method-params"></div>
         </div>
       </div>
 
-      <!-- Benchmark Leaderboards -->
+      <!-- Leaderboard -->
       <div class="card full-width">
         <div class="card-header"><h2>🏆 Leaderboards</h2></div>
         <div class="card-body">
           <div class="env-tabs" id="bench-env-tabs">
-            <div class="env-tab" data-env="CartPole-v1">🎯 CartPole-v1</div>
-            <div class="env-tab active" data-env="LunarLander-v3">🚀 LunarLander-v3</div>
-            <div class="env-tab" data-env="BipedalWalker-v3">🦿 BipedalWalker-v3</div>
-            <div class="env-tab" data-env="BipedalWalkerHardcore-v3">🔥 BipedalWalkerHardcore-v3</div>
+            <div class="env-tab" data-env="CartPole-v1">🎯 CartPole</div>
+            <div class="env-tab active" data-env="LunarLander-v3">🚀 LunarLander</div>
+            <div class="env-tab" data-env="BipedalWalker-v3">🦿 BipedalWalker</div>
+            <div class="env-tab" data-env="Swimmer-v1">🐛 Swimmer</div>
+            <div class="env-tab" data-env="Pendulum-2Link">🔗 2-Link</div>
+            <div class="env-tab" data-env="Pendulum-3Link">🔗 3-Link</div>
+            <div class="env-tab" data-env="Pendulum-5Link">🔗 5-Link</div>
           </div>
           <div id="leaderboard-body"><div class="empty">Run experiments to see leaderboards</div></div>
         </div>
       </div>
 
-      <!-- Learning Curves per Environment -->
+      <!-- Learning Curves -->
       <div class="card full-width">
         <div class="card-header">
           <h2>📈 Learning Curves</h2>
           <div class="toolbar">
             <button class="btn-sm active" data-metric="best_ever" onclick="setMetric(this,'best_ever')">Best Ever</button>
             <button class="btn-sm" data-metric="mean" onclick="setMetric(this,'mean')">Mean</button>
-            <span style="color:var(--text2);font-size:.7rem;margin-left:4px" id="chart1-info"></span>
+            <span style="color:var(--text3);font-size:.65rem;margin-left:4px" id="chart1-info"></span>
           </div>
         </div>
         <div class="card-body">
-          <div id="method-toggles" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;font-size:.75rem"></div>
-          <div style="font-size:.65rem;color:var(--text2);margin-bottom:4px">🖱️ Drag to pan • Scroll to zoom • Shift+drag = time only • Pinch on mobile • Double-tap to reset</div>
+          <div id="method-toggles" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;font-size:.7rem"></div>
           <div class="chart-wrap"><canvas id="learning-canvas"></canvas></div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- TAB: Overview -->
+  <!-- ═══════ TAB: OVERVIEW ═══════ -->
   <div class="tab-content" id="tab-overview">
     <div class="grid">
       <div class="card">
-        <div class="card-header"><h2>⚡ Workers</h2><div class="toolbar"><label style="font-size:.7rem;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="show-offline" onchange="refresh()" style="accent-color:var(--accent)"> Offline</label><span id="worker-count" class="badge badge-idle">0</span></div></div>
+        <div class="card-header"><h2>⚡ Workers</h2><div class="toolbar"><label style="font-size:.7rem;color:var(--text3);cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="show-offline" onchange="refresh()" style="accent-color:var(--accent)"> Offline</label><span id="worker-count" class="badge badge-idle">0</span></div></div>
         <div class="card-body" id="workers-body"><div class="empty">No workers connected</div></div>
       </div>
       <div class="card">
@@ -270,7 +322,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
       </div>
       <div class="card full-width">
         <div class="card-header"><h2>📊 Best Scores</h2></div>
-        <div class="card-body"><div class="big-numbers" id="best-scores"><div class="empty">Run experiments to see scores</div></div></div>
+        <div class="card-body"><div class="stats-row" id="best-scores"><div class="empty">Run experiments to see scores</div></div></div>
       </div>
       <div class="card full-width">
         <div class="card-header"><h2>📋 Activity</h2><button class="btn-sm" onclick="activityLog.length=0;renderActivity()">Clear</button></div>
@@ -279,7 +331,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
     </div>
   </div>
 
-  <!-- TAB: Charts -->
+  <!-- ═══════ TAB: CHARTS ═══════ -->
   <div class="tab-content" id="tab-charts">
     <div class="grid">
       <div class="card">
@@ -297,22 +349,25 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
     </div>
   </div>
 
-  <!-- TAB: History -->
+  <!-- ═══════ TAB: HISTORY ═══════ -->
   <div class="tab-content" id="tab-history">
     <div class="grid">
       <div class="card full-width">
         <div class="card-header">
           <h2>📋 Job History</h2>
           <div class="toolbar">
-            <select id="history-env-filter" onchange="renderHistory()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:.75rem">
+            <select id="history-env-filter" onchange="renderHistory()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 8px;font-size:.75rem">
               <option value="all">All Environments</option>
               <option value="CartPole-v1">CartPole-v1</option>
               <option value="LunarLander-v3">LunarLander-v3</option>
               <option value="BipedalWalker-v3">BipedalWalker-v3</option>
-              <option value="BipedalWalkerHardcore-v3">BipedalWalkerHardcore-v3</option>
+              <option value="Swimmer-v1">Swimmer-v1</option>
+              <option value="Pendulum-2Link">Pendulum-2Link</option>
+              <option value="Pendulum-3Link">Pendulum-3Link</option>
+              <option value="Pendulum-5Link">Pendulum-5Link</option>
             </select>
-            <button class="btn-sm" onclick="downloadAllCSV()">⬇️ Export All CSV</button>
-            <button class="btn-sm" onclick="downloadSummaryJSON()">⬇️ Summary JSON</button>
+            <button class="btn-sm" onclick="downloadAllCSV()">⬇️ CSV</button>
+            <button class="btn-sm" onclick="downloadSummaryJSON()">⬇️ JSON</button>
           </div>
         </div>
         <div class="card-body" id="history-body"><div class="empty">No jobs yet</div></div>
@@ -320,74 +375,52 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
     </div>
   </div>
 
-  <!-- TAB: Debug -->
-  <div class="tab-content" id="tab-debug">
-    <div class="grid">
-      <div class="card full-width">
-        <div class="card-header"><h2>🔍 Live Stream</h2><div class="toolbar"><button class="btn-sm" onclick="debugLog.length=0;renderDebug()">Clear</button><label style="font-size:.7rem;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="debug-autoscroll" checked style="accent-color:var(--accent)"> Auto-scroll</label></div></div>
-        <div class="card-body"><div id="debug-log" style="max-height:500px;overflow-y:auto;font-family:monospace;font-size:.7rem;white-space:pre-wrap;color:var(--text2)">Waiting for data…</div></div>
-      </div>
-      <div class="card full-width">
-        <div class="card-header"><h2>📡 Raw API Status</h2><button class="btn-sm" onclick="refreshDebugRaw()">Refresh</button></div>
-        <div class="card-body"><pre id="debug-raw" style="max-height:400px;overflow:auto;font-size:.7rem;color:var(--text2)">Click Refresh…</pre></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- TAB: Network -->
+  <!-- ═══════ TAB: NETWORK ═══════ -->
   <div class="tab-content" id="tab-network">
     <div class="grid">
       <div class="card full-width">
         <div class="card-header"><h2>🌐 GAIA P2P Network</h2></div>
         <div class="card-body" id="network-body"><div class="empty">Loading network status...</div></div>
       </div>
-      <div class="card full-width">
-        <div class="card-header"><h2>🗺️ Network Topology</h2></div>
-        <div class="card-body"><canvas id="network-canvas" width="800" height="400" style="width:100%;background:var(--surface2);border-radius:8px"></canvas></div>
-      </div>
     </div>
   </div>
 </div>
 
 <script>
-// ======= BENCHMARK CONFIG =======
+// ═══════ CONFIG ═══════
 const BENCHMARKS = {
-  'CartPole-v1':              { threshold: 475, obs_dim: 4,  act_dim: 2, action_type: 'discrete',   emoji: '🎯' },
-  'LunarLander-v3':           { threshold: 200, obs_dim: 8,  act_dim: 4, action_type: 'discrete',   emoji: '🚀' },
-  'BipedalWalker-v3':         { threshold: 300, obs_dim: 24, act_dim: 4, action_type: 'continuous', emoji: '🦿' },
-  'BipedalWalkerHardcore-v3': { threshold: 300, obs_dim: 24, act_dim: 4, action_type: 'continuous', emoji: '🔥' },
+  'CartPole-v1':     { threshold: 475, obs: 4,  act: 2, type: 'discrete',   emoji: '🎯', gpu: true },
+  'LunarLander-v3':  { threshold: 200, obs: 8,  act: 4, type: 'discrete',   emoji: '🚀', gpu: true },
+  'BipedalWalker-v3':{ threshold: 300, obs: 24, act: 4, type: 'continuous', emoji: '🦿', gpu: false },
+  'Swimmer-v1':      { threshold: 360, obs: 8,  act: 2, type: 'continuous', emoji: '🐛', gpu: true },
+  'Pendulum-2Link':  { threshold: 400, obs: 6,  act: 2, type: 'continuous', emoji: '🔗', gpu: true },
+  'Pendulum-3Link':  { threshold: 600, obs: 9,  act: 3, type: 'continuous', emoji: '🔗', gpu: true },
+  'Pendulum-5Link':  { threshold:1000, obs: 15, act: 5, type: 'continuous', emoji: '🔗', gpu: true },
 };
-
-const GENERIC_METHODS = [
-  'cma_es','openai_es','neuromod','island_model','neuromod_island',
-  'curriculum','hybrid_cma_ff','indirect_encoding','island_advanced',
-  'gpu_cma','scaling'
-];
 
 const METHOD_NAMES = {
-  cma_es:'CMA-ES', openai_es:'OpenAI-ES', hybrid_cma_ff:'Hybrid CMA+FF',
-  curriculum:'Curriculum', indirect_encoding:'Indirect Enc',
-  neuromod:'Neuromod CMA-ES', island_model:'Island Model',
-  island_advanced:'Island Advanced', neuromod_island:'Neuromod Island',
-  scaling:'Network Scaling',
-  ppo_baseline:'PPO (Backprop)',
+  cma_es:'CMA-ES', openai_es:'OpenAI-ES', curriculum:'Curriculum',
+  neuromod:'Neuromod', island_model:'Island Model', meta_learning:'Meta-Learning',
+  ppo_baseline:'PPO (Backprop)', gpu_full_cma_es:'GPU CMA-ES',
+  gpu_full_openai_es:'GPU OpenAI-ES', gpu_full_benchmark:'GPU Benchmark',
+  neuromod_island:'Neuromod Island', island_advanced:'Island Advanced',
+  meta_learning_pure:'Pure Meta', scaling_test:'Scaling', hybrid_cma_ff:'Hybrid CMA+FF',
+  indirect_encoding:'Indirect Enc',
 };
 const BACKPROP_METHODS = new Set(['ppo_baseline']);
+const GPU_METHODS = new Set(['gpu_full_cma_es','gpu_full_openai_es','gpu_full_benchmark']);
 
-function resolveEnv(job) { return job.environment; }
+// ═══════ STATE ═══════
+let TOKEN='', serverStart=null, currentBenchEnv='LunarLander-v3';
+const activityLog=[], MAX_LOG=80;
+let prevWorkerIds=new Set(), prevJobStatuses={};
+let allJobData={}, allJobs=[];
+let chartZoom={x0:0,x1:1,dragging:false,startX:0,yOff:0};
+let hiddenMethods=new Set();
+let currentMetric='best_ever';
+const COLORS=['#8b5cf6','#06b6d4','#22c55e','#eab308','#f97316','#ec4899','#ef4444','#a855f7','#14b8a6','#f43f5e','#3b82f6','#d946ef'];
 
-// ======= STATE =======
-let TOKEN = '', serverStart = null, currentBenchEnv = 'LunarLander-v3';
-const activityLog = [], MAX_LOG = 80;
-let prevWorkerIds = new Set(), prevJobStatuses = {};
-let allJobData = {}; // { jobId: { method, environment, status, points: [...] } }
-let chartZoom = {x0:0, x1:1, dragging:false, startX:0}; // 0..1 range
-let hiddenMethods = new Set();
-let allJobs = []; // raw jobs from API
-let currentMetric = 'best_ever';
-const COLORS = ['#6366f1','#06b6d4','#22c55e','#eab308','#f97316','#ec4899','#ef4444','#a855f7','#14b8a6','#f43f5e'];
-
-// ======= AUTH =======
+// ═══════ AUTH ═══════
 function authenticate(){
   TOKEN=document.getElementById('token-input').value.trim();
   if(!TOKEN){document.getElementById('auth-error').textContent='Token required';return}
@@ -399,7 +432,7 @@ function authenticate(){
 document.getElementById('token-input').addEventListener('keydown',e=>{if(e.key==='Enter')authenticate()});
 window.addEventListener('DOMContentLoaded',()=>{const s=localStorage.getItem('gaia_token');if(s){TOKEN=s;document.getElementById('token-input').value=s;authenticate()}});
 
-// ======= TABS =======
+// ═══════ TABS ═══════
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
@@ -409,118 +442,122 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   if(t.dataset.tab==='benchmarks')requestAnimationFrame(()=>{renderLeaderboard();drawLearningCurves()});
   if(t.dataset.tab==='history')renderHistory();
 }));
-
-// Env tabs
 document.querySelectorAll('#bench-env-tabs .env-tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('#bench-env-tabs .env-tab').forEach(x=>x.classList.remove('active'));
   t.classList.add('active');
   currentBenchEnv=t.dataset.env;
-  renderLeaderboard();
-  drawLearningCurves();
+  renderLeaderboard();drawLearningCurves();
 }));
 
-// ======= POLLING =======
-function startPolling(){refresh();setInterval(refresh,3000)}
-
-function addLog(m,ts){const d=ts?new Date(ts):new Date();activityLog.unshift({ts:d.getTime(),time:d.toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}),msg:m});activityLog.sort((a,b)=>b.ts-a.ts);if(activityLog.length>MAX_LOG)activityLog.pop()}
+// ═══════ HELPERS ═══════
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
-function setHtml(el,html){
-  // Preserve scroll positions of .table-scroll children
-  const scrolls=new Map();
-  el.querySelectorAll('.table-scroll').forEach((s,i)=>{if(s.scrollLeft)scrolls.set(i,s.scrollLeft)});
-  el.innerHTML=html;
-  el.querySelectorAll('.table-scroll').forEach((s,i)=>{if(scrolls.has(i))s.scrollLeft=scrolls.get(i)});
-}
-function fmtParams(p){
-  if(!p||typeof p!=='object')return'';
-  const skip=new Set(['max_evals','eval_episodes']);
-  const items=Object.entries(p).filter(([k])=>!skip.has(k));
-  if(!items.length)return'';
-  return'<span style="font-size:.65rem;color:var(--accent2);margin-left:4px">'+items.map(([k,v])=>esc(k)+'='+esc(String(v))).join(' ')+'</span>';
-}
-function fmtParamsInline(p){
-  if(!p||typeof p!=='object')return'—';
-  const items=Object.entries(p);
-  if(!items.length)return'—';
-  return items.map(([k,v])=>k+'='+v).join(', ');
-}
+function setHtml(el,html){const scrolls=new Map();el.querySelectorAll('.table-scroll').forEach((s,i)=>{if(s.scrollLeft)scrolls.set(i,s.scrollLeft)});el.innerHTML=html;el.querySelectorAll('.table-scroll').forEach((s,i)=>{if(scrolls.has(i))s.scrollLeft=scrolls.get(i)})}
 function timeSince(iso){if(!iso)return'—';const s=Math.floor((Date.now()-new Date(iso).getTime())/1000);if(s<0)return'now';if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m';if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'d'}
 function dur(a,b){if(!a)return'—';const s=Math.floor(((b?new Date(b):new Date).getTime()-new Date(a).getTime())/1000);if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m'+s%60+'s';return Math.floor(s/3600)+'h'+Math.floor(s%3600/60)+'m'}
-function fmtTime(t){if(!t)return'—';const d=new Date(t);return d.toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})}
+function fmtTime(t){if(!t)return'—';return new Date(t).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})}
+function addLog(m,ts){const d=ts?new Date(ts):new Date();activityLog.unshift({ts:d.getTime(),time:d.toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}),msg:m});activityLog.sort((a,b)=>b.ts-a.ts);if(activityLog.length>MAX_LOG)activityLog.pop()}
+function resolveEnv(j){return j.environment}
+
+// ═══════ POLLING ═══════
+function startPolling(){refresh();setInterval(refresh,3000)}
 
 async function refresh(){
   try{
     const r=await fetch('/api/status',{headers:{'Authorization':'Bearer '+TOKEN}});
     if(!r.ok)throw 0;
     const d=await r.json();
-    document.getElementById('conn-dot').className='dot on';
+    document.getElementById('conn-dot').className='status-dot on';
     document.getElementById('conn-text').textContent='Connected';
     if(d.server_start_time)serverStart=new Date(d.server_start_time);
     if(serverStart){const s=Math.floor((Date.now()-serverStart)/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60);document.getElementById('uptime').textContent=h>0?h+'h '+m+'m':m+'m'}
     allJobs=d.jobs||[];
 
-    // Activity tracking
+    // Activity
     const cw=new Set((d.workers||[]).map(w=>w.id));
     for(const w of d.workers||[])if(!prevWorkerIds.has(w.id))addLog('🟢 <b>'+esc(w.name)+'</b> connected',w.registered_at);
-    for(const id of prevWorkerIds)if(!cw.has(id))addLog('🔴 Worker disconnected');
     prevWorkerIds=cw;
-    for(const j of d.jobs||[]){const p=prevJobStatuses[j.id];if(!p&&j.status==='queued')addLog('📤 Job <b>'+j.id.slice(0,8)+'</b> queued ('+esc(j.method)+')',j.created_at);if(p!==j.status){if(j.status==='running')addLog('▶️ Job <b>'+j.id.slice(0,8)+'</b> running',j.started_at);if(j.status==='completed')addLog('✅ Job <b>'+j.id.slice(0,8)+'</b> completed',j.completed_at);if(j.status==='failed')addLog('❌ Job <b>'+j.id.slice(0,8)+'</b> failed',j.completed_at)}prevJobStatuses[j.id]=j.status}
+    for(const j of d.jobs||[]){const p=prevJobStatuses[j.id];if(!p&&j.status==='queued')addLog('📤 <b>'+esc(j.method)+'</b> queued',j.created_at);if(p!==j.status){if(j.status==='running')addLog('▶️ <b>'+esc(j.method)+'</b> running');if(j.status==='completed')addLog('✅ <b>'+esc(j.method)+'</b> done');if(j.status==='failed')addLog('❌ <b>'+esc(j.method)+'</b> failed')}prevJobStatuses[j.id]=j.status}
 
-    renderWorkers(d.workers||[]);
-    renderJobs(d.jobs||[]);
+    // Stats
+    const workers=d.workers||[];
+    const onlineW=workers.filter(w=>(Date.now()-new Date(w.last_heartbeat))/1000<60);
+    const runJ=allJobs.filter(j=>j.status==='running'||j.status==='queued');
+    const doneJ=allJobs.filter(j=>j.status==='completed');
+    const envSet=new Set(allJobs.map(j=>j.environment));
+    document.getElementById('stat-workers').textContent=onlineW.length;
+    document.getElementById('stat-jobs').textContent=runJ.length;
+    document.getElementById('stat-completed').textContent=doneJ.length;
+    document.getElementById('stat-envs').textContent=envSet.size;
+
+    renderWorkers(workers);
+    renderJobs(allJobs);
     renderActivity();
-    await fetchResults(d.jobs||[]);
+    await fetchResults(allJobs);
     renderBestScores();
     renderLeaderboard();
     if(document.getElementById('tab-benchmarks').classList.contains('active'))drawLearningCurves();
     if(document.getElementById('tab-charts').classList.contains('active'))drawAllCharts();
-  }catch(e){document.getElementById('conn-dot').className='dot off';document.getElementById('conn-text').textContent='Disconnected'}
+    if(document.getElementById('tab-network')?.classList.contains('active'))renderNetwork();
+    if(document.getElementById('tab-history')?.classList.contains('active'))renderHistory();
+  }catch(e){document.getElementById('conn-dot').className='status-dot off';document.getElementById('conn-text').textContent='Disconnected'}
 }
 
-// ======= RENDER: Workers =======
+// ═══════ WORKERS ═══════
 function renderWorkers(ws){
   const el=document.getElementById('workers-body');
   const showOffline=document.getElementById('show-offline').checked;
   const on=ws.filter(w=>(Date.now()-new Date(w.last_heartbeat))/1000<60);
   const off=ws.filter(w=>(Date.now()-new Date(w.last_heartbeat))/1000>=60);
-  document.getElementById('worker-count').textContent=on.length+' online'+(showOffline&&off.length?' · '+off.length+' offline':'');
+  document.getElementById('worker-count').textContent=on.length+' online';
   const visible=showOffline?ws:on;
-  if(!visible.length){el.innerHTML=on.length===0&&off.length===0?'<div class="empty">No workers<br><code style="font-size:.7rem;color:var(--text2)">gaia-worker --server URL --token TOKEN</code></div>':'<div class="empty">All workers offline'+(!showOffline?' — enable "Offline" to show':'')+'</div>';return}
+  if(!visible.length){el.innerHTML='<div class="empty">No workers connected<br><code style="font-size:.7rem;color:var(--text3)">gaia-worker --server URL --token TOKEN --name NAME</code></div>';return}
   let h='<div class="worker-grid">';
   for(const w of visible){
     const age=(Date.now()-new Date(w.last_heartbeat))/1000;
     const pc=age<15?'live':age<60?'stale':'dead';
-    const isOffline=age>=60;
-    const sc=isOffline?'offline':w.status==='busy'?'busy':'idle';
-    const gpu=w.gpu&&typeof w.gpu==='object'?w.gpu.name:(w.gpu||'CPU');
-    const disabled=w.enabled===false;
-    const opacity=isOffline||disabled?'opacity:.5':'';
-    const statusLabel=disabled?'disabled':sc;
+    const sc=age>=60?'offline':w.status==='busy'?'busy':'idle';
+    const gpu=w.gpu&&typeof w.gpu==='object'?(w.gpu.name||'CPU'):(w.gpu||'CPU');
+    const gpuMem=w.gpu&&w.gpu.memory_mb?Math.round(w.gpu.memory_mb/1024)+'GB':'';
     const ver=w.version?'v'+w.version:'—';
-    h+=`<div class="worker-card ${sc}" style="${opacity}"><div class="worker-name"><span><span class="pulse ${pc}"></span> ${esc(w.name)}</span><div style="display:flex;gap:4px;align-items:center"><span class="badge badge-${sc}">${statusLabel}</span><button class="btn-sm" onclick="toggleWorker('${w.id}')" title="${disabled?'Enable':'Disable'} worker">${disabled?'▶':'⏸'}</button><button class="btn-sm" onclick="forceUpdate('${w.id}')" title="Force update" style="font-size:.6rem">🔄</button></div></div><div class="worker-details"><span>GPU:</span><span class="v">${esc(gpu)}</span><span>Ver:</span><span class="v" style="color:var(--accent2)">${ver}</span><span>HB:</span><span class="v">${timeSince(w.last_heartbeat)}</span><span>Up:</span><span class="v">${timeSince(w.registered_at)}</span>${w.current_job?'<span>Job:</span><span class="v" style="color:var(--cyan)">'+w.current_job.slice(0,8)+'</span>':''}</div></div>`;
+    const disabled=w.enabled===false;
+    h+=`<div class="worker-card ${sc}">
+      <div class="worker-name">
+        <span><span class="pulse ${pc}"></span> ${esc(w.name)}</span>
+        <div style="display:flex;gap:4px;align-items:center">
+          <span class="badge badge-${sc}">${disabled?'disabled':sc}</span>
+          <button class="btn-sm" onclick="toggleWorker('${w.id}')" title="${disabled?'Enable':'Disable'}">${disabled?'▶':'⏸'}</button>
+        </div>
+      </div>
+      <div class="worker-details">
+        <span>GPU:</span><span class="v">${esc(gpu)} ${gpuMem}</span>
+        <span>Version:</span><span class="v" style="color:var(--accent2)">${ver}</span>
+        <span>Heartbeat:</span><span class="v">${timeSince(w.last_heartbeat)}</span>
+        ${w.current_job?'<span>Job:</span><span class="v" style="color:var(--cyan)">'+w.current_job.slice(0,8)+'</span>':''}
+      </div>
+    </div>`;
   }
   el.innerHTML=h+'</div>';
 }
 
-// ======= RENDER: Jobs (Overview) =======
+// ═══════ JOBS ═══════
 function renderJobs(jobs){
   const el=document.getElementById('jobs-body');
   document.getElementById('job-count').textContent=jobs.length;
   const run=jobs.filter(j=>j.status==='running'),que=jobs.filter(j=>j.status==='queued');
   let h='';
-  if(run.length){h+='<div class="job-section"><span style="color:var(--cyan)">▶</span> Running</div>';for(const j of run){const env=resolveEnv(j);h+=`<div class="job-item" style="border-left:2px solid var(--cyan)"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span><span style="font-size:.7rem;color:var(--text2)">${esc(env)}</span>${fmtParams(j.params)}</div><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--text2);font-size:.75rem">${dur(j.started_at)}</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}}
-  if(que.length){h+=`<div class="job-section"><span style="color:var(--accent2)">⏳</span> Queue (${que.length})</div>`;for(const j of que){const env=resolveEnv(j);h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><span>${esc(j.method)}</span><span style="font-size:.7rem;color:var(--text2)">${esc(env)}</span>${fmtParams(j.params)}</div><div style="display:flex;align-items:center;gap:6px"><span class="badge badge-queued">queued</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}}
-  if(!run.length&&!que.length)h='<div class="empty">No active jobs</div>';
+  if(run.length){h+='<div style="font-size:.7rem;font-weight:600;color:var(--text3);margin:6px 0 4px">▶ Running</div>';for(const j of run){h+=`<div class="job-item running"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><strong>${esc(j.method)}</strong><span style="font-size:.7rem;color:var(--text3)">${esc(j.environment)}</span></div><div style="display:flex;gap:6px;align-items:center"><span style="color:var(--text3);font-size:.7rem">${dur(j.started_at)}</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}}
+  if(que.length){h+=`<div style="font-size:.7rem;font-weight:600;color:var(--text3);margin:8px 0 4px">⏳ Queue (${que.length})</div>`;for(const j of que){h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><strong>${esc(j.method)}</strong><span style="font-size:.7rem;color:var(--text3)">${esc(j.environment)}</span></div><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div>`}}
+  if(!h)h='<div class="empty">No active jobs</div>';
   el.innerHTML=h;
 }
 
 function renderActivity(){
   const el=document.getElementById('activity-log');
   if(!activityLog.length){el.innerHTML='<div class="empty">Waiting…</div>';return}
-  el.innerHTML=activityLog.slice(0,25).map(e=>`<div class="entry"><span class="time">${e.time}</span><span class="msg">${e.msg}</span></div>`).join('');
+  el.innerHTML=activityLog.slice(0,25).map(e=>`<div class="entry"><span class="time">${e.time}</span><span>${e.msg}</span></div>`).join('');
 }
 
-// ======= FETCH RESULTS =======
+// ═══════ RESULTS ═══════
 async function fetchResults(jobs){
   for(const j of jobs.filter(j=>j.status==='running'||j.status==='completed')){
     try{
@@ -536,124 +573,85 @@ async function fetchResults(jobs){
         evals:parseInt((row.data?.evals||'0').replace(/,/g,'')),
         time:parseFloat(row.data?.time||0),
       })).sort((a,b)=>a.gen-b.gen);
-      const env=resolveEnv(j);
-      allJobData[j.id]={method:j.method,environment:env,status:j.status,points:pts,started_at:j.started_at,completed_at:j.completed_at};
+      allJobData[j.id]={method:j.method,environment:resolveEnv(j),status:j.status,points:pts,started_at:j.started_at,completed_at:j.completed_at};
     }catch(e){}
   }
 }
 
-// ======= LEADERBOARD =======
+// ═══════ LEADERBOARD ═══════
 function renderLeaderboard(){
   const el=document.getElementById('leaderboard-body');
   const bench=BENCHMARKS[currentBenchEnv];
-  if(!bench){el.innerHTML='<div class="empty">Unknown benchmark</div>';return}
+  if(!bench){el.innerHTML='<div class="empty">Unknown environment</div>';return}
 
-  // Collect best results per method for this environment
   const methods={};
   for(const[id,d]of Object.entries(allJobData)){
-    if(!d.points.length)continue;
-    const env=d.environment||'LunarLander-v3';
-    if(env!==currentBenchEnv)continue;
+    if(!d.points.length||d.environment!==currentBenchEnv)continue;
     const mKey=d.method;
-    const mName=METHOD_NAMES[mKey]||METHOD_NAMES[d.method]||d.method;
     const best=Math.max(...d.points.map(p=>p.best_ever));
     const totalEvals=Math.max(...d.points.map(p=>p.evals),d.points.length);
-    const runtime=d.started_at&&d.completed_at?dur(d.started_at,d.completed_at):(d.started_at?dur(d.started_at):'-');
-    if(!methods[mKey]||best>methods[mKey].best){
-      methods[mKey]={key:mKey,name:mName,best,evals:totalEvals,runtime,solved:best>=bench.threshold,jobId:id,status:d.status};
-    }
+    const runtime=d.started_at&&d.completed_at?dur(d.started_at,d.completed_at):(d.started_at?dur(d.started_at):'—');
+    if(!methods[mKey]||best>methods[mKey].best)methods[mKey]={key:mKey,name:METHOD_NAMES[mKey]||mKey,best,evals:totalEvals,runtime,solved:best>=bench.threshold,status:d.status};
   }
 
   const sorted=Object.values(methods).sort((a,b)=>b.best-a.best);
   if(!sorted.length){
-    el.innerHTML=`<div class="empty">No results for ${currentBenchEnv} yet.<br>
-      <span style="font-size:.7rem;color:var(--text2)">Threshold: ${bench.threshold} | obs: ${bench.obs_dim} | act: ${bench.act_dim} (${bench.action_type})</span></div>`;
+    el.innerHTML=`<div class="empty">No results for ${currentBenchEnv}<br><span style="font-size:.7rem">Solved ≥ ${bench.threshold} · ${bench.obs} obs · ${bench.act} act (${bench.type}) ${bench.gpu?'· 🚀 GPU':'· 💻 CPU'}</span></div>`;
     return;
   }
 
-  let h=`<div style="font-size:.7rem;color:var(--text2);margin-bottom:8px">Solved ≥ ${bench.threshold} | obs_dim=${bench.obs_dim} | act_dim=${bench.act_dim} (${bench.action_type})</div>`;
-  h+='<div class="table-scroll"><table class="leaderboard"><tr><th>#</th><th>Method</th><th>Best Score</th><th>Evals</th><th>Solved?</th><th>Runtime</th><th>Status</th></tr>';
+  let h=`<div style="font-size:.7rem;color:var(--text3);margin-bottom:8px">Solved ≥ ${bench.threshold} · obs=${bench.obs} · act=${bench.act} (${bench.type}) ${bench.gpu?'· 🚀 GPU-native':'· 💻 CPU only'}</div>`;
+  h+='<div class="table-scroll"><table class="leaderboard"><tr><th>#</th><th>Method</th><th>Best Score</th><th>Evals</th><th>Solved</th><th>Runtime</th><th>Status</th></tr>';
   sorted.forEach((m,i)=>{
-    const isBackprop=['ppo_baseline'].includes(m.key);
+    const isBackprop=BACKPROP_METHODS.has(m.key);
+    const isGpu=GPU_METHODS.has(m.key);
+    const medal=i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';
     const rankClass=i<3?`rank-${i+1}`:'';
-    const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
-    const solvedBadge=m.solved?'<span style="color:var(--green)">✅</span>':'<span style="color:var(--text2)">—</span>';
+    const solvedBadge=m.solved?'✅':'—';
     const scoreColor=m.solved?'var(--green)':m.best>bench.threshold*0.8?'var(--yellow)':'var(--text)';
-    const typeBadge=isBackprop?'<span style="background:rgba(239,68,68,.15);color:var(--red);padding:1px 6px;border-radius:4px;font-size:.65rem;margin-left:4px">⚡ BACKPROP</span>':'<span style="background:rgba(34,197,94,.12);color:var(--green);padding:1px 6px;border-radius:4px;font-size:.65rem;margin-left:4px">🧬 GRAD-FREE</span>';
-    const rowBg=isBackprop?'background:rgba(239,68,68,.04);':'';
-    h+=`<tr style="${rowBg}">
-      <td class="${rankClass}">${medal}${i+1}</td>
-      <td style="font-weight:600">${esc(m.name)}${typeBadge}</td>
-      <td style="color:${scoreColor};font-weight:700;font-variant-numeric:tabular-nums">${m.best.toFixed(1)}</td>
-      <td style="font-variant-numeric:tabular-nums">${m.evals>1000?(m.evals/1000).toFixed(1)+'K':m.evals}</td>
-      <td>${solvedBadge}</td>
-      <td style="color:var(--text2)">${m.runtime}</td>
-      <td><span class="badge badge-${m.status}">${m.status}</span></td>
-    </tr>`;
+    const typeBadge=isBackprop?'<span style="background:var(--red-bg);color:var(--red);padding:1px 6px;border-radius:4px;font-size:.6rem;margin-left:4px">BACKPROP</span>':isGpu?'<span style="background:rgba(6,182,212,.1);color:var(--cyan);padding:1px 6px;border-radius:4px;font-size:.6rem;margin-left:4px">GPU</span>':'<span style="background:var(--green-bg);color:var(--green);padding:1px 6px;border-radius:4px;font-size:.6rem;margin-left:4px">GRAD-FREE</span>';
+    h+=`<tr><td class="${rankClass}">${medal}${i+1}</td><td style="font-weight:600">${esc(m.name)}${typeBadge}</td><td style="color:${scoreColor};font-weight:700;font-variant-numeric:tabular-nums">${m.best.toFixed(1)}</td><td style="font-variant-numeric:tabular-nums">${m.evals>1000?(m.evals/1000).toFixed(1)+'K':m.evals}</td><td>${solvedBadge}</td><td style="color:var(--text3)">${m.runtime}</td><td><span class="badge badge-${m.status}">${m.status}</span></td></tr>`;
   });
   h+='</table></div>';
   setHtml(el,h);
 }
 
-// ======= BEST SCORES =======
+// ═══════ BEST SCORES ═══════
 function renderBestScores(){
   const el=document.getElementById('best-scores');
-  // Per-environment best
   const envBest={};
   for(const d of Object.values(allJobData)){
     if(!d.points.length)continue;
-    const env=d.environment||'LunarLander-v3';
     const best=Math.max(...d.points.map(p=>p.best_ever));
-    if(!envBest[env]||best>envBest[env])envBest[env]=best;
+    if(!envBest[d.environment]||best>envBest[d.environment])envBest[d.environment]=best;
   }
-  if(!Object.keys(envBest).length){el.innerHTML='<div class="empty">Run experiments to see scores</div>';return}
+  if(!Object.keys(envBest).length){el.innerHTML='<div class="empty" style="grid-column:1/-1">Run experiments to see scores</div>';return}
   el.innerHTML=Object.entries(envBest).map(([env,s])=>{
     const bench=BENCHMARKS[env]||{threshold:200,emoji:'🔬'};
     const ok=s>=bench.threshold;
-    return`<div class="big-num"><div class="val ${ok?'solved':''}">${s.toFixed(1)}</div><div class="lbl">${bench.emoji} ${esc(env)}${ok?' 🎉':''}</div></div>`;
+    return`<div class="stat-card"><div class="val ${ok?'solved':''}">${s.toFixed(1)}</div><div class="lbl">${bench.emoji} ${esc(env)}</div>${ok?'<div class="sub" style="color:var(--green)">SOLVED ✓</div>':''}</div>`;
   }).join('');
 }
 
-// ======= HISTORY =======
+// ═══════ HISTORY ═══════
 function renderHistory(){
   const el=document.getElementById('history-body');
   const filter=document.getElementById('history-env-filter').value;
   let jobs=[...allJobs].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   if(filter!=='all')jobs=jobs.filter(j=>resolveEnv(j)===filter);
   if(!jobs.length){el.innerHTML='<div class="empty">No jobs</div>';return}
-
-  let h='<div class="table-scroll"><table class="leaderboard"><tr><th>ID</th><th>Environment</th><th>Method</th><th>Params</th><th>Status</th><th>Best</th><th>Queued</th><th>Runtime</th><th></th></tr>';
+  let h='<div class="table-scroll"><table class="leaderboard"><tr><th>ID</th><th>Env</th><th>Method</th><th>Status</th><th>Best</th><th>Queued</th><th>Runtime</th><th></th></tr>';
   for(const j of jobs.slice(0,50)){
-    const env=resolveEnv(j);
     const d=allJobData[j.id];
     const best=d&&d.points.length?Math.max(...d.points.map(p=>p.best_ever)).toFixed(1):'—';
-    const runtime=dur(j.started_at,j.completed_at);
-    const errTip=j.error?` title="${esc(j.error.slice(-120))}"`:'';
-    h+=`<tr>
-      <td style="font-family:monospace;font-size:.75rem">${j.id.slice(0,8)}</td>
-      <td style="font-size:.75rem">${esc(env)}</td>
-      <td>${esc(j.method)}</td>
-      <td style="font-size:.65rem;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtParamsInline(j.params)}</td>
-      <td><span class="badge badge-${j.status}"${errTip}>${j.status}</span></td>
-      <td style="font-weight:600;font-variant-numeric:tabular-nums">${best}</td>
-      <td style="font-size:.7rem;color:var(--text2)">${fmtTime(j.created_at)}</td>
-      <td style="font-size:.7rem">${runtime}</td>
-      <td><button class="btn-sm" onclick="downloadCSV('${j.id}')">CSV</button></td>
-    </tr>`;
+    h+=`<tr><td style="font-family:monospace;font-size:.7rem">${j.id.slice(0,8)}</td><td style="font-size:.75rem">${esc(j.environment)}</td><td>${esc(j.method)}</td><td><span class="badge badge-${j.status}">${j.status}</span></td><td style="font-weight:600">${best}</td><td style="font-size:.7rem;color:var(--text3)">${fmtTime(j.created_at)}</td><td style="font-size:.7rem">${dur(j.started_at,j.completed_at)}</td><td><button class="btn-sm" onclick="downloadCSV('${j.id}')">CSV</button></td></tr>`;
   }
-  if(jobs.length>50)h+=`<tr><td colspan="10" style="text-align:center;color:var(--text2)">+${jobs.length-50} more</td></tr>`;
   h+='</table></div>';
   setHtml(el,h);
 }
 
-// ======= CHARTS =======
-function setMetric(btn,m){
-  currentMetric=m;
-  document.querySelectorAll('[data-metric]').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  drawLearningCurves();
-}
-
+// ═══════ CHARTS ═══════
+function setMetric(btn,m){currentMetric=m;document.querySelectorAll('[data-metric]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');drawLearningCurves()}
 function drawAllCharts(){drawComparison();drawSigma();drawDistribution()}
 
 function setupCanvas(id){
@@ -663,27 +661,16 @@ function setupCanvas(id){
   const w=wrap.clientWidth,h=wrap.clientHeight;
   canvas.width=w*dpr;canvas.height=h*dpr;
   canvas.style.width=w+'px';canvas.style.height=h+'px';
-  const ctx=canvas.getContext('2d');
-  ctx.scale(dpr,dpr);
-  ctx.clearRect(0,0,w,h);
-  return{ctx,w,h,dpr};
+  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);
+  return{ctx,w,h};
 }
 
 function drawGrid(ctx,pad,w,h,minY,maxY,maxX,xLabel,yLabel,steps=6){
-  const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
-  const range=maxY-minY||1;
-  ctx.strokeStyle='#1a1a2a';ctx.lineWidth=.5;
-  for(let i=0;i<=steps;i++){
-    const y=pad.top+(ph/steps)*i;
-    ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();
-    ctx.fillStyle='#666';ctx.font='9px sans-serif';ctx.textAlign='right';
-    ctx.fillText((maxY-(range/steps)*i).toFixed(0),pad.left-5,y+3);
-  }
-  ctx.textAlign='center';ctx.fillStyle='#666';
-  for(let i=0;i<=4;i++){
-    const v=Math.round((maxX/4)*i);
-    ctx.fillText(v,pad.left+(v/maxX)*pw,h-pad.bottom+14);
-  }
+  const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom,range=maxY-minY||1;
+  ctx.strokeStyle='#27272a';ctx.lineWidth=.5;
+  for(let i=0;i<=steps;i++){const y=pad.top+(ph/steps)*i;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();ctx.fillStyle='#52525b';ctx.font='9px sans-serif';ctx.textAlign='right';ctx.fillText((maxY-(range/steps)*i).toFixed(0),pad.left-5,y+3)}
+  ctx.textAlign='center';ctx.fillStyle='#52525b';
+  for(let i=0;i<=4;i++){const v=Math.round((maxX/4)*i);ctx.fillText(v,pad.left+(v/maxX)*pw,h-pad.bottom+14)}
   ctx.fillText(xLabel,w/2,h-2);
   ctx.save();ctx.translate(10,h/2);ctx.rotate(-Math.PI/2);ctx.fillText(yLabel,0,0);ctx.restore();
 }
@@ -692,143 +679,38 @@ function drawSolvedLine(ctx,pad,w,h,minY,maxY,val){
   if(val<minY||val>maxY)return;
   const ph=h-pad.top-pad.bottom,range=maxY-minY||1;
   const y=pad.top+ph-((val-minY)/range)*ph;
-  ctx.setLineDash([4,3]);ctx.strokeStyle='#22c55e40';ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle='#22c55e50';ctx.font='8px sans-serif';ctx.textAlign='left';
+  ctx.setLineDash([4,3]);ctx.strokeStyle='rgba(34,197,94,.25)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(34,197,94,.4)';ctx.font='8px sans-serif';ctx.textAlign='left';
   ctx.fillText(`SOLVED (${val})`,pad.left+4,y-3);
 }
 
-// Learning Curves — filtered by current benchmark env, with zoom + method toggles
+// Method toggles
 function buildMethodToggles(entries){
   const el=document.getElementById('method-toggles');
-  const methods=new Map();
-  let ci=0;
-  for(const[id,d]of entries){
-    if(!methods.has(d.method)){
-      const color=COLORS[ci%COLORS.length];
-      const name=METHOD_NAMES[d.method]||d.method;
-      const isBackprop=BACKPROP_METHODS.has(d.method);
-      methods.set(d.method,{name,color,isBackprop});
-      ci++;
-    }
-  }
+  const methods=new Map();let ci=0;
+  for(const[_,d]of entries){if(!methods.has(d.method)){methods.set(d.method,{name:METHOD_NAMES[d.method]||d.method,color:COLORS[ci%COLORS.length],isBackprop:BACKPROP_METHODS.has(d.method)});ci++}}
   el.innerHTML=[...methods.entries()].map(([key,{name,color,isBackprop}])=>{
     const checked=!hiddenMethods.has(key)?'checked':'';
-    const label=isBackprop?`⚡${name}`:`🧬${name}`;
-    return`<label style="display:flex;align-items:center;gap:3px;cursor:pointer;opacity:${hiddenMethods.has(key)?'.4':'1'}"><input type="checkbox" ${checked} onchange="toggleMethod('${key}')" style="accent-color:${color}"><span style="color:${color}">${label}</span></label>`;
+    return`<label style="display:flex;align-items:center;gap:3px;cursor:pointer;opacity:${hiddenMethods.has(key)?'.4':'1'}"><input type="checkbox" ${checked} onchange="toggleMethod('${key}')" style="accent-color:${color}"><span style="color:${color};font-size:.7rem">${isBackprop?'⚡':'🧬'}${name}</span></label>`;
   }).join('');
 }
+function toggleMethod(key){if(hiddenMethods.has(key))hiddenMethods.delete(key);else hiddenMethods.add(key);drawLearningCurves()}
 
-function toggleMethod(key){
-  if(hiddenMethods.has(key))hiddenMethods.delete(key);else hiddenMethods.add(key);
-  drawLearningCurves();
-}
-
+// Chart zoom
 function initChartZoom(){
   const canvas=document.getElementById('learning-canvas');
-
-  // Scroll wheel → zoom (centered on cursor)
-  canvas.addEventListener('wheel',e=>{
-    e.preventDefault();
-    const rect=canvas.getBoundingClientRect();
-    const xFrac=(e.clientX-rect.left)/rect.width;
-    const zoomRange=chartZoom.x1-chartZoom.x0;
-    const center=chartZoom.x0+xFrac*zoomRange;
-    const factor=e.deltaY>0?1.2:0.8;
-    const newRange=Math.min(1,zoomRange*factor);
-    chartZoom.x0=Math.max(0,center-xFrac*newRange);
-    chartZoom.x1=Math.min(1,chartZoom.x0+newRange);
-    if(chartZoom.x1-chartZoom.x0>0.99){chartZoom.x0=0;chartZoom.x1=1}
-    drawLearningCurves();
-  },{passive:false});
-
-  // Double-click/tap → reset zoom
-  canvas.addEventListener('dblclick',()=>{chartZoom.x0=0;chartZoom.x1=1;drawLearningCurves()});
-
-  // ── Mouse: left-click drag = pan, shift+drag = time-axis only ──
-  canvas.addEventListener('mousedown',e=>{
-    if(e.button!==0)return;
-    chartZoom.dragging=true;
-    chartZoom.shiftKey=e.shiftKey;
-    chartZoom.startX=e.clientX;
-    chartZoom.startY=e.clientY;
-    chartZoom.dragStart={x0:chartZoom.x0,x1:chartZoom.x1,yOff:chartZoom.yOff||0};
-    e.preventDefault();
-  });
-  canvas.addEventListener('mousemove',e=>{
-    if(!chartZoom.dragging)return;
-    const rect=canvas.getBoundingClientRect();
-    const r=chartZoom.dragStart.x1-chartZoom.dragStart.x0;
-    const dx=(e.clientX-chartZoom.startX)/rect.width*r;
-    chartZoom.x0=Math.max(0,Math.min(1-r,chartZoom.dragStart.x0-dx));
-    chartZoom.x1=chartZoom.x0+r;
-    if(!chartZoom.shiftKey){
-      // Also allow Y-axis panning (store offset as fraction of range)
-      const dy=(e.clientY-chartZoom.startY)/rect.height;
-      chartZoom.yOff=(chartZoom.dragStart.yOff||0)+dy;
-    }
-    drawLearningCurves();
-  });
+  canvas.addEventListener('wheel',e=>{e.preventDefault();const rect=canvas.getBoundingClientRect();const xFrac=(e.clientX-rect.left)/rect.width;const zoomRange=chartZoom.x1-chartZoom.x0;const center=chartZoom.x0+xFrac*zoomRange;const factor=e.deltaY>0?1.2:0.8;const newRange=Math.min(1,zoomRange*factor);chartZoom.x0=Math.max(0,center-xFrac*newRange);chartZoom.x1=Math.min(1,chartZoom.x0+newRange);if(chartZoom.x1-chartZoom.x0>0.99){chartZoom.x0=0;chartZoom.x1=1}drawLearningCurves()},{passive:false});
+  canvas.addEventListener('dblclick',()=>{chartZoom.x0=0;chartZoom.x1=1;chartZoom.yOff=0;drawLearningCurves()});
+  canvas.addEventListener('mousedown',e=>{if(e.button!==0)return;chartZoom.dragging=true;chartZoom.startX=e.clientX;chartZoom.startY=e.clientY;chartZoom.dragStart={x0:chartZoom.x0,x1:chartZoom.x1,yOff:chartZoom.yOff};e.preventDefault()});
+  canvas.addEventListener('mousemove',e=>{if(!chartZoom.dragging)return;const rect=canvas.getBoundingClientRect();const r=chartZoom.dragStart.x1-chartZoom.dragStart.x0;const dx=(e.clientX-chartZoom.startX)/rect.width*r;chartZoom.x0=Math.max(0,Math.min(1-r,chartZoom.dragStart.x0-dx));chartZoom.x1=chartZoom.x0+r;const dy=(e.clientY-chartZoom.startY)/rect.height;chartZoom.yOff=chartZoom.dragStart.yOff+dy;drawLearningCurves()});
   canvas.addEventListener('mouseup',()=>{chartZoom.dragging=false});
   canvas.addEventListener('mouseleave',()=>{chartZoom.dragging=false});
-
-  // ── Touch: single finger = pan, pinch = zoom ──
+  // Touch
   let lastTouches=null;
-  canvas.addEventListener('touchstart',e=>{
-    if(e.touches.length===1){
-      chartZoom.dragging=true;
-      chartZoom.shiftKey=false;
-      chartZoom.startX=e.touches[0].clientX;
-      chartZoom.startY=e.touches[0].clientY;
-      chartZoom.dragStart={x0:chartZoom.x0,x1:chartZoom.x1,yOff:chartZoom.yOff||0};
-    }
-    if(e.touches.length===2){
-      chartZoom.dragging=false;
-      lastTouches=[...e.touches];
-    }
-    e.preventDefault();
-  },{passive:false});
-
-  canvas.addEventListener('touchmove',e=>{
-    e.preventDefault();
-    const rect=canvas.getBoundingClientRect();
-
-    if(e.touches.length===1&&chartZoom.dragging){
-      // Pan
-      const r=chartZoom.dragStart.x1-chartZoom.dragStart.x0;
-      const dx=(e.touches[0].clientX-chartZoom.startX)/rect.width*r;
-      chartZoom.x0=Math.max(0,Math.min(1-r,chartZoom.dragStart.x0-dx));
-      chartZoom.x1=chartZoom.x0+r;
-      const dy=(e.touches[0].clientY-chartZoom.startY)/rect.height;
-      chartZoom.yOff=(chartZoom.dragStart.yOff||0)+dy;
-      drawLearningCurves();
-    }
-
-    if(e.touches.length===2&&lastTouches&&lastTouches.length===2){
-      // Pinch zoom
-      const prevDist=Math.hypot(lastTouches[0].clientX-lastTouches[1].clientX,lastTouches[0].clientY-lastTouches[1].clientY);
-      const curDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-      const scale=prevDist/curDist; // >1 = zoom out, <1 = zoom in
-
-      // Center of pinch
-      const cx=((e.touches[0].clientX+e.touches[1].clientX)/2-rect.left)/rect.width;
-      const zoomRange=chartZoom.x1-chartZoom.x0;
-      const center=chartZoom.x0+cx*zoomRange;
-      const newRange=Math.max(0.01,Math.min(1,zoomRange*scale));
-      chartZoom.x0=Math.max(0,center-cx*newRange);
-      chartZoom.x1=Math.min(1,chartZoom.x0+newRange);
-      if(chartZoom.x1-chartZoom.x0>0.99){chartZoom.x0=0;chartZoom.x1=1}
-
-      lastTouches=[...e.touches];
-      drawLearningCurves();
-    }
-  },{passive:false});
-
-  canvas.addEventListener('touchend',e=>{
-    chartZoom.dragging=false;
-    if(e.touches.length<2)lastTouches=null;
-  });
+  canvas.addEventListener('touchstart',e=>{if(e.touches.length===1){chartZoom.dragging=true;chartZoom.startX=e.touches[0].clientX;chartZoom.startY=e.touches[0].clientY;chartZoom.dragStart={x0:chartZoom.x0,x1:chartZoom.x1,yOff:chartZoom.yOff}}if(e.touches.length===2){chartZoom.dragging=false;lastTouches=[...e.touches]}e.preventDefault()},{passive:false});
+  canvas.addEventListener('touchmove',e=>{e.preventDefault();const rect=canvas.getBoundingClientRect();if(e.touches.length===1&&chartZoom.dragging){const r=chartZoom.dragStart.x1-chartZoom.dragStart.x0;const dx=(e.touches[0].clientX-chartZoom.startX)/rect.width*r;chartZoom.x0=Math.max(0,Math.min(1-r,chartZoom.dragStart.x0-dx));chartZoom.x1=chartZoom.x0+r;const dy=(e.touches[0].clientY-chartZoom.startY)/rect.height;chartZoom.yOff=chartZoom.dragStart.yOff+dy;drawLearningCurves()}if(e.touches.length===2&&lastTouches){const prev=Math.hypot(lastTouches[0].clientX-lastTouches[1].clientX,lastTouches[0].clientY-lastTouches[1].clientY);const cur=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);const scale=prev/cur;const cx=((e.touches[0].clientX+e.touches[1].clientX)/2-rect.left)/rect.width;const zr=chartZoom.x1-chartZoom.x0;const center=chartZoom.x0+cx*zr;const nr=Math.max(0.01,Math.min(1,zr*scale));chartZoom.x0=Math.max(0,center-cx*nr);chartZoom.x1=Math.min(1,chartZoom.x0+nr);lastTouches=[...e.touches];drawLearningCurves()}},{passive:false});
+  canvas.addEventListener('touchend',e=>{chartZoom.dragging=false;if(e.touches.length<2)lastTouches=null});
 }
 let chartZoomInited=false;
 
@@ -836,398 +718,147 @@ function drawLearningCurves(){
   if(!chartZoomInited){initChartZoom();chartZoomInited=true}
   const{ctx,w,h}=setupCanvas('learning-canvas');
   const bench=BENCHMARKS[currentBenchEnv]||{threshold:200};
-  const allEntries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0&&(d.environment||'LunarLander-v3')===currentBenchEnv);
+  const allEntries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0&&d.environment===currentBenchEnv);
   buildMethodToggles(allEntries);
   const entries=allEntries.filter(([_,d])=>!hiddenMethods.has(d.method));
-  if(!entries.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText(`No visible data for ${currentBenchEnv}`,w/2,h/2);return}
+  if(!entries.length){ctx.fillStyle='#71717a';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText(`No data for ${currentBenchEnv}`,w/2,h/2);return}
 
   const pad={top:28,right:20,bottom:36,left:56};
   const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
   const allPts=entries.flatMap(([_,d])=>d.points);
   const fullMaxGen=Math.max(...allEntries.flatMap(([_,d])=>d.points).map(p=>p.gen),1);
-  const visMinGen=Math.floor(chartZoom.x0*fullMaxGen);
-  const visMaxGen=Math.ceil(chartZoom.x1*fullMaxGen)||1;
+  const visMinGen=Math.floor(chartZoom.x0*fullMaxGen),visMaxGen=Math.ceil(chartZoom.x1*fullMaxGen)||1;
   const visPts=allPts.filter(p=>p.gen>=visMinGen&&p.gen<=visMaxGen);
   const vals=visPts.length?visPts.map(p=>p[currentMetric]||0):[0];
   const rawMaxV=Math.max(Math.max(...vals),bench.threshold*1.1),rawMinV=Math.min(Math.min(...vals),-100);
   const rawRange=rawMaxV-rawMinV||1;
   const yOff=(chartZoom.yOff||0)*rawRange;
-  const maxV=rawMaxV+yOff,minV=rawMinV+yOff;
-  const range=maxV-minV||1;
+  const maxV=rawMaxV+yOff,minV=rawMinV+yOff,range=maxV-minV||1;
   const toX=g=>pad.left+((g-visMinGen)/(visMaxGen-visMinGen||1))*pw;
   const toY=v=>pad.top+ph-((v-minV)/range)*ph;
 
-  drawGrid(ctx,pad,w,h,minV,maxV,visMaxGen,'Generation',currentMetric==='best_ever'?'Best Score Ever':'Mean Score');
+  drawGrid(ctx,pad,w,h,minV,maxV,visMaxGen,'Generation',currentMetric==='best_ever'?'Best Score':'Mean');
   drawSolvedLine(ctx,pad,w,h,minV,maxV,bench.threshold);
 
-  if(0>=minV&&0<=maxV){ctx.setLineDash([2,2]);ctx.strokeStyle='#fff1';ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(pad.left,toY(0));ctx.lineTo(w-pad.right,toY(0));ctx.stroke();ctx.setLineDash([])}
-
-  // Clip to chart area
   ctx.save();ctx.beginPath();ctx.rect(pad.left,pad.top,pw,ph);ctx.clip();
-
-  let ci=0;
-  // Color index must match allEntries order for consistency with toggles
   const colorMap=new Map();let cj=0;
   for(const[_,d]of allEntries){if(!colorMap.has(d.method)){colorMap.set(d.method,COLORS[cj%COLORS.length]);cj++}}
 
-  for(const[id,d]of entries){
+  for(const[_,d]of entries){
     const color=colorMap.get(d.method)||COLORS[0];
     const pts=d.points.filter(p=>p.gen>=visMinGen&&p.gen<=visMaxGen);
     if(!pts.length)continue;
-
     // Area
-    ctx.fillStyle=color+'0c';
-    ctx.beginPath();ctx.moveTo(toX(pts[0].gen),toY(minV));
+    ctx.fillStyle=color+'0a';ctx.beginPath();ctx.moveTo(toX(pts[0].gen),toY(minV));
     pts.forEach(p=>ctx.lineTo(toX(p.gen),toY(p[currentMetric]||0)));
     ctx.lineTo(toX(pts[pts.length-1].gen),toY(minV));ctx.closePath();ctx.fill();
-
     // Line
     ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();
-    pts.forEach((p,i)=>{const x=toX(p.gen),y=toY(p[currentMetric]||0);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});
-    ctx.stroke();
-
-    if(pts.length<50){ctx.fillStyle=color;pts.forEach(p=>{ctx.beginPath();ctx.arc(toX(p.gen),toY(p[currentMetric]||0),2.5,0,Math.PI*2);ctx.fill()})}
-
+    pts.forEach((p,i)=>{const x=toX(p.gen),y=toY(p[currentMetric]||0);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});ctx.stroke();
+    // Label
     const last=pts[pts.length-1];
-    const v=last[currentMetric]||0;
     ctx.fillStyle=color;ctx.font='bold 10px sans-serif';ctx.textAlign='left';
-    ctx.fillText(v.toFixed(1),toX(last.gen)+6,toY(v)+3);
+    ctx.fillText((last[currentMetric]||0).toFixed(1),toX(last.gen)+4,toY(last[currentMetric]||0)+3);
   }
-  ctx.restore(); // unclip
-
-  // Zoom indicator
-  if(chartZoom.x0>0.001||chartZoom.x1<0.999){
-    ctx.fillStyle='rgba(99,102,241,0.15)';
-    const zx=pad.left,zy=h-pad.bottom+20,zw=pw,zh=4;
-    ctx.fillRect(zx,zy,zw,zh);
-    ctx.fillStyle='var(--accent)';
-    ctx.fillRect(zx+chartZoom.x0*zw,zy,((chartZoom.x1-chartZoom.x0)*zw),zh);
-  }
+  ctx.restore();
   document.getElementById('chart1-info').textContent=`${currentBenchEnv} · ${entries.reduce((s,[_,d])=>s+d.points.length,0)} pts`;
 }
 
-// Comparison bars (all envs)
 function drawComparison(){
   const{ctx,w,h}=setupCanvas('comparison-canvas');
   const methods={};
-  for(const d of Object.values(allJobData)){
-    if(!d.points.length)continue;
-    const env=d.environment||'LunarLander-v3';
-    const name=(METHOD_NAMES[d.method]||d.method)+'\n'+env.replace('-v3','');
-    const best=Math.max(...d.points.map(p=>p.best_ever));
-    const lastMean=d.points[d.points.length-1].mean;
-    if(!methods[name]||best>methods[name].best)methods[name]={best,mean:lastMean,env};
-  }
+  for(const d of Object.values(allJobData)){if(!d.points.length)continue;const name=(METHOD_NAMES[d.method]||d.method)+'\n'+d.environment;const best=Math.max(...d.points.map(p=>p.best_ever));if(!methods[name]||best>methods[name].best)methods[name]={best,mean:d.points[d.points.length-1].mean}}
   const names=Object.keys(methods);
-  if(!names.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No data yet',w/2,h/2);return}
-
-  const pad={top:24,right:20,bottom:50,left:50};
-  const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
+  if(!names.length){ctx.fillStyle='#71717a';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No data',w/2,h/2);return}
+  const pad={top:24,right:20,bottom:50,left:50};const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
   const vals=[...Object.values(methods).map(m=>m.best),...Object.values(methods).map(m=>m.mean)];
-  const maxV=Math.max(Math.max(...vals),300),minV=Math.min(Math.min(...vals),-300);
-  const range=maxV-minV||1;
+  const maxV=Math.max(Math.max(...vals),300),minV=Math.min(Math.min(...vals),-300);const range=maxV-minV||1;
   const toY=v=>pad.top+ph-((v-minV)/range)*ph;
-
-  ctx.strokeStyle='#1a1a2a';ctx.lineWidth=.5;
-  for(let i=0;i<=5;i++){const y=pad.top+(ph/5)*i;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();ctx.fillStyle='#666';ctx.font='9px sans-serif';ctx.textAlign='right';ctx.fillText((maxV-(range/5)*i).toFixed(0),pad.left-5,y+3)}
-
-  const barW=Math.min(40,pw/(names.length*3));
-  const gap=pw/(names.length);
-  names.forEach((name,i)=>{
-    const x=pad.left+gap*i+gap/2;
-    const m=methods[name];
-    const yBest=toY(m.best),yZero=toY(0);
-    ctx.fillStyle='#6366f1cc';ctx.fillRect(x-barW-1,Math.min(yBest,yZero),barW,Math.abs(yBest-yZero));
-    const yMean=toY(m.mean);
-    ctx.fillStyle='#22c55ecc';ctx.fillRect(x+1,Math.min(yMean,yZero),barW,Math.abs(yMean-yZero));
-    ctx.fillStyle='#e0e0e8';ctx.font='bold 9px sans-serif';ctx.textAlign='center';
-    ctx.fillText(m.best.toFixed(0),x-barW/2,yBest-4);
-    ctx.save();ctx.translate(x,h-pad.bottom+6);ctx.rotate(-Math.PI/6);
-    ctx.fillStyle='#aaa';ctx.font='8px sans-serif';ctx.textAlign='right';
-    const label=name.replace('\n',' · ');
-    ctx.fillText(label,0,0);ctx.restore();
-  });
+  ctx.strokeStyle='#27272a';ctx.lineWidth=.5;for(let i=0;i<=5;i++){const y=pad.top+(ph/5)*i;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();ctx.fillStyle='#52525b';ctx.font='9px sans-serif';ctx.textAlign='right';ctx.fillText((maxV-(range/5)*i).toFixed(0),pad.left-5,y+3)}
+  const barW=Math.min(40,pw/(names.length*3)),gap=pw/names.length;
+  names.forEach((name,i)=>{const x=pad.left+gap*i+gap/2;const m=methods[name];const yBest=toY(m.best),yZero=toY(0);ctx.fillStyle='#8b5cf6cc';ctx.fillRect(x-barW-1,Math.min(yBest,yZero),barW,Math.abs(yBest-yZero));ctx.fillStyle='#22c55ecc';const yMean=toY(m.mean);ctx.fillRect(x+1,Math.min(yMean,yZero),barW,Math.abs(yMean-yZero));ctx.fillStyle='#fafafa';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText(m.best.toFixed(0),x-barW/2,yBest-4);ctx.save();ctx.translate(x,h-pad.bottom+6);ctx.rotate(-Math.PI/6);ctx.fillStyle='#a1a1aa';ctx.font='8px sans-serif';ctx.textAlign='right';ctx.fillText(name.replace('\n',' · '),0,0);ctx.restore()});
 }
 
-// Sigma
 function drawSigma(){
   const{ctx,w,h}=setupCanvas('sigma-canvas');
   const entries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0&&d.points[0].sigma>0);
-  if(!entries.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No sigma data',w/2,h/2);return}
-  const pad={top:24,right:20,bottom:36,left:50};
-  const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
-  const allPts=entries.flatMap(([_,d])=>d.points);
-  const maxGen=Math.max(...allPts.map(p=>p.gen),1),maxS=Math.max(...allPts.map(p=>p.sigma),1)*1.1;
+  if(!entries.length){ctx.fillStyle='#71717a';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No sigma data',w/2,h/2);return}
+  const pad={top:24,right:20,bottom:36,left:50};const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
+  const allPts=entries.flatMap(([_,d])=>d.points);const maxGen=Math.max(...allPts.map(p=>p.gen),1),maxS=Math.max(...allPts.map(p=>p.sigma),1)*1.1;
   const toX=g=>pad.left+(g/maxGen)*pw,toY=s=>pad.top+ph-(s/maxS)*ph;
-  drawGrid(ctx,pad,w,h,0,maxS,maxGen,'Generation','σ (Step Size)');
-  let ci=0;
-  for(const[id,d]of entries){
-    const color=COLORS[ci%COLORS.length];
-    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();
-    d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.sigma)):ctx.lineTo(toX(p.gen),toY(p.sigma))});
-    ctx.stroke();
-    const last=d.points[d.points.length-1];
-    ctx.fillStyle=color;ctx.font='9px sans-serif';ctx.textAlign='left';
-    ctx.fillText((METHOD_NAMES[d.method]||d.method)+' σ='+last.sigma.toFixed(4),toX(last.gen)+4,toY(last.sigma));
-    ci++;
-  }
+  drawGrid(ctx,pad,w,h,0,maxS,maxGen,'Generation','σ');
+  let ci=0;for(const[_,d]of entries){const color=COLORS[ci%COLORS.length];ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.sigma)):ctx.lineTo(toX(p.gen),toY(p.sigma))});ctx.stroke();const last=d.points[d.points.length-1];ctx.fillStyle=color;ctx.font='9px sans-serif';ctx.textAlign='left';ctx.fillText((METHOD_NAMES[d.method]||d.method),toX(last.gen)+4,toY(last.sigma));ci++}
 }
 
-// Distribution
 function drawDistribution(){
   const{ctx,w,h}=setupCanvas('dist-canvas');
   const entries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0);
-  if(!entries.length){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No data',w/2,h/2);return}
-  const pad={top:24,right:20,bottom:36,left:56};
-  const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
-  const allPts=entries.flatMap(([_,d])=>d.points);
-  const maxGen=Math.max(...allPts.map(p=>p.gen),1);
-  const allVals=[...allPts.map(p=>p.best_ever),...allPts.map(p=>p.mean)];
-  const maxV=Math.max(...allVals)*1.1,minV=Math.min(...allVals)*1.1;
-  const range=maxV-minV||1;
+  if(!entries.length){ctx.fillStyle='#71717a';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No data',w/2,h/2);return}
+  const pad={top:24,right:20,bottom:36,left:56};const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
+  const allPts=entries.flatMap(([_,d])=>d.points);const maxGen=Math.max(...allPts.map(p=>p.gen),1);
+  const allVals=[...allPts.map(p=>p.best_ever),...allPts.map(p=>p.mean)];const maxV=Math.max(...allVals)*1.1,minV=Math.min(...allVals)*1.1;const range=maxV-minV||1;
   const toX=g=>pad.left+(g/maxGen)*pw,toY=v=>pad.top+ph-((v-minV)/range)*ph;
   drawGrid(ctx,pad,w,h,minV,maxV,maxGen,'Generation','Score');
-  let ci=0;
-  for(const[id,d]of entries){
-    const color=COLORS[ci%COLORS.length];
-    ctx.fillStyle=color+'18';ctx.beginPath();
-    d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.best_ever)):ctx.lineTo(toX(p.gen),toY(p.best_ever))});
-    for(let i=d.points.length-1;i>=0;i--)ctx.lineTo(toX(d.points[i].gen),toY(d.points[i].mean));
-    ctx.closePath();ctx.fill();
-    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.beginPath();
-    d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.best_ever)):ctx.lineTo(toX(p.gen),toY(p.best_ever))});
-    ctx.stroke();
-    ctx.strokeStyle=color+'80';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();
-    d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.mean)):ctx.lineTo(toX(p.gen),toY(p.mean))});
-    ctx.stroke();ctx.setLineDash([]);
-    const last=d.points[d.points.length-1];
-    ctx.fillStyle=color;ctx.font='9px sans-serif';ctx.textAlign='left';
-    ctx.fillText((METHOD_NAMES[d.method]||d.method),toX(last.gen)+4,toY(last.best_ever));
-    ci++;
-  }
+  let ci=0;for(const[_,d]of entries){const color=COLORS[ci%COLORS.length];ctx.fillStyle=color+'15';ctx.beginPath();d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.best_ever)):ctx.lineTo(toX(p.gen),toY(p.best_ever))});for(let i=d.points.length-1;i>=0;i--)ctx.lineTo(toX(d.points[i].gen),toY(d.points[i].mean));ctx.closePath();ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.best_ever)):ctx.lineTo(toX(p.gen),toY(p.best_ever))});ctx.stroke();ci++}
 }
 
-// ======= ACTIONS =======
-// ======= METHOD PARAMS =======
+// ═══════ METHOD PARAMS ═══════
 const METHOD_PARAMS = {
-  _common: [
-    {key:'max_evals',label:'Max Evals',type:'number',default:100000,step:10000},
-    {key:'eval_episodes',label:'Eval Episodes',type:'number',default:5,step:1},
-    {key:'hidden',label:'Hidden Layers',type:'text',default:'64,32',help:'e.g. 64,32'},
-  ],
-  cma_es: [
-    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
-    {key:'patience',label:'Patience',type:'number',default:200,step:50},
-  ],
-  openai_es: [
-    {key:'pop_size',label:'Pop Size',type:'number',default:50,step:10},
-    {key:'lr',label:'Learning Rate',type:'number',default:0.02,step:0.005},
-    {key:'noise_std',label:'Noise σ',type:'number',default:0.05,step:0.01},
-    {key:'weight_decay',label:'Weight Decay',type:'number',default:0.005,step:0.001},
-  ],
-  curriculum: [
-    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
-  ],
-  neuromod: [
-    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
-  ],
-  neuromod_island: [
-    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
-  ],
-  island_model: [
-    {key:'n_islands',label:'Islands',type:'number',default:4,step:1},
-    {key:'migration_interval',label:'Migration Int.',type:'number',default:10,step:5},
-    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
-  ],
-  island_advanced: [
-    {key:'n_islands',label:'Islands',type:'number',default:6,step:1},
-    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
-  ],
-  meta_learning: [
-    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
-    {key:'n_lifetime_episodes',label:'Lifetime Eps',type:'number',default:3,step:1},
-  ],
-  meta_learning_pure: [
-    {key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},
-    {key:'n_lifetime_episodes',label:'Lifetime Eps',type:'number',default:10,step:1},
-    {key:'n_random_inits',label:'Random Inits',type:'number',default:3,step:1},
-  ],
-  scaling_test: [
-    {key:'config',label:'Net Size',type:'select',options:['1k','3k','10k','33k','100k','200k','500k'],default:'10k'},
-  ],
-  ppo_baseline: [
-    {key:'rollout_steps',label:'Rollout Steps',type:'number',default:2048,step:256},
-    {key:'n_epochs',label:'Epochs',type:'number',default:10,step:1},
-    {key:'lr',label:'Learning Rate',type:'number',default:0.0003,step:0.0001},
-    {key:'clip_eps',label:'Clip ε',type:'number',default:0.2,step:0.05},
-    {key:'gamma',label:'γ',type:'number',default:0.99,step:0.005},
-    {key:'lambda',label:'λ (GAE)',type:'number',default:0.95,step:0.05},
-    {key:'ent_coeff',label:'Entropy Coeff',type:'number',default:0.01,step:0.005},
-  ],
-  hybrid_cma_ff: [],
-  indirect_encoding: [],
+  _common:[{key:'max_evals',label:'Max Evals',type:'number',default:100000,step:10000},{key:'eval_episodes',label:'Episodes',type:'number',default:5,step:1}],
+  cma_es:[{key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},{key:'patience',label:'Patience',type:'number',default:200,step:50}],
+  openai_es:[{key:'pop_size',label:'Pop Size',type:'number',default:50,step:10},{key:'lr',label:'LR',type:'number',default:0.02,step:0.005},{key:'noise_std',label:'Noise σ',type:'number',default:0.1,step:0.01}],
+  curriculum:[{key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1}],
+  neuromod:[{key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1}],
+  island_model:[{key:'n_islands',label:'Islands',type:'number',default:4,step:1},{key:'migration_interval',label:'Migrate Int',type:'number',default:10,step:5},{key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1}],
+  meta_learning:[{key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1}],
+  gpu_full_cma_es:[{key:'sigma0',label:'σ₀',type:'number',default:0.5,step:0.1},{key:'patience',label:'Patience',type:'number',default:200,step:50}],
+  gpu_full_openai_es:[{key:'pop_size',label:'Pop Size',type:'number',default:50,step:10},{key:'lr',label:'LR',type:'number',default:0.02,step:0.005},{key:'noise_std',label:'Noise σ',type:'number',default:0.1,step:0.01}],
+  gpu_full_benchmark:[{key:'n_candidates',label:'Candidates',type:'number',default:28,step:4}],
+  ppo_baseline:[{key:'rollout_steps',label:'Rollout',type:'number',default:2048,step:256},{key:'n_epochs',label:'Epochs',type:'number',default:10,step:1},{key:'lr',label:'LR',type:'number',default:0.0003,step:0.0001},{key:'clip_eps',label:'Clip ε',type:'number',default:0.2,step:0.05}],
 };
 
 function updateMethodParams(){
   const method=document.getElementById('method-select').value;
   const el=document.getElementById('method-params');
-  const common=METHOD_PARAMS._common||[];
-  const specific=METHOD_PARAMS[method]||[];
-  const fields=[...common,...specific];
+  const fields=[...(METHOD_PARAMS._common||[]),...(METHOD_PARAMS[method]||[])];
   el.innerHTML=fields.map(f=>{
     const id=`param-${f.key}`;
-    if(f.type==='select'){
-      const opts=(f.options||[]).map(o=>`<option value="${o}"${o===f.default?' selected':''}>${o}</option>`).join('');
-      return`<label style="font-size:.7rem;color:var(--text2);display:flex;flex-direction:column;gap:2px">${esc(f.label)}<select id="${id}" style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:4px 8px;color:var(--text);font-size:.8rem">${opts}</select></label>`;
-    }
-    const inputType=f.type==='text'?'text':'number';
-    const step=f.step?`step="${f.step}"`:'';
-    return`<label style="font-size:.7rem;color:var(--text2);display:flex;flex-direction:column;gap:2px">${esc(f.label)}<input type="${inputType}" id="${id}" value="${f.default}" ${step} style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:4px 8px;color:var(--text);font-size:.8rem;width:100%"></label>`;
+    if(f.type==='select'){const opts=(f.options||[]).map(o=>`<option value="${o}"${o===f.default?' selected':''}>${o}</option>`).join('');return`<label>${esc(f.label)}<select id="${id}">${opts}</select></label>`}
+    return`<label>${esc(f.label)}<input type="number" id="${id}" value="${f.default}" step="${f.step||1}"></label>`;
   }).join('');
 }
-
-// Init on load
 setTimeout(updateMethodParams,0);
 
+// ═══════ ACTIONS ═══════
 async function submitJob(){
   const environment=document.getElementById('env-select').value;
   const method=document.getElementById('method-select').value;
-  const common=METHOD_PARAMS._common||[];
-  const specific=METHOD_PARAMS[method]||[];
-  const fields=[...common,...specific];
+  const fields=[...(METHOD_PARAMS._common||[]),...(METHOD_PARAMS[method]||[])];
   const params={};
-  for(const f of fields){
-    const el=document.getElementById(`param-${f.key}`);
-    if(!el)continue;
-    let v=el.value;
-    if(f.key==='hidden'){
-      // Keep as string — server parses it or pass as-is
-      // Actually skip hidden from params, let server use defaults unless changed
-      if(v&&v!=='64,32'){
-        params.hidden=v.split(',').map(Number);
-      }
-      continue;
-    }
-    if(f.type==='number')v=parseFloat(v);
-    if(f.type==='select')v=v;
-    if(v!==''&&v!==null&&v!==undefined)params[f.key]=v;
-  }
-  const maxEvals=params.max_evals||100000;
-  try{
-    const r=await fetch('/api/jobs/submit',{method:'POST',headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},body:JSON.stringify({method,environment,max_evals:maxEvals,params})});
-    if(r.ok){addLog(`📤 Submitted: <b>${esc(method)}</b> on <b>${esc(environment)}</b> (${maxEvals} evals)`);refresh()}
-    else{addLog('❌ Submit failed: HTTP '+r.status)}
-  }catch(e){addLog('❌ Submit failed: '+e)}
+  for(const f of fields){const el=document.getElementById(`param-${f.key}`);if(!el)continue;let v=el.value;if(f.type==='number')v=parseFloat(v);if(v!==''&&v!==null)params[f.key]=v}
+  try{const r=await fetch('/api/jobs/submit',{method:'POST',headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},body:JSON.stringify({method,environment,max_evals:params.max_evals||100000,params})});if(r.ok){addLog(`📤 <b>${esc(method)}</b> on ${esc(environment)}`);refresh()}else addLog('❌ Submit failed: HTTP '+r.status)}catch(e){addLog('❌ '+e)}
 }
+async function cancelJob(id){if(!confirm('Cancel?'))return;try{await fetch(`/api/jobs/cancel/${id}`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});addLog('🚫 Cancelled '+id.slice(0,8));refresh()}catch(e){}}
+async function toggleWorker(id){try{await fetch(`/api/workers/${id}/enable`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});refresh()}catch(e){}}
 
-async function cancelJob(jobId){
-  if(!confirm('Cancel job '+jobId.slice(0,8)+'?'))return;
-  try{await fetch(`/api/jobs/cancel/${jobId}`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});addLog('🚫 Cancelled job <b>'+jobId.slice(0,8)+'</b>');refresh()}catch(e){addLog('❌ Cancel failed')}
-}
+// ═══════ EXPORT ═══════
+async function downloadCSV(id){try{const r=await fetch(`/api/results/${id}/csv`,{headers:{'Authorization':'Bearer '+TOKEN}});dl(await r.text(),'text/csv',`gaia-${id.slice(0,8)}.csv`)}catch(e){}}
+function downloadAllCSV(){let csv='job_id,method,env,gen,best,best_ever,mean,sigma,evals,time\n';for(const[id,d]of Object.entries(allJobData))for(const p of d.points)csv+=`${id.slice(0,8)},${d.method},${d.environment},${p.gen},${p.best},${p.best_ever},${p.mean},${p.sigma},${p.evals},${p.time}\n`;dl(csv,'text/csv','gaia-all.csv')}
+function downloadSummaryJSON(){const s={};for(const[id,d]of Object.entries(allJobData)){if(!d.points.length)continue;s[d.method+'@'+d.environment]={method:d.method,env:d.environment,best:Math.max(...d.points.map(p=>p.best_ever)),evals:Math.max(...d.points.map(p=>p.evals))}};dl(JSON.stringify(s,null,2),'application/json','gaia-summary.json')}
+function dl(c,t,n){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:t}));a.download=n;a.click()}
 
-async function toggleWorker(workerId){
-  try{const r=await fetch(`/api/workers/${workerId}/enable`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});const d=await r.json();addLog(d.enabled?'▶️ Worker enabled':'⏸ Worker disabled');refresh()}catch(e){addLog('❌ Toggle failed')}
-}
-
-async function forceUpdate(workerId){
-  if(!confirm('Force update this worker?'))return;
-  try{await fetch(`/api/workers/${workerId}/force-update`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});addLog('🔄 Force update sent');refresh()}catch(e){addLog('❌ Force update failed')}
-}
-
-// ======= DATA EXPORT =======
-async function downloadCSV(jobId){
-  try{const r=await fetch(`/api/results/${jobId}/csv`,{headers:{'Authorization':'Bearer '+TOKEN}});const text=await r.text();dl(text,'text/csv',`gaia-${jobId.slice(0,8)}.csv`)}catch(e){}
-}
-
-async function downloadAllCSV(){
-  let csv='job_id,method,environment,generation,best,best_ever,mean,sigma,evals,time\n';
-  for(const[id,d]of Object.entries(allJobData)){
-    for(const p of d.points)csv+=`${id.slice(0,8)},${d.method},${d.environment||'LunarLander-v3'},${p.gen},${p.best},${p.best_ever},${p.mean},${p.sigma},${p.evals},${p.time}\n`;
-  }
-  dl(csv,'text/csv','gaia-all-results.csv');
-}
-
-function downloadSummaryJSON(){
-  const summary={};
-  for(const[id,d]of Object.entries(allJobData)){
-    if(!d.points.length)continue;
-    const key=(METHOD_NAMES[d.method]||d.method)+'@'+(d.environment||'LunarLander-v3');
-    summary[key]={job_id:id,method:d.method,environment:d.environment||'LunarLander-v3',status:d.status,
-      generations:d.points.length,best_ever:Math.max(...d.points.map(p=>p.best_ever)),
-      final_mean:d.points[d.points.length-1].mean,total_evals:Math.max(...d.points.map(p=>p.evals))};
-  }
-  dl(JSON.stringify(summary,null,2),'application/json','gaia-summary.json');
-}
-
-function dl(content,type,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click()}
-
-// ======= DEBUG =======
-const debugLog=[],MAX_DEBUG=500;
-function addDebug(msg){debugLog.push({time:new Date().toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}),msg});if(debugLog.length>MAX_DEBUG)debugLog.shift()}
-function renderDebug(){
-  const el=document.getElementById('debug-log');if(!el)return;
-  if(!debugLog.length){el.textContent='Waiting for data…';return}
-  el.innerHTML=debugLog.map(e=>`<span style="color:var(--text2)">${e.time}</span> ${e.msg}`).join('\n');
-  if(document.getElementById('debug-autoscroll')?.checked)el.scrollTop=el.scrollHeight;
-}
-async function refreshDebugRaw(){
-  try{const r=await fetch('/api/status',{headers:{'Authorization':'Bearer '+TOKEN}});const d=await r.json();document.getElementById('debug-raw').textContent=JSON.stringify(d,null,2)}catch(e){document.getElementById('debug-raw').textContent='Error: '+e}
-}
-
-// Feed debug log from refresh
-const _origRefresh=refresh;
-refresh=async function(){
-  await _origRefresh();
-  for(const[id,d]of Object.entries(allJobData)){
-    if(d.status!=='running'||!d.points.length)continue;
-    const last=d.points[d.points.length-1];
-    const key='debug_'+id+'_'+last.gen;
-    if(!window._debugSeen)window._debugSeen=new Set();
-    if(!window._debugSeen.has(key)){
-      window._debugSeen.add(key);
-      addDebug(`<span style="color:var(--cyan)">[${d.method}@${d.environment||'?'}]</span> Gen ${last.gen} | best: ${last.best_ever.toFixed(1)} | mean: ${last.mean.toFixed(1)} | σ: ${last.sigma.toFixed(4)} | evals: ${last.evals}`);
-    }
-  }
-  if(document.getElementById('tab-debug')?.classList.contains('active'))renderDebug();
-  if(document.getElementById('tab-history')?.classList.contains('active'))renderHistory();
-};
-
-// ======= NETWORK =======
+// ═══════ NETWORK ═══════
 async function renderNetwork(){
   const el=document.getElementById('network-body');
-  try{
-    const r=await fetch('/api/network',{headers:{'Authorization':'Bearer '+TOKEN}});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const d=await r.json();
-    if(d.mode==='centralized'){
-      el.innerHTML=`<div style="text-align:center;padding:40px"><div style="font-size:3rem;margin-bottom:16px">🏗️</div><h3 style="margin-bottom:8px">Centralized Mode</h3><p style="color:var(--text2);font-size:.875rem">Start with <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">--gossip</code> to enable P2P.</p></div>`;
-      return;
-    }
-    let h=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px">
-      <div class="big-num"><div class="val" style="color:var(--accent)">${d.peer_count}</div><div class="lbl">Peers</div></div>
-      <div class="big-num"><div class="val" style="color:var(--green)">${d.gpu_nodes}</div><div class="lbl">GPU Nodes</div></div>
-      <div class="big-num"><div class="val" style="color:var(--cyan)">${d.total_cpu_cores}</div><div class="lbl">Total CPU Cores</div></div>
-    </div>`;
-    if(d.peers&&d.peers.length){
-      h+='<div class="table-scroll"><table class="leaderboard"><tr><th>Node</th><th>Address</th><th>GPU</th><th>CPU</th><th>Last Seen</th></tr>';
-      for(const p of d.peers){const c=p.capabilities||{};h+=`<tr><td style="color:var(--accent)">${esc(p.node_id.slice(0,12))}...</td><td>${esc(p.address)}</td><td>${c.gpu?'🟢 '+esc(c.gpu):'—'}</td><td>${c.cpu_cores||'?'} cores</td><td>${timeSince(p.last_seen)}</td></tr>`}
-      h+='</table></div>';
-    }
+  try{const r=await fetch('/api/network',{headers:{'Authorization':'Bearer '+TOKEN}});if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();
+    if(d.mode==='centralized'){el.innerHTML='<div class="empty"><div style="font-size:2.5rem;margin-bottom:12px">🏗️</div><h3>Centralized Mode</h3><p style="color:var(--text3);margin-top:4px">Start with <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">--gossip</code> to enable P2P</p></div>';return}
+    let h=`<div class="stats-row"><div class="stat-card"><div class="val" style="color:var(--accent)">${d.peer_count}</div><div class="lbl">Peers</div></div><div class="stat-card"><div class="val" style="color:var(--green)">${d.gpu_nodes}</div><div class="lbl">GPU Nodes</div></div><div class="stat-card"><div class="val" style="color:var(--cyan)">${d.total_cpu_cores}</div><div class="lbl">CPU Cores</div></div></div>`;
+    if(d.peers?.length){h+='<div class="table-scroll"><table class="leaderboard"><tr><th>Node</th><th>Address</th><th>GPU</th><th>CPU</th><th>Last Seen</th></tr>';for(const p of d.peers){const c=p.capabilities||{};h+=`<tr><td style="color:var(--accent)">${esc(p.node_id.slice(0,12))}…</td><td>${esc(p.address)}</td><td>${c.gpu?'🟢 '+esc(c.gpu):'—'}</td><td>${c.cpu_cores||'?'}</td><td>${timeSince(p.last_seen)}</td></tr>`}h+='</table></div>'}
     setHtml(el,h);
-  }catch(e){el.innerHTML=`<div class="empty">Network unavailable: ${esc(e.message)}</div>`}
+  }catch(e){el.innerHTML=`<div class="empty">Network unavailable</div>`}
 }
 
-// Hook network tab
-const _origRefresh2=refresh;
-refresh=async function(){
-  await _origRefresh2();
-  if(document.getElementById('tab-network')?.classList.contains('active'))renderNetwork();
-};
-
-window.addEventListener('resize',()=>{
-  if(document.getElementById('tab-benchmarks').classList.contains('active'))drawLearningCurves();
-  if(document.getElementById('tab-charts').classList.contains('active'))drawAllCharts();
-});
+window.addEventListener('resize',()=>{if(document.getElementById('tab-benchmarks').classList.contains('active'))drawLearningCurves();if(document.getElementById('tab-charts').classList.contains('active'))drawAllCharts()});
 </script>
 </body>
 </html>
