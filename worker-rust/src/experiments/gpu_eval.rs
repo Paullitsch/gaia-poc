@@ -1,0 +1,535 @@
+//! Full on-device GPU evaluation: forward pass + env step in a single kernel.
+//!
+//! Zero PCIe transfers during episode loop.
+//! Only transfer: params (once at start) → rewards (once at end).
+//!
+//! One CUDA thread per environment runs the ENTIRE episode:
+//!   loop { obs → forward_pass → argmax → env_step → accumulate_reward }
+//! All on GPU registers/shared memory.
+
+#[cfg(feature = "cuda")]
+use cudarc::driver::{CudaDevice, CudaSlice, LaunchConfig, LaunchAsync};
+#[cfg(feature = "cuda")]
+use cudarc::nvrtc::compile_ptx;
+#[cfg(feature = "cuda")]
+use std::sync::Arc;
+
+use super::env::{self, ActionSpace};
+use super::policy::Policy;
+use super::native_runner::{GenResult, RunResult};
+use super::optim::{CmaEs, Rng as OptRng, compute_centered_ranks};
+use serde_json::Value;
+use std::time::Instant;
+
+/// CUDA kernel: full episode evaluation on GPU.
+/// Each thread runs one environment for one complete episode.
+/// Network: 2-hidden-layer FF with tanh activations.
+///
+/// Template params compiled into kernel via string substitution:
+/// - OBS_DIM, ACT_DIM, H1, H2, N_PARAMS, MAX_STEPS
+/// - ENV_TYPE: 0=CartPole, 1=LunarLander
+const FULL_EVAL_KERNEL_TEMPLATE: &str = r#"
+// ─── Network constants (substituted at compile time) ────────────
+#define OBS_DIM {OBS_DIM}
+#define ACT_DIM {ACT_DIM}
+#define H1 {H1}
+#define H2 {H2}
+#define N_PARAMS {N_PARAMS}
+#define MAX_STEPS {MAX_STEPS}
+#define ENV_TYPE {ENV_TYPE}
+
+// ─── CartPole constants ─────────────────────────────────────────
+#define CP_GRAVITY 9.8f
+#define CP_CART_MASS 1.0f
+#define CP_POLE_MASS 0.1f
+#define CP_TOTAL_MASS 1.1f
+#define CP_HALF_LEN 0.5f
+#define CP_FORCE 10.0f
+#define CP_TAU 0.02f
+#define CP_X_THRESH 2.4f
+#define CP_THETA_THRESH 0.2094f
+
+// ─── Forward pass: obs → action index ───────────────────────────
+__device__ int forward_pass_discrete(
+    const float* obs,
+    const float* params
+) {
+    // Layer 1: obs(OBS_DIM) → h1(H1), tanh
+    float h1[H1];
+    int off = 0;
+    for (int j = 0; j < H1; j++) {
+        float sum = params[off + OBS_DIM * H1 + j]; // bias
+        for (int i = 0; i < OBS_DIM; i++) {
+            sum += obs[i] * params[off + i * H1 + j];
+        }
+        h1[j] = tanhf(sum);
+    }
+    off += OBS_DIM * H1 + H1;
+
+    // Layer 2: h1(H1) → h2(H2), tanh
+    float h2[H2];
+    for (int j = 0; j < H2; j++) {
+        float sum = params[off + H1 * H2 + j]; // bias
+        for (int i = 0; i < H1; i++) {
+            sum += h1[i] * params[off + i * H2 + j];
+        }
+        h2[j] = tanhf(sum);
+    }
+    off += H1 * H2 + H2;
+
+    // Output layer: h2(H2) → out(ACT_DIM), no activation
+    float out[ACT_DIM];
+    for (int j = 0; j < ACT_DIM; j++) {
+        float sum = params[off + H2 * ACT_DIM + j]; // bias
+        for (int i = 0; i < H2; i++) {
+            sum += h2[i] * params[off + i * ACT_DIM + j];
+        }
+        out[j] = sum;
+    }
+
+    // Argmax
+    int best = 0;
+    float best_val = out[0];
+    for (int j = 1; j < ACT_DIM; j++) {
+        if (out[j] > best_val) {
+            best_val = out[j];
+            best = j;
+        }
+    }
+    return best;
+}
+
+// ─── Forward pass: obs → continuous action (tanh squashed) ──────
+__device__ void forward_pass_continuous(
+    const float* obs,
+    const float* params,
+    float* actions
+) {
+    float h1[H1];
+    int off = 0;
+    for (int j = 0; j < H1; j++) {
+        float sum = params[off + OBS_DIM * H1 + j];
+        for (int i = 0; i < OBS_DIM; i++) {
+            sum += obs[i] * params[off + i * H1 + j];
+        }
+        h1[j] = tanhf(sum);
+    }
+    off += OBS_DIM * H1 + H1;
+
+    float h2[H2];
+    for (int j = 0; j < H2; j++) {
+        float sum = params[off + H1 * H2 + j];
+        for (int i = 0; i < H1; i++) {
+            sum += h1[i] * params[off + i * H2 + j];
+        }
+        h2[j] = tanhf(sum);
+    }
+    off += H1 * H2 + H2;
+
+    for (int j = 0; j < ACT_DIM; j++) {
+        float sum = params[off + H2 * ACT_DIM + j];
+        for (int i = 0; i < H2; i++) {
+            sum += h2[i] * params[off + i * ACT_DIM + j];
+        }
+        actions[j] = tanhf(sum); // squash to [-1, 1]
+    }
+}
+
+// ─── CartPole step ──────────────────────────────────────────────
+__device__ float cartpole_step_device(float* state, int action) {
+    float x = state[0], x_dot = state[1];
+    float theta = state[2], theta_dot = state[3];
+
+    float force = (action == 1) ? CP_FORCE : -CP_FORCE;
+    float cos_t = cosf(theta), sin_t = sinf(theta);
+
+    float temp = (force + CP_POLE_MASS * CP_HALF_LEN * theta_dot * theta_dot * sin_t) / CP_TOTAL_MASS;
+    float theta_acc = (CP_GRAVITY * sin_t - cos_t * temp)
+        / (CP_HALF_LEN * (4.0f/3.0f - CP_POLE_MASS * cos_t * cos_t / CP_TOTAL_MASS));
+    float x_acc = temp - CP_POLE_MASS * CP_HALF_LEN * theta_acc * cos_t / CP_TOTAL_MASS;
+
+    state[0] = x + CP_TAU * x_dot;
+    state[1] = x_dot + CP_TAU * x_acc;
+    state[2] = theta + CP_TAU * theta_dot;
+    state[3] = theta_dot + CP_TAU * theta_acc;
+
+    int terminated = (fabsf(state[0]) > CP_X_THRESH) || (fabsf(state[2]) > CP_THETA_THRESH);
+    return terminated ? -1.0f : 1.0f; // -1 = done, reward = 1.0 per step
+}
+
+// ─── Main kernel: one thread = one full episode ─────────────────
+extern "C" __global__ void evaluate_episodes(
+    const float* __restrict__ all_params,  // [n_candidates × N_PARAMS]
+    float* rewards_out,                     // [n_candidates × n_episodes]
+    int n_candidates,
+    int n_episodes,
+    unsigned long long base_seed
+) {
+    int global_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = n_candidates * n_episodes;
+    if (global_idx >= total) return;
+
+    int cand_idx = global_idx / n_episodes;
+    int ep_idx = global_idx % n_episodes;
+
+    const float* params = &all_params[cand_idx * N_PARAMS];
+
+    // Init state with LCG random
+    float state[OBS_DIM];
+    unsigned long long seed = base_seed + (unsigned long long)global_idx * 12345ULL + 1ULL;
+
+    // Reset: small random values in [-0.05, 0.05]
+    for (int i = 0; i < OBS_DIM; i++) {
+        seed = seed * 6364136223846793005ULL + 1ULL;
+        float val = (float)(seed >> 33) / (float)0xFFFFFFFF;
+        state[i] = val * 0.1f - 0.05f;
+    }
+
+    float total_reward = 0.0f;
+
+    for (int step = 0; step < MAX_STEPS; step++) {
+        #if ENV_TYPE == 0
+            // CartPole: discrete action
+            int action = forward_pass_discrete(state, params);
+            float r = cartpole_step_device(state, action);
+            if (r < 0.0f) break; // terminated
+            total_reward += 1.0f;
+        #endif
+    }
+
+    rewards_out[global_idx] = total_reward;
+}
+"#;
+
+// ─── GPU Evaluator ──────────────────────────────────────────────
+
+#[cfg(feature = "cuda")]
+pub struct GpuEvaluator {
+    dev: Arc<CudaDevice>,
+    n_params: usize,
+    n_episodes: usize,
+    env_name: String,
+}
+
+#[cfg(feature = "cuda")]
+impl GpuEvaluator {
+    /// Create a GPU evaluator. Compiles the CUDA kernel for the given env/network.
+    pub fn new(env_name: &str, policy: &Policy, n_episodes: usize) -> Option<Self> {
+        let dev = CudaDevice::new(0).ok()?;
+
+        let (h1, h2) = if policy.config.hidden.len() == 2 {
+            (policy.config.hidden[0], policy.config.hidden[1])
+        } else {
+            eprintln!("⚠️ GPU eval only supports 2-hidden-layer networks");
+            return None;
+        };
+
+        let env_type = match env_name {
+            "CartPole-v1" => 0,
+            // "LunarLander-v3" => 1,
+            _ => {
+                eprintln!("⚠️ GPU eval not supported for {}", env_name);
+                return None;
+            }
+        };
+
+        // Compile kernel with concrete dimensions
+        let src = FULL_EVAL_KERNEL_TEMPLATE
+            .replace("{OBS_DIM}", &policy.config.obs_dim.to_string())
+            .replace("{ACT_DIM}", &policy.config.act_dim.to_string())
+            .replace("{H1}", &h1.to_string())
+            .replace("{H2}", &h2.to_string())
+            .replace("{N_PARAMS}", &policy.n_params.to_string())
+            .replace("{MAX_STEPS}", &match env_name {
+                "CartPole-v1" => "500",
+                "LunarLander-v3" => "1000",
+                _ => "1000",
+            }.to_string())
+            .replace("{ENV_TYPE}", &env_type.to_string());
+
+        let ptx = compile_ptx(&src).ok()?;
+        dev.load_ptx(ptx, "eval", &["evaluate_episodes"]).ok()?;
+
+        eprintln!("🚀 GPU Full-Episode kernel compiled | {}→{}→{}→{} | {} params",
+            policy.config.obs_dim, h1, h2, policy.config.act_dim, policy.n_params);
+
+        Some(GpuEvaluator {
+            dev,
+            n_params: policy.n_params,
+            n_episodes,
+            env_name: env_name.to_string(),
+        })
+    }
+
+    /// Evaluate multiple candidates. Returns fitness for each candidate.
+    /// ALL computation happens on GPU — zero transfers during episodes.
+    pub fn evaluate_batch(&self, candidates: &[Vec<f64>]) -> Vec<f64> {
+        let n_candidates = candidates.len();
+        let total_episodes = n_candidates * self.n_episodes;
+
+        // Flatten all params into one buffer
+        let mut all_params = vec![0.0f32; n_candidates * self.n_params];
+        for (c, cand) in candidates.iter().enumerate() {
+            for (i, &v) in cand.iter().enumerate() {
+                all_params[c * self.n_params + i] = v as f32;
+            }
+        }
+
+        // Upload params (ONLY transfer to GPU)
+        let d_params = self.dev.htod_copy(all_params).unwrap();
+        let d_rewards = self.dev.alloc_zeros::<f32>(total_episodes).unwrap();
+
+        // Launch: one thread per episode
+        let f = self.dev.get_func("eval", "evaluate_episodes").unwrap();
+        let block = 256;
+        let grid = ((total_episodes + block - 1) / block) as u32;
+        let cfg = LaunchConfig {
+            block_dim: (block as u32, 1, 1),
+            grid_dim: (grid, 1, 1),
+            shared_mem_bytes: 0,
+        };
+
+        unsafe {
+            f.launch(cfg, (
+                &d_params,
+                &d_rewards,
+                n_candidates as i32,
+                self.n_episodes as i32,
+                42u64, // base_seed
+            )).unwrap();
+        }
+
+        // Download rewards (ONLY transfer from GPU)
+        let rewards: Vec<f32> = self.dev.dtoh_sync_copy(&d_rewards).unwrap();
+
+        // Aggregate per candidate
+        let mut fitnesses = vec![0.0f64; n_candidates];
+        for c in 0..n_candidates {
+            let sum: f64 = (0..self.n_episodes)
+                .map(|ep| rewards[c * self.n_episodes + ep] as f64)
+                .sum();
+            fitnesses[c] = sum / self.n_episodes as f64;
+        }
+        fitnesses
+    }
+}
+
+// ─── GPU-accelerated CMA-ES (full on-device) ───────────────────
+
+pub fn run_gpu_full_cma_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
+    let env_cfg = env::get_env_config(env_name).expect("Unknown env");
+    let hidden = match env_name {
+        "CartPole-v1" => vec![32, 16],
+        _ => vec![64, 32],
+    };
+    let max_evals = params.get("max_evals").and_then(|v| v.as_u64()).unwrap_or(100000) as usize;
+    let eval_episodes = params.get("eval_episodes").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
+    let sigma0 = params.get("sigma0").and_then(|v| v.as_f64()).unwrap_or(0.5);
+    let patience = params.get("patience").and_then(|v| v.as_u64()).unwrap_or(200) as usize;
+
+    let policy = Policy::new(env_cfg.obs_dim, env_cfg.action_space.size(), &hidden, env_cfg.action_space);
+    let mut cma = CmaEs::new(policy.n_params, sigma0, None);
+    let solved = env_cfg.solved_threshold;
+
+    // Try GPU evaluator
+    #[cfg(feature = "cuda")]
+    let gpu_eval = super::gpu_eval::GpuEvaluator::new(env_name, &policy, eval_episodes);
+    #[cfg(not(feature = "cuda"))]
+    let gpu_eval: Option<()> = None;
+
+    let using_gpu = gpu_eval.is_some();
+    eprintln!("🦀{} Full CMA-ES on {} | {} params | pop={} | {} episodes | GPU={}",
+        if using_gpu { "🚀" } else { "💻" },
+        env_name, policy.n_params, cma.pop_size, eval_episodes, using_gpu);
+
+    let mut best_ever = f64::NEG_INFINITY;
+    let mut best_params: Option<Vec<f64>> = None;
+    let mut total_evals = 0usize;
+    let mut stale_gens = 0usize;
+    let mut restarts = 0usize;
+    let start = Instant::now();
+
+    while total_evals < max_evals {
+        let candidates = cma.ask();
+
+        let fitnesses = {
+            #[cfg(feature = "cuda")]
+            {
+                if let Some(ref eval) = gpu_eval {
+                    eval.evaluate_batch(&candidates)
+                } else {
+                    cpu_evaluate_batch(env_name, &candidates, &policy, eval_episodes, env_cfg.max_steps)
+                }
+            }
+            #[cfg(not(feature = "cuda"))]
+            {
+                cpu_evaluate_batch(env_name, &candidates, &policy, eval_episodes, env_cfg.max_steps)
+            }
+        };
+
+        total_evals += candidates.len() * eval_episodes;
+        cma.tell(&candidates, &fitnesses);
+
+        let gen_best = fitnesses.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        if gen_best > best_ever {
+            best_ever = gen_best;
+            stale_gens = 0;
+            let idx = fitnesses.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()).unwrap().0;
+            best_params = Some(candidates[idx].clone());
+        } else {
+            stale_gens += 1;
+        }
+
+        on_gen(GenResult {
+            generation: cma.gen, best: gen_best, best_ever,
+            mean: fitnesses.iter().sum::<f64>() / fitnesses.len() as f64,
+            sigma: cma.sigma, evals: total_evals, time: start.elapsed().as_secs_f64(),
+        });
+
+        if best_ever >= solved { break; }
+
+        if stale_gens >= patience || cma.sigma < 1e-8 {
+            restarts += 1;
+            let new_sigma = sigma0 * (1.0 + 0.2 * restarts as f64);
+            cma = CmaEs::new(policy.n_params, new_sigma, None);
+            if let Some(ref bp) = best_params {
+                for (i, v) in bp.iter().enumerate() { cma.mean[i] = *v; }
+            }
+            stale_gens = 0;
+        }
+    }
+
+    RunResult {
+        method: if using_gpu { "GPU-Full-CMA-ES" } else { "CPU-Vec-CMA-ES" }.into(),
+        environment: env_name.into(), best_ever,
+        final_mean: best_ever, final_std: 0.0,
+        total_evals, generations: cma.gen,
+        elapsed: start.elapsed().as_secs_f64(), solved: best_ever >= solved,
+    }
+}
+
+/// CPU fallback: evaluate candidates using rayon
+fn cpu_evaluate_batch(
+    env_name: &str,
+    candidates: &[Vec<f64>],
+    policy: &Policy,
+    n_episodes: usize,
+    max_steps: usize,
+) -> Vec<f64> {
+    use rayon::prelude::*;
+    candidates.par_iter().map(|c| {
+        let pf32: Vec<f32> = c.iter().map(|&v| v as f32).collect();
+        let mut total = 0.0;
+        for ep in 0..n_episodes {
+            let mut env = env::make(env_name, Some(ep as u64 * 1000)).unwrap();
+            let mut obs = env.reset(Some(ep as u64 * 1000));
+            let mut ep_reward = 0.0;
+            for _ in 0..max_steps {
+                let action = policy.forward(&obs, &pf32);
+                let result = env.step(&action);
+                ep_reward += result.reward;
+                if result.done() { break; }
+                obs = result.observation;
+            }
+            total += ep_reward;
+        }
+        total / n_episodes as f64
+    }).collect()
+}
+
+/// Benchmark: CPU (rayon) vs GPU (full on-device)
+pub fn run_gpu_full_benchmark(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
+    let env_cfg = env::get_env_config(env_name).expect("Unknown env");
+    let hidden = match env_name {
+        "CartPole-v1" => vec![32, 16],
+        _ => vec![64, 32],
+    };
+    let n_candidates = params.get("n_candidates").and_then(|v| v.as_u64()).unwrap_or(28) as usize;
+    let eval_episodes = params.get("eval_episodes").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
+
+    let policy = Policy::new(env_cfg.obs_dim, env_cfg.action_space.size(), &hidden, env_cfg.action_space);
+
+    let mut rng = OptRng::new(42);
+    let candidates: Vec<Vec<f64>> = (0..n_candidates)
+        .map(|_| (0..policy.n_params).map(|_| rng.randn() * 0.1).collect())
+        .collect();
+
+    // CPU baseline (rayon)
+    let cpu_start = Instant::now();
+    let _cpu_fits = cpu_evaluate_batch(env_name, &candidates, &policy, eval_episodes, env_cfg.max_steps);
+    let cpu_time = cpu_start.elapsed().as_secs_f64();
+
+    // GPU full on-device
+    let mut gpu_time = f64::MAX;
+    let mut speedup = 0.0;
+
+    #[cfg(feature = "cuda")]
+    {
+        if let Some(eval) = GpuEvaluator::new(env_name, &policy, eval_episodes) {
+            // Warmup
+            let _ = eval.evaluate_batch(&candidates);
+
+            let gpu_start = Instant::now();
+            let _gpu_fits = eval.evaluate_batch(&candidates);
+            gpu_time = gpu_start.elapsed().as_secs_f64();
+            speedup = cpu_time / gpu_time;
+        }
+    }
+
+    eprintln!("🏁 Full On-Device Benchmark: {} candidates × {} episodes on {}",
+        n_candidates, eval_episodes, env_name);
+    eprintln!("  CPU (rayon):     {:.4}s", cpu_time);
+    eprintln!("  GPU (on-device): {:.4}s ({:.1}x speedup)", gpu_time, speedup);
+
+    on_gen(GenResult {
+        generation: 1, best: speedup, best_ever: speedup, mean: cpu_time,
+        sigma: gpu_time, evals: n_candidates * eval_episodes * 2,
+        time: cpu_time + gpu_time,
+    });
+
+    RunResult {
+        method: "GPU-Full-Benchmark".into(), environment: env_name.into(),
+        best_ever: speedup, final_mean: cpu_time, final_std: gpu_time,
+        total_evals: n_candidates * eval_episodes * 2, generations: 1,
+        elapsed: cpu_time + gpu_time, solved: false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cpu_evaluate_batch() {
+        let env_cfg = env::get_env_config("CartPole-v1").unwrap();
+        let policy = Policy::new(env_cfg.obs_dim, env_cfg.action_space.size(), &[32, 16], env_cfg.action_space);
+
+        let mut rng = OptRng::new(42);
+        let candidates: Vec<Vec<f64>> = (0..4)
+            .map(|_| (0..policy.n_params).map(|_| rng.randn() * 0.1).collect())
+            .collect();
+
+        let fits = cpu_evaluate_batch("CartPole-v1", &candidates, &policy, 3, 500);
+        assert_eq!(fits.len(), 4);
+        for f in &fits {
+            assert!(*f > 0.0, "Should get positive CartPole score");
+        }
+    }
+
+    #[test]
+    fn test_kernel_template_substitution() {
+        let src = FULL_EVAL_KERNEL_TEMPLATE
+            .replace("{OBS_DIM}", "4")
+            .replace("{ACT_DIM}", "2")
+            .replace("{H1}", "32")
+            .replace("{H2}", "16")
+            .replace("{N_PARAMS}", "722")
+            .replace("{MAX_STEPS}", "500")
+            .replace("{ENV_TYPE}", "0");
+
+        assert!(src.contains("#define OBS_DIM 4"));
+        assert!(src.contains("#define H1 32"));
+        assert!(src.contains("#define N_PARAMS 722"));
+        assert!(!src.contains("{OBS_DIM}"));
+    }
+}

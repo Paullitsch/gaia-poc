@@ -39,6 +39,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "neuromod", "neuromod_island", "island_model", "island_advanced",
     "meta_learning", "meta_learning_pure", "ppo_baseline",
     "gpu_cma_es", "gpu_openai_es", "gpu_benchmark",
+    "gpu_full_cma_es", "gpu_full_benchmark",
 ];
 
 /// Check if we can run this job natively in Rust.
@@ -96,6 +97,8 @@ fn dispatch(
         "gpu_cma_es" => super::gpu_methods::run_gpu_cma_es(env_name, params, on_gen),
         "gpu_openai_es" => super::gpu_methods::run_gpu_openai_es(env_name, params, on_gen),
         "gpu_benchmark" => super::gpu_methods::run_gpu_benchmark(env_name, params, on_gen),
+        "gpu_full_cma_es" => super::gpu_eval::run_gpu_full_cma_es(env_name, params, on_gen),
+        "gpu_full_benchmark" => super::gpu_eval::run_gpu_full_benchmark(env_name, params, on_gen),
         _ => RunResult {
             method: method.into(), environment: env_name.into(),
             best_ever: 0.0, final_mean: 0.0, final_std: 0.0,
