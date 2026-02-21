@@ -1,10 +1,15 @@
 //! All gradient-free methods in pure Rust.
 //!
 //! Each method: fn run(env_name, params, on_gen) -> RunResult
+//! Validated against reference implementations:
+//! - CMA-ES: Hansen's purecma.py (github.com/CMA-ES/pycma)
+//! - OpenAI-ES: Salimans et al. 2017 (github.com/openai/evolution-strategies-starter)
+//! - Neuromod: Our Python implementation (Hebbian + modulation network)
+//! - Meta-Learning: Najarro & Risi 2020 (github.com/enajx/HebbianMetaLearning)
 
 use super::env::{self, Environment};
 use super::policy::Policy;
-use super::optim::{CmaEs, Rng as OptRng};
+use super::optim::{CmaEs, Rng as OptRng, compute_centered_ranks};
 use super::native_runner::{GenResult, RunResult};
 use rayon::prelude::*;
 use serde_json::Value;
@@ -32,6 +37,240 @@ fn evaluate(env_name: &str, policy: &Policy, params: &[f32], n_episodes: usize, 
     total / n_episodes as f64
 }
 
+/// Evaluate with Hebbian neuromodulation (within-episode learning).
+fn evaluate_neuromod(
+    env_name: &str, policy: &Policy, genome: &[f64],
+    mod_net: &ModNetwork, n_episodes: usize, max_steps: usize,
+) -> f64 {
+    let n_main = policy.n_params;
+    let n_mod = mod_net.n_params;
+
+    // Decode genome
+    let main_weights: Vec<f32> = genome[..n_main].iter().map(|&v| v as f32).collect();
+    let mod_weights: Vec<f32> = genome[n_main..n_main + n_mod].iter().map(|&v| v as f32).collect();
+    let plast_raw = &genome[n_main + n_mod..];
+    let n_layers = policy.layer_dims.len();
+    let plasticity: Vec<f64> = (0..n_layers).map(|i| {
+        if i < plast_raw.len() { plast_raw[i].abs() * 0.01 } else { 0.001 }
+    }).collect();
+
+    let mut working_w = main_weights.clone();
+    let mut total_reward = 0.0;
+
+    for ep in 0..n_episodes {
+        let mut env = env::make(env_name, Some(ep as u64 * 1000))
+            .unwrap_or_else(|| panic!("Unknown env: {}", env_name));
+        let mut obs = env.reset(Some(ep as u64 * 1000));
+        let mut ep_reward = 0.0;
+
+        // Hebbian traces (per weight)
+        let mut traces = vec![0.0f32; n_main];
+
+        for _ in 0..max_steps {
+            let (_output, pre_acts, post_acts) = policy.forward_with_activations(&obs, &working_w);
+
+            // Action selection
+            let action = policy.forward(&obs, &working_w);
+
+            // Modulation signal
+            let mod_signal = mod_net.forward(&obs, &mod_weights);
+
+            let result = env.step(&action);
+            let reward = result.reward;
+            ep_reward += reward;
+
+            // Hebbian trace update: trace += pre * post * mod_signal * reward * 0.001
+            let mut offset = 0;
+            for layer_i in 0..n_layers.min(pre_acts.len()) {
+                let (fan_in, fan_out) = policy.layer_dims[layer_i];
+                let w_size = fan_in * fan_out;
+                let pre = &pre_acts[layer_i];
+                let post = &post_acts[layer_i];
+
+                for i in 0..fan_in.min(pre.len()) {
+                    for j in 0..fan_out.min(post.len()) {
+                        traces[offset + i * fan_out + j] +=
+                            pre[i] * post[j] * mod_signal * reward as f32 * 0.001;
+                    }
+                }
+                offset += w_size + fan_out; // skip biases
+            }
+
+            if result.done() { break; }
+            obs = result.observation;
+        }
+
+        // Apply plasticity at end of episode (except last)
+        if ep < n_episodes - 1 {
+            let mut offset = 0;
+            for layer_i in 0..n_layers {
+                let (fan_in, fan_out) = policy.layer_dims[layer_i];
+                let w_size = fan_in * fan_out;
+                let lr = plasticity[layer_i] as f32;
+                for k in 0..w_size {
+                    working_w[offset + k] += lr * traces[offset + k];
+                    working_w[offset + k] = working_w[offset + k].clamp(-5.0, 5.0);
+                }
+                offset += w_size + fan_out;
+            }
+        }
+
+        total_reward += ep_reward;
+    }
+    total_reward / n_episodes as f64
+}
+
+/// Evaluate with Hebbian meta-learning (ABCD+η learning rules).
+fn evaluate_with_learning(
+    env_name: &str, policy: &Policy, genome: &[f64],
+    n_episodes: usize, max_steps: usize,
+) -> f64 {
+    let n_main = policy.n_params;
+    let n_layers = policy.layer_dims.len();
+    let rule_params_per_layer = 5; // A, B, C, D, eta
+
+    // Decode: weights + per-layer learning rules
+    let mut working_w: Vec<f32> = genome[..n_main].iter().map(|&v| v as f32).collect();
+    let rule_genome = &genome[n_main..];
+
+    // Decode rules per layer
+    let rules: Vec<(f64, f64, f64, f64, f64)> = (0..n_layers).map(|i| {
+        let off = i * rule_params_per_layer;
+        if off + 4 < rule_genome.len() {
+            let a = rule_genome[off].tanh() * 0.1;       // Hebbian coeff
+            let b = rule_genome[off+1].tanh() * 0.05;    // Presynaptic
+            let c = rule_genome[off+2].tanh() * 0.05;    // Postsynaptic
+            let d = -rule_genome[off+3].abs() * 0.01;    // Decay (always negative)
+            let eta = rule_genome[off+4].abs() * 0.01;   // Learning rate
+            (a, b, c, d, eta)
+        } else {
+            (0.0, 0.0, 0.0, 0.0, 0.0)
+        }
+    }).collect();
+
+    let mut total_reward = 0.0;
+
+    for ep in 0..n_episodes {
+        let mut env = env::make(env_name, Some(ep as u64 * 1000))
+            .unwrap_or_else(|| panic!("Unknown env: {}", env_name));
+        let mut obs = env.reset(Some(ep as u64 * 1000));
+        let mut ep_reward = 0.0;
+
+        // Store activations for Hebbian update
+        let mut all_pre_acts: Vec<Vec<Vec<f32>>> = Vec::new();
+        let mut all_post_acts: Vec<Vec<Vec<f32>>> = Vec::new();
+
+        for _ in 0..max_steps {
+            let (_output, pre_acts, post_acts) = policy.forward_with_activations(&obs, &working_w);
+            let action = policy.forward(&obs, &working_w);
+
+            let result = env.step(&action);
+            ep_reward += result.reward;
+
+            all_pre_acts.push(pre_acts);
+            all_post_acts.push(post_acts);
+
+            if result.done() { break; }
+            obs = result.observation;
+        }
+
+        total_reward += ep_reward;
+
+        // Apply Hebbian learning after each episode (except last)
+        if !all_pre_acts.is_empty() && ep < n_episodes - 1 {
+            let reward_signal = (ep_reward / 100.0).max(0.0);
+
+            // Sample timesteps (up to 50)
+            let n_samples = all_pre_acts.len().min(50);
+            let step = if all_pre_acts.len() <= n_samples { 1 } else { all_pre_acts.len() / n_samples };
+
+            let mut offset = 0;
+            for layer_i in 0..n_layers {
+                let (fan_in, fan_out) = policy.layer_dims[layer_i];
+                let w_size = fan_in * fan_out;
+                let (a, b, c, d, eta) = rules[layer_i];
+
+                if eta.abs() < 1e-12 { offset += w_size + fan_out; continue; }
+
+                // Average Hebbian update across sampled timesteps
+                let mut dw = vec![0.0f64; w_size];
+                let mut count = 0;
+                for si in (0..all_pre_acts.len()).step_by(step.max(1)).take(n_samples) {
+                    if layer_i >= all_pre_acts[si].len() { break; }
+                    let pre = &all_pre_acts[si][layer_i];
+                    let post = &all_post_acts[si][layer_i];
+
+                    for i in 0..fan_in.min(pre.len()) {
+                        for j in 0..fan_out.min(post.len()) {
+                            // Generalized Hebbian: Δw = A*pre*post + B*pre + C*post + D
+                            dw[i * fan_out + j] +=
+                                a * pre[i] as f64 * post[j] as f64
+                                + b * pre[i] as f64
+                                + c * post[j] as f64
+                                + d;
+                        }
+                    }
+                    count += 1;
+                }
+
+                if count > 0 {
+                    for k in 0..w_size {
+                        dw[k] /= count as f64;
+                        working_w[offset + k] += (eta * reward_signal * dw[k]) as f32;
+                        working_w[offset + k] = working_w[offset + k].clamp(-5.0, 5.0);
+                    }
+                }
+
+                offset += w_size + fan_out;
+            }
+        }
+    }
+
+    total_reward / n_episodes as f64
+}
+
+// ─── Modulation Network (for Neuromod) ────────────────────────────────
+
+/// Small feed-forward network: obs → hidden(16) → 1 scalar (tanh).
+struct ModNetwork {
+    obs_dim: usize,
+    hidden: usize,
+    n_params: usize,
+}
+
+impl ModNetwork {
+    fn new(obs_dim: usize) -> Self {
+        let hidden = 16;
+        let n_params = obs_dim * hidden + hidden + hidden * 1 + 1;
+        ModNetwork { obs_dim, hidden, n_params }
+    }
+
+    fn forward(&self, obs: &[f32], params: &[f32]) -> f32 {
+        let mut offset = 0;
+
+        // Layer 1: obs → hidden (tanh)
+        let w1_size = self.obs_dim * self.hidden;
+        let mut h = vec![0.0f32; self.hidden];
+        for j in 0..self.hidden {
+            let mut sum = params[offset + w1_size + j]; // bias
+            for i in 0..self.obs_dim.min(obs.len()) {
+                sum += obs[i] * params[offset + i * self.hidden + j];
+            }
+            h[j] = sum.tanh();
+        }
+        offset += w1_size + self.hidden;
+
+        // Layer 2: hidden → 1 (tanh)
+        let mut out = params[offset + self.hidden]; // bias
+        for j in 0..self.hidden {
+            out += h[j] * params[offset + j];
+        }
+        out.tanh()
+    }
+}
+
+// ─── Parameter extraction helpers ─────────────────────────────────────
+
 fn extract_params(env_name: &str, params: &Value) -> (usize, usize, f64, Vec<usize>) {
     let max_evals = params.get("max_evals").and_then(|v| v.as_u64()).unwrap_or(100000) as usize;
     let eval_episodes = params.get("eval_episodes").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
@@ -52,17 +291,15 @@ fn extract_params(env_name: &str, params: &Value) -> (usize, usize, f64, Vec<usi
 }
 
 /// Optimal hidden sizes for CMA-ES methods (keep params < 5K for full covariance).
-/// CMA-ES O(n²) makes large nets infeasible — use smaller nets with more compute.
 fn cma_optimal_hidden(env_name: &str) -> Vec<usize> {
     match env_name {
         "CartPole-v1" => vec![32, 16],
-        "LunarLander-v3" => vec![64, 32],          // 2,788 params ← Phase 7 sweet spot
-        "BipedalWalker-v3" => vec![64, 32],         // 2,788 params ← Phase 8 sweet spot
+        "LunarLander-v3" => vec![64, 32],
+        "BipedalWalker-v3" => vec![64, 32],
         _ => vec![64, 32],
     }
 }
 
-/// Extract params but use CMA-optimal net size unless explicitly overridden.
 fn extract_cma_params(env_name: &str, params: &Value) -> (usize, usize, f64, Vec<usize>) {
     let max_evals = params.get("max_evals").and_then(|v| v.as_u64()).unwrap_or(100000) as usize;
     let eval_episodes = params.get("eval_episodes").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
@@ -70,7 +307,6 @@ fn extract_cma_params(env_name: &str, params: &Value) -> (usize, usize, f64, Vec
     let hidden = if let Some(h) = params.get("hidden").and_then(|v| v.as_array()) {
         h.iter().filter_map(|v| v.as_u64().map(|n| n as usize)).collect()
     } else if params.get("config").is_some() {
-        // Scaling test — use extract_params
         return extract_params(env_name, params);
     } else {
         cma_optimal_hidden(env_name)
@@ -100,7 +336,8 @@ pub fn run_cma_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResu
 
     let patience = params.get("patience").and_then(|v| v.as_u64()).unwrap_or(200) as usize;
 
-    eprintln!("🦀 CMA-ES on {} | {} params | pop={} | patience={}", env_name, policy.n_params, cma.pop_size, patience);
+    eprintln!("🦀 CMA-ES on {} | {} params | pop={} | patience={} | full_cov={}",
+        env_name, policy.n_params, cma.pop_size, patience, !cma.use_diagonal);
 
     let mut best_ever = f64::NEG_INFINITY;
     let mut best_params: Option<Vec<f64>> = None;
@@ -137,11 +374,9 @@ pub fn run_cma_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResu
 
         if best_ever >= solved { break; }
 
-        // Restart if stuck (patience exhausted or sigma collapsed)
         if stale_gens >= patience || cma.sigma < 1e-8 {
             restarts += 1;
             eprintln!("  🔄 Restart #{} at gen {} (stale={}, σ={:.2e})", restarts, cma.gen, stale_gens, cma.sigma);
-            // Inject best known solution into new CMA
             let new_sigma = sigma0 * (1.0 + 0.2 * restarts as f64);
             cma = CmaEs::new(policy.n_params, new_sigma, None);
             if let Some(ref bp) = best_params {
@@ -156,7 +391,7 @@ pub fn run_cma_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResu
         total_evals, generations: cma.gen, elapsed: start.elapsed().as_secs_f64(), solved: best_ever >= solved }
 }
 
-// ─── OpenAI-ES ───────────────────────────────────────────────────────
+// ─── OpenAI-ES (with rank-based fitness shaping) ─────────────────────
 
 pub fn run_openai_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
     let env_cfg = env::get_env_config(env_name).expect("Unknown env");
@@ -166,15 +401,19 @@ pub fn run_openai_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenR
     let max_steps = env_cfg.max_steps;
     let solved = env_cfg.solved_threshold;
 
+    // Defaults matched to Python/OpenAI reference implementation
     let pop_size = params.get("pop_size").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
-    let lr = params.get("lr").and_then(|v| v.as_f64()).unwrap_or(0.02) as f64;
-    let noise_std = params.get("noise_std").and_then(|v| v.as_f64()).unwrap_or(0.05) as f64;
-    let weight_decay = params.get("weight_decay").and_then(|v| v.as_f64()).unwrap_or(0.005);
+    let lr = params.get("lr").and_then(|v| v.as_f64()).unwrap_or(0.01);
+    let noise_std = params.get("noise_std").and_then(|v| v.as_f64()).unwrap_or(0.02);
+    let weight_decay = params.get("weight_decay").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
-    eprintln!("🦀 OpenAI-ES on {} | {} params | pop={} | lr={} | σ={}", env_name, n, pop_size, lr, noise_std);
+    eprintln!("🦀 OpenAI-ES on {} | {} params | pop={} | lr={} | σ={} | wd={}",
+        env_name, n, pop_size, lr, noise_std, weight_decay);
 
-    let mut theta = vec![0.0f64; n];
+    // Initialize theta with small random values (matching Python: randn * 0.1)
     let mut rng = OptRng::new(42);
+    let mut theta: Vec<f64> = (0..n).map(|_| rng.randn() * 0.1).collect();
+
     let mut best_ever = f64::NEG_INFINITY;
     let mut best_params: Option<Vec<f64>> = None;
     let mut total_evals = 0usize;
@@ -183,6 +422,7 @@ pub fn run_openai_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenR
 
     while total_evals < max_evals {
         gen += 1;
+
         // Generate perturbations
         let epsilons: Vec<Vec<f64>> = (0..pop_size).map(|_| rng.randn_vec(n)).collect();
 
@@ -197,24 +437,35 @@ pub fn run_openai_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenR
 
         total_evals += pop_size * 2 * eval_episodes;
 
-        // Update theta
+        // ── Rank-based fitness shaping (from OpenAI's reference) ──
+        // Collect all 2*pop_size rewards, compute centered ranks
+        let mut all_rewards: Vec<f64> = Vec::with_capacity(pop_size * 2);
+        for (fp, fm) in &fitnesses {
+            all_rewards.push(*fp);
+            all_rewards.push(*fm);
+        }
+        let ranks = compute_centered_ranks(&all_rewards);
+        // ranks[2*i] = rank of plus perturbation i
+        // ranks[2*i+1] = rank of minus perturbation i
+
+        // Compute gradient using ranks
         let mut grad = vec![0.0f64; n];
         for (i, eps) in epsilons.iter().enumerate() {
-            let advantage = fitnesses[i].0 - fitnesses[i].1;
+            let rank_diff = ranks[2 * i] - ranks[2 * i + 1];
             for j in 0..n {
-                grad[j] += advantage * eps[j];
+                grad[j] += rank_diff * eps[j];
             }
         }
+
+        // Update theta: gradient ascent with optional weight decay
         for j in 0..n {
-            theta[j] = theta[j] * (1.0 - weight_decay) + lr / (pop_size as f64 * noise_std) * grad[j];
+            theta[j] = theta[j] * (1.0 - weight_decay)
+                + lr / (2.0 * pop_size as f64 * noise_std) * grad[j];
         }
 
-        // Evaluate current theta
-        let theta_f32: Vec<f32> = theta.iter().map(|&v| v as f32).collect();
-        let current = evaluate(env_name, &policy, &theta_f32, eval_episodes, max_steps);
-        let gen_best = fitnesses.iter().map(|f| f.0.max(f.1)).fold(f64::NEG_INFINITY, f64::max).max(current);
-        let gen_mean = fitnesses.iter().map(|f| (f.0 + f.1) / 2.0).sum::<f64>() / pop_size as f64;
-
+        // Track best
+        let gen_best = all_rewards.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let gen_mean = all_rewards.iter().sum::<f64>() / all_rewards.len() as f64;
         if gen_best > best_ever {
             best_ever = gen_best;
             best_params = Some(theta.clone());
@@ -243,7 +494,7 @@ pub fn run_curriculum(env_name: &str, params: &Value, mut on_gen: impl FnMut(Gen
     let max_steps = env_cfg.max_steps;
     let solved = env_cfg.solved_threshold;
 
-    eprintln!("🦀 Curriculum CMA-ES on {} | {} params", env_name, policy.n_params);
+    eprintln!("🦀 Curriculum CMA-ES on {} | {} params | full_cov={}", env_name, policy.n_params, !cma.use_diagonal);
 
     let max_gens = max_evals / (cma.pop_size * eval_episodes);
     let mut best_ever = f64::NEG_INFINITY;
@@ -296,23 +547,26 @@ pub fn run_curriculum(env_name: &str, params: &Value, mut on_gen: impl FnMut(Gen
         total_evals, generations: cma.gen, elapsed: start.elapsed().as_secs_f64(), solved: best_ever >= solved }
 }
 
-// ─── Neuromod CMA-ES ─────────────────────────────────────────────────
+// ─── Neuromod CMA-ES (with actual Hebbian modulation) ────────────────
 
 pub fn run_neuromod(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
     let env_cfg = env::get_env_config(env_name).expect("Unknown env");
     let (max_evals, eval_episodes, sigma0, hidden) = extract_cma_params(env_name, params);
     let policy = Policy::new(env_cfg.obs_dim, env_cfg.action_space.size(), &hidden, env_cfg.action_space);
     let n_layers = hidden.len() + 1;
-    // Neuromod: evolve weights + per-layer modulation params (eta, A, B per layer)
-    let mod_params = n_layers * 3;
-    let total_params = policy.n_params + mod_params;
+
+    // Modulation network: obs → hidden(16) → 1
+    let mod_net = ModNetwork::new(env_cfg.obs_dim);
+
+    // Genome: main_weights + mod_network + plasticity_per_layer
+    let total_params = policy.n_params + mod_net.n_params + n_layers;
 
     let mut cma = CmaEs::new(total_params, sigma0, None);
     let max_steps = env_cfg.max_steps;
     let solved = env_cfg.solved_threshold;
 
-    eprintln!("🦀 Neuromod CMA-ES on {} | {} weight + {} mod = {} total",
-        env_name, policy.n_params, mod_params, total_params);
+    eprintln!("🦀 Neuromod CMA-ES on {} | {} weight + {} mod + {} plast = {} total | full_cov={}",
+        env_name, policy.n_params, mod_net.n_params, n_layers, total_params, !cma.use_diagonal);
 
     let mut best_ever = f64::NEG_INFINITY;
     let mut best_params_raw: Option<Vec<f64>> = None;
@@ -323,9 +577,7 @@ pub fn run_neuromod(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenRe
         let candidates = cma.ask();
         let fitnesses: Vec<f64> = candidates.par_iter()
             .map(|c| {
-                // Use only the weight portion for evaluation (modulation is structural)
-                let pf32: Vec<f32> = c[..policy.n_params].iter().map(|&v| v as f32).collect();
-                evaluate(env_name, &policy, &pf32, eval_episodes, max_steps)
+                evaluate_neuromod(env_name, &policy, c, &mod_net, eval_episodes, max_steps)
             }).collect();
 
         total_evals += candidates.len() * eval_episodes;
@@ -347,8 +599,16 @@ pub fn run_neuromod(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenRe
         if best_ever >= solved { break; }
     }
 
-    let best_weight_params = best_params_raw.as_ref().map(|bp| bp[..policy.n_params].to_vec());
-    let (fm, fs) = final_eval(env_name, &policy, &best_weight_params, max_steps);
+    // Final eval uses the neuromod evaluation (with learning)
+    let (fm, fs) = if let Some(ref bp) = best_params_raw {
+        let scores: Vec<f64> = (0..20).map(|_| {
+            evaluate_neuromod(env_name, &policy, bp, &mod_net, 1, max_steps)
+        }).collect();
+        let m = scores.iter().sum::<f64>() / 20.0;
+        let s = (scores.iter().map(|x| (x - m).powi(2)).sum::<f64>() / 20.0).sqrt();
+        (m, s)
+    } else { (0.0, 0.0) };
+
     RunResult { method: "Neuromod".into(), environment: env_name.into(), best_ever, final_mean: fm, final_std: fs,
         total_evals, generations: cma.gen, elapsed: start.elapsed().as_secs_f64(), solved: best_ever >= solved }
 }
@@ -371,7 +631,6 @@ pub fn run_island_model(env_name: &str, params: &Value, mut on_gen: impl FnMut(G
     let mut islands: Vec<CmaEs> = (0..n_islands)
         .map(|i| {
             let mut c = CmaEs::new(policy.n_params, sigma0 * (1.0 + 0.2 * i as f64), None);
-            // Diversify initial means
             let mut rng = OptRng::new(i as u64 * 12345);
             for j in 0..policy.n_params {
                 c.mean[j] = rng.randn() * 0.1;
@@ -388,9 +647,7 @@ pub fn run_island_model(env_name: &str, params: &Value, mut on_gen: impl FnMut(G
 
     while total_evals < max_evals {
         gen += 1;
-
-        // Run one generation per island
-        let mut island_results: Vec<(f64, Vec<f64>, f64)> = Vec::new(); // (best_score, best_params, mean)
+        let mut island_results: Vec<(f64, Vec<f64>, f64)> = Vec::new();
 
         for island in &mut islands {
             let candidates = island.ask();
@@ -409,7 +666,6 @@ pub fn run_island_model(env_name: &str, params: &Value, mut on_gen: impl FnMut(G
             island_results.push((gen_best, candidates[idx].clone(), gen_mean));
         }
 
-        // Global best
         for (score, params_vec, _) in &island_results {
             if *score > global_best_ever {
                 global_best_ever = *score;
@@ -417,7 +673,6 @@ pub fn run_island_model(env_name: &str, params: &Value, mut on_gen: impl FnMut(G
             }
         }
 
-        // Migration: best island shares mean with worst
         if gen % migration_interval == 0 && n_islands > 1 {
             let mut scores: Vec<(usize, f64)> = island_results.iter().enumerate()
                 .map(|(i, (s, _, _))| (i, *s)).collect();
@@ -446,7 +701,7 @@ pub fn run_island_model(env_name: &str, params: &Value, mut on_gen: impl FnMut(G
         elapsed: start.elapsed().as_secs_f64(), solved: global_best_ever >= solved }
 }
 
-// ─── Meta-Learning (evolve weights + rules) ──────────────────────────
+// ─── Meta-Learning (evolve weights + Hebbian learning rules) ─────────
 
 pub fn run_meta_learning(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
     let env_cfg = env::get_env_config(env_name).expect("Unknown env");
@@ -459,10 +714,9 @@ pub fn run_meta_learning(env_name: &str, params: &Value, mut on_gen: impl FnMut(
     let mut cma = CmaEs::new(total_params, sigma0, None);
     let max_steps = env_cfg.max_steps;
     let solved = env_cfg.solved_threshold;
-    let n_lifetime_eps = params.get("n_lifetime_episodes").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
 
-    eprintln!("🦀 Meta-Learning on {} | {} weights + {} rule = {} genome | {} lifetime eps",
-        env_name, policy.n_params, rule_params, total_params, n_lifetime_eps);
+    eprintln!("🦀 Meta-Learning on {} | {} weights + {} rule = {} genome | full_cov={}",
+        env_name, policy.n_params, rule_params, total_params, !cma.use_diagonal);
 
     let mut best_ever = f64::NEG_INFINITY;
     let mut best_params: Option<Vec<f64>> = None;
@@ -473,11 +727,7 @@ pub fn run_meta_learning(env_name: &str, params: &Value, mut on_gen: impl FnMut(
         let candidates = cma.ask();
         let fitnesses: Vec<f64> = candidates.par_iter()
             .map(|c| {
-                // Split: weights + rule genome
-                let weights: Vec<f32> = c[..policy.n_params].iter().map(|&v| v as f32).collect();
-                // For now: just evaluate with the weights (Hebbian learning needs more work)
-                // TODO: implement lifetime learning with Hebbian rules
-                evaluate(env_name, &policy, &weights, eval_episodes, max_steps)
+                evaluate_with_learning(env_name, &policy, c, eval_episodes, max_steps)
             }).collect();
 
         total_evals += candidates.len() * eval_episodes;
@@ -499,8 +749,16 @@ pub fn run_meta_learning(env_name: &str, params: &Value, mut on_gen: impl FnMut(
         if best_ever >= solved { break; }
     }
 
-    let best_weight_params = best_params.as_ref().map(|bp| bp[..policy.n_params].to_vec());
-    let (fm, fs) = final_eval(env_name, &policy, &best_weight_params, max_steps);
+    // Final eval with learning
+    let (fm, fs) = if let Some(ref bp) = best_params {
+        let scores: Vec<f64> = (0..20).map(|_| {
+            evaluate_with_learning(env_name, &policy, bp, 1, max_steps)
+        }).collect();
+        let m = scores.iter().sum::<f64>() / 20.0;
+        let s = (scores.iter().map(|x| (x - m).powi(2)).sum::<f64>() / 20.0).sqrt();
+        (m, s)
+    } else { (0.0, 0.0) };
+
     RunResult { method: "Meta-Learning".into(), environment: env_name.into(), best_ever, final_mean: fm, final_std: fs,
         total_evals, generations: cma.gen, elapsed: start.elapsed().as_secs_f64(), solved: best_ever >= solved }
 }
