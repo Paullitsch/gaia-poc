@@ -38,6 +38,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "cma_es", "openai_es", "scaling_test", "curriculum",
     "neuromod", "neuromod_island", "island_model", "island_advanced",
     "meta_learning", "meta_learning_pure", "ppo_baseline",
+    "gpu_cma_es", "gpu_openai_es", "gpu_benchmark",
 ];
 
 /// Check if we can run this job natively in Rust.
