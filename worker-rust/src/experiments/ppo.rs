@@ -523,14 +523,16 @@ pub fn run_ppo(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)
                     // Gradient of loss w.r.t. output
                     let d_log_prob = policy.d_log_prob(&fwd.output, &t.action);
 
-                    // d_loss/d_output = -min'(surr1, surr2) * d_log_prob/d_output - ent_coeff * d_entropy
-                    // Simplified: use -advantage * d_log_prob (REINFORCE-style for clipped region)
-                    let clip_grad = if ratio > 1.0 - clip_eps && ratio < 1.0 + clip_eps {
-                        advantages[idx]
-                    } else if (surr1 < surr2 && ratio > 1.0 + clip_eps) || (surr1 < surr2 && ratio < 1.0 - clip_eps) {
-                        0.0 // clipped → no gradient
+                    // PPO gradient: d_loss/d_theta = -d/d_theta min(r*A, clip(r)*A)
+                    // If ratio in [1-eps, 1+eps]: gradient flows (use advantage * ratio)
+                    // If clipped and clipping is active: zero gradient
+                    let use_surr1 = surr1 <= surr2; // min picks surr1
+                    let clip_grad = if use_surr1 {
+                        // surr1 = ratio * A, d(surr1)/d(logprob) = ratio * A
+                        ratio * advantages[idx]
                     } else {
-                        advantages[idx]
+                        // surr2 = clip(ratio) * A — ratio is outside clip range, no gradient
+                        0.0
                     };
 
                     let d_output: Vec<f64> = d_log_prob.iter().map(|&d| -clip_grad * d / batch_size).collect();
