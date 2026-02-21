@@ -42,3 +42,6 @@ config.yaml
 # Logs
 *.log
 server-rust/target/
+
+# Cargo.lock varies by platform
+worker-rust/Cargo.lock
