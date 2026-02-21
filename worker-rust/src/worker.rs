@@ -265,7 +265,11 @@ async fn execute_native(
     let job_id = job.id.clone();
     let env_name = job.environment.clone();
     let method = job.method.clone();
-    let params = job.params.clone();
+    // Inject job-level max_evals into params so methods see the actual budget
+    let mut params = job.params.clone();
+    if !params.get("max_evals").is_some() {
+        params.as_object_mut().map(|m| m.insert("max_evals".into(), serde_json::json!(job.max_evals)));
+    }
 
     // Stream results in real-time via channel
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<crate::experiments::native_runner::GenResult>();
