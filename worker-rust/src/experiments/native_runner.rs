@@ -37,7 +37,7 @@ const SUPPORTED_ENVS: &[&str] = &["CartPole-v1", "LunarLander-v3", "BipedalWalke
 const SUPPORTED_METHODS: &[&str] = &[
     "cma_es", "openai_es", "scaling_test", "curriculum",
     "neuromod", "neuromod_island", "island_model", "island_advanced",
-    "meta_learning", "meta_learning_pure", "ppo_baseline",
+    "meta_learning", "meta_learning_pure", "ppo_baseline", "ppo_gpu",
     "gpu_cma_es", "gpu_openai_es", "gpu_benchmark",
     "gpu_full_cma_es", "gpu_full_openai_es", "gpu_full_benchmark",
 ];
@@ -94,7 +94,16 @@ fn dispatch(
         "neuromod" | "neuromod_island" => methods::run_neuromod(env_name, params, on_gen),
         "island_model" | "island_advanced" => methods::run_island_model(env_name, params, on_gen),
         "meta_learning" | "meta_learning_pure" => methods::run_meta_learning(env_name, params, on_gen),
-        "ppo_baseline" => ppo::run_ppo(env_name, params, on_gen),
+        "ppo_baseline" => {
+            // Auto-select GPU PPO for supported environments
+            match env_name {
+                "CartPole-v1" | "Swimmer-v1" => ppo::run_ppo_gpu(env_name, params, on_gen),
+                _ if env_name.starts_with("Pendulum-") && env_name.ends_with("Link") =>
+                    ppo::run_ppo_gpu(env_name, params, on_gen),
+                _ => ppo::run_ppo(env_name, params, on_gen), // LunarLander, BipedalWalker: CPU
+            }
+        }
+        "ppo_gpu" => ppo::run_ppo_gpu(env_name, params, on_gen),
         "gpu_cma_es" => super::gpu_methods::run_gpu_cma_es(env_name, params, on_gen),
         "gpu_openai_es" => super::gpu_methods::run_gpu_openai_es(env_name, params, on_gen),
         "gpu_benchmark" => super::gpu_methods::run_gpu_benchmark(env_name, params, on_gen),

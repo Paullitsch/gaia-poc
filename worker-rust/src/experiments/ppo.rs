@@ -699,3 +699,294 @@ fn compute_d_entropy(output: &[f64], action_space: &ActionSpace, _log_std: &Opti
         }
     }
 }
+
+// ─── GPU-Vectorized PPO ─────────────────────────────────────────────
+// Uses GpuVecEnv for parallel rollout collection on GPU.
+// Policy forward pass + PPO gradient updates remain on CPU.
+
+pub fn run_ppo_gpu(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
+    let env_cfg = env::get_env_config(env_name).expect("Unknown env");
+    let hidden = if let Some(h) = params.get("hidden").and_then(|v| v.as_array()) {
+        h.iter().filter_map(|v| v.as_u64().map(|n| n as usize)).collect()
+    } else {
+        env::default_hidden(env_name)
+    };
+    let max_evals = params.get("max_evals").and_then(|v| v.as_u64()).unwrap_or(500000) as usize;
+    let max_steps = env_cfg.max_steps;
+    let solved = env_cfg.solved_threshold;
+
+    let n_envs = params.get("n_envs").and_then(|v| v.as_u64()).unwrap_or(16) as usize;
+    let rollout_steps = params.get("rollout_steps").and_then(|v| v.as_u64()).unwrap_or(128) as usize;
+    let n_epochs = params.get("n_epochs").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
+    let minibatch_size = params.get("minibatch_size").and_then(|v| v.as_u64()).unwrap_or(64) as usize;
+    let clip_eps = params.get("clip_eps").and_then(|v| v.as_f64()).unwrap_or(0.2);
+    let gamma = params.get("gamma").and_then(|v| v.as_f64()).unwrap_or(0.99);
+    let lambda = params.get("lambda").and_then(|v| v.as_f64()).unwrap_or(0.95);
+    let lr = params.get("lr").and_then(|v| v.as_f64()).unwrap_or(3e-4);
+    let vf_coeff = params.get("vf_coeff").and_then(|v| v.as_f64()).unwrap_or(0.5);
+    let ent_coeff = params.get("ent_coeff").and_then(|v| v.as_f64()).unwrap_or(0.01);
+
+    let obs_dim = env_cfg.obs_dim;
+    let act_dim = env_cfg.action_space.size();
+
+    let mut policy = DiffPolicy::new(obs_dim, act_dim, &hidden, env_cfg.action_space);
+    let mut value_net = ValueNet::new(obs_dim, &hidden);
+    let mut policy_adam = Adam::new(policy.n_params(), lr);
+    let mut value_adam = Adam::new(value_net.inner.n_params(), lr);
+    let mut rng = Rng::new(42);
+
+    // Create vectorized GPU environment
+    let mut vec_env = super::gpu_env::GpuVecEnv::new(env_name, n_envs);
+    vec_env.reset_all(42);
+
+    eprintln!("🦀🚀 GPU-PPO on {} | {} policy params | {} envs | rollout={} | GPU={}",
+        env_name, policy.n_params(), n_envs, rollout_steps, vec_env.using_gpu);
+
+    let mut best_ever = f64::NEG_INFINITY;
+    let mut total_evals = 0usize;
+    let mut gen = 0usize;
+    let start = Instant::now();
+
+    // Per-env episode tracking
+    let mut ep_rewards = vec![0.0f64; n_envs];
+    let mut ep_steps = vec![0usize; n_envs];
+    let mut recent_rewards: Vec<f64> = Vec::new();
+
+    while total_evals < max_evals {
+        gen += 1;
+
+        // ── Collect vectorized rollout ──
+        // transitions[step][env] flattened into one big buffer
+        let total_transitions = rollout_steps * n_envs;
+        let mut all_obs = Vec::with_capacity(total_transitions);
+        let mut all_actions = Vec::with_capacity(total_transitions);
+        let mut all_log_probs = Vec::with_capacity(total_transitions);
+        let mut all_rewards = Vec::with_capacity(total_transitions);
+        let mut all_values = Vec::with_capacity(total_transitions);
+        let mut all_dones = Vec::with_capacity(total_transitions);
+
+        for _step in 0..rollout_steps {
+            let obs_slice = vec_env.get_observations();
+
+            // Forward pass for each env (CPU — small net, fast enough)
+            let mut actions_flat = Vec::with_capacity(n_envs * act_dim);
+            for i in 0..n_envs {
+                let obs_f64: Vec<f64> = obs_slice[i*obs_dim..(i+1)*obs_dim].iter().map(|&v| v as f64).collect();
+                let fwd = policy.forward(&obs_f64);
+                let value = value_net.predict(&obs_f64);
+                let (action, log_prob) = policy.sample_action(&fwd.output, &mut rng);
+
+                all_obs.push(obs_f64);
+                all_log_probs.push(log_prob);
+                all_values.push(value);
+
+                match &action {
+                    Action::Discrete(a) => {
+                        actions_flat.push(*a as f32);
+                        all_actions.push(action);
+                    }
+                    Action::Continuous(a) => {
+                        actions_flat.extend(a.iter());
+                        all_actions.push(action);
+                    }
+                }
+            }
+
+            // Step ALL envs simultaneously on GPU
+            let (obs_new, rewards, dones) = vec_env.step_all(&actions_flat);
+
+            for i in 0..n_envs {
+                all_rewards.push(rewards[i] as f64);
+                all_dones.push(dones[i] != 0);
+                ep_rewards[i] += rewards[i] as f64;
+                ep_steps[i] += 1;
+
+                if dones[i] != 0 || ep_steps[i] >= max_steps {
+                    recent_rewards.push(ep_rewards[i]);
+                    if recent_rewards.len() > 50 { recent_rewards.remove(0); }
+                    if ep_rewards[i] > best_ever { best_ever = ep_rewards[i]; }
+                    ep_rewards[i] = 0.0;
+                    ep_steps[i] = 0;
+                }
+            }
+            total_evals += n_envs;
+
+            // Auto-reset done envs
+            vec_env.auto_reset();
+        }
+
+        // ── Compute GAE for all transitions ──
+        // We treat the buffer as one big batch (environments interleaved)
+        // Last values for bootstrap
+        let obs_slice = vec_env.get_observations();
+        let mut last_values = Vec::with_capacity(n_envs);
+        for i in 0..n_envs {
+            let obs_f64: Vec<f64> = obs_slice[i*obs_dim..(i+1)*obs_dim].iter().map(|&v| v as f64).collect();
+            last_values.push(value_net.predict(&obs_f64));
+        }
+
+        // GAE per environment
+        let mut all_advantages = vec![0.0f64; total_transitions];
+        let mut all_returns = vec![0.0f64; total_transitions];
+
+        for env_i in 0..n_envs {
+            let mut last_gae = 0.0f64;
+            let bootstrap_value = last_values[env_i];
+
+            for t in (0..rollout_steps).rev() {
+                let idx = t * n_envs + env_i;
+                let next_value = if t == rollout_steps - 1 {
+                    bootstrap_value
+                } else {
+                    all_values[(t + 1) * n_envs + env_i]
+                };
+                let mask = if all_dones[idx] { 0.0 } else { 1.0 };
+                let delta = all_rewards[idx] + gamma * next_value * mask - all_values[idx];
+                last_gae = delta + gamma * lambda * mask * last_gae;
+                all_advantages[idx] = last_gae;
+                all_returns[idx] = last_gae + all_values[idx];
+            }
+        }
+
+        // Normalize advantages
+        let adv_mean = all_advantages.iter().sum::<f64>() / total_transitions as f64;
+        let adv_std = (all_advantages.iter().map(|a| (a - adv_mean).powi(2)).sum::<f64>() / total_transitions as f64).sqrt().max(1e-8);
+        for a in &mut all_advantages { *a = (*a - adv_mean) / adv_std; }
+
+        // ── PPO update epochs ──
+        let indices: Vec<usize> = (0..total_transitions).collect();
+        for _epoch in 0..n_epochs {
+            let mut shuffled = indices.clone();
+            for i in (1..shuffled.len()).rev() {
+                let j = (rng.next_u64() as usize) % (i + 1);
+                shuffled.swap(i, j);
+            }
+
+            for batch_start in (0..total_transitions).step_by(minibatch_size) {
+                let batch_end = (batch_start + minibatch_size).min(total_transitions);
+                let batch_indices = &shuffled[batch_start..batch_end];
+                let bs = batch_indices.len();
+                if bs == 0 { continue; }
+
+                let mut total_d_weights: Vec<Vec<f64>> = policy.weights.iter()
+                    .map(|w| vec![0.0; w.len()]).collect();
+                let mut total_d_biases: Vec<Vec<f64>> = policy.biases.iter()
+                    .map(|b| vec![0.0; b.len()]).collect();
+                let n_log_std = policy.log_std.as_ref().map_or(0, |v| v.len());
+                let mut total_d_log_std = vec![0.0; n_log_std];
+                let batch_size = bs as f64;
+
+                for &idx in batch_indices {
+                    let fwd = policy.forward(&all_obs[idx]);
+                    let new_log_prob = policy.log_prob(&fwd.output, &all_actions[idx]);
+                    let ratio = (new_log_prob - all_log_probs[idx]).exp();
+                    let adv = all_advantages[idx];
+
+                    let surr1 = ratio * adv;
+                    let surr2 = ratio.clamp(1.0 - clip_eps, 1.0 + clip_eps) * adv;
+                    let use_surr1 = surr1 <= surr2;
+                    let clip_grad = if use_surr1 { ratio * adv } else { 0.0 };
+
+                    let d_log_prob = policy.d_log_prob(&fwd.output, &all_actions[idx]);
+                    let d_entropy = compute_d_entropy(&fwd.output, &policy.action_space, &policy.log_std);
+
+                    let d_output: Vec<f64> = (0..fwd.output.len()).map(|i| {
+                        (-clip_grad * d_log_prob[i] - ent_coeff * d_entropy[i]) / batch_size
+                    }).collect();
+
+                    let (dw, db) = policy.backward(&fwd, &d_output);
+                    for l in 0..dw.len() {
+                        for i in 0..dw[l].len() { total_d_weights[l][i] += dw[l][i]; }
+                        for i in 0..db[l].len() { total_d_biases[l][i] += db[l][i]; }
+                    }
+
+                    // log_std gradient (continuous only)
+                    if n_log_std > 0 {
+                        if let (ActionSpace::Continuous(_), Action::Continuous(actions)) = (&policy.action_space, &all_actions[idx]) {
+                            let log_std_vec = policy.log_std.as_ref().unwrap();
+                            for i in 0..n_log_std {
+                                let log_s = log_std_vec[i].clamp(-2.0, 0.5);
+                                let std = log_s.exp();
+                                let mean = fwd.output[i];
+                                let a64 = (actions[i] as f64).clamp(-0.999, 0.999);
+                                let raw_a = 0.5 * ((1.0 + a64) / (1.0 - a64)).ln();
+                                let d_lp_d_ls = ((raw_a - mean) / std).powi(2) - 1.0;
+                                let d_ent_d_ls = 1.0;
+                                total_d_log_std[i] += (-clip_grad * d_lp_d_ls - ent_coeff * d_ent_d_ls) / batch_size;
+                            }
+                        }
+                    }
+
+                    // Value function update
+                    let fwd_v = value_net.inner.forward(&all_obs[idx]);
+                    let prediction = fwd_v.output[0];
+                    let error = prediction - all_returns[idx];
+                    let d_output_v = vec![2.0 * vf_coeff * error];
+                    let (dw_v, db_v) = value_net.inner.backward(&fwd_v, &d_output_v);
+                    value_net.inner.apply_gradients(&dw_v, &db_v, None, &mut value_adam);
+                }
+
+                let d_ls = if n_log_std > 0 { Some(total_d_log_std.as_slice()) } else { None };
+                policy.apply_gradients(&total_d_weights, &total_d_biases, d_ls, &mut policy_adam);
+            }
+        }
+
+        // ── Report ──
+        let mean_reward = if recent_rewards.is_empty() { 0.0 }
+            else { recent_rewards.iter().sum::<f64>() / recent_rewards.len() as f64 };
+
+        on_gen(GenResult {
+            generation: gen,
+            best: recent_rewards.last().copied().unwrap_or(0.0),
+            best_ever,
+            mean: mean_reward,
+            sigma: policy.log_std.as_ref().map_or(0.0, |ls| ls.iter().map(|v| v.exp()).sum::<f64>() / ls.len() as f64),
+            evals: total_evals,
+            time: start.elapsed().as_secs_f64(),
+        });
+
+        if best_ever >= solved { break; }
+    }
+
+    // Final evaluation
+    let mut final_scores = Vec::new();
+    for ep in 0..20 {
+        let mut env = env::make(env_name, Some(ep as u64 * 9999)).unwrap();
+        let mut obs = env.reset(Some(ep as u64 * 9999)).iter().map(|&v| v as f64).collect::<Vec<_>>();
+        let mut ep_reward = 0.0;
+        for _ in 0..max_steps {
+            let fwd = policy.forward(&obs);
+            let action = match policy.action_space {
+                ActionSpace::Discrete(_) => {
+                    let best = fwd.output.iter().enumerate()
+                        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+                        .map(|(i, _)| i).unwrap_or(0);
+                    Action::Discrete(best)
+                }
+                ActionSpace::Continuous(n) => {
+                    let actions: Vec<f32> = (0..n).map(|i| fwd.output[i].tanh() as f32).collect();
+                    Action::Continuous(actions)
+                }
+            };
+            let result = env.step(&action);
+            ep_reward += result.reward as f64;
+            if result.done() { break; }
+            obs = result.observation.iter().map(|&v| v as f64).collect();
+        }
+        final_scores.push(ep_reward);
+    }
+    let fm = final_scores.iter().sum::<f64>() / 20.0;
+    let fs = (final_scores.iter().map(|x| (x - fm).powi(2)).sum::<f64>() / 20.0).sqrt();
+
+    RunResult {
+        method: "PPO-GPU".into(),
+        environment: env_name.into(),
+        best_ever,
+        final_mean: fm,
+        final_std: fs,
+        total_evals,
+        generations: gen,
+        elapsed: start.elapsed().as_secs_f64(),
+        solved: best_ever >= solved,
+    }
+}
