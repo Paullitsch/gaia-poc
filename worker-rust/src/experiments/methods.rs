@@ -43,7 +43,12 @@ fn evaluate(env_name: &str, policy: &Policy, params: &[f32], n_episodes: usize, 
 #[cfg(feature = "cuda")]
 fn try_gpu_evaluator(env_name: &str, policy: &Policy, n_episodes: usize) -> Option<super::gpu_eval::GpuEvaluator> {
     match env_name {
-        "CartPole-v1" | "LunarLander-v3" => super::gpu_eval::GpuEvaluator::new(env_name, policy, n_episodes),
+        "CartPole-v1" | "LunarLander-v3" | "Swimmer-v1" => {
+            super::gpu_eval::GpuEvaluator::new(env_name, policy, n_episodes)
+        }
+        _ if env_name.starts_with("Pendulum-") && env_name.ends_with("Link") => {
+            super::gpu_eval::GpuEvaluator::new(env_name, policy, n_episodes)
+        }
         _ => None, // BipedalWalker: Box2D too complex for GPU
     }
 }

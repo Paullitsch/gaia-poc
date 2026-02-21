@@ -27,7 +27,7 @@ use std::time::Instant;
 ///
 /// Template params compiled into kernel via string substitution:
 /// - OBS_DIM, ACT_DIM, H1, H2, N_PARAMS, MAX_STEPS
-/// - ENV_TYPE: 0=CartPole, 1=LunarLander
+/// - ENV_TYPE: 0=CartPole, 1=LunarLander, 2=Swimmer, 3=NLinkPendulum
 const FULL_EVAL_KERNEL_TEMPLATE: &str = r#"
 // ─── Network constants (substituted at compile time) ────────────
 #define OBS_DIM {OBS_DIM}
@@ -224,6 +224,125 @@ __device__ float lunarlander_step_device(float* state, int action, int step) {
     return reward;
 }
 
+// ─── Swimmer constants ──────────────────────────────────────────
+#define SW_VISCOSITY 0.1f
+#define SW_SEG_LEN 0.1f
+#define SW_SEG_MASS 1.0f
+#define SW_DT 0.01f
+#define SW_FRAME_SKIP 4
+#define SW_CTRL_COST 0.0001f
+#define SW_SEG_INERTIA (SW_SEG_MASS * SW_SEG_LEN * SW_SEG_LEN / 12.0f)
+
+// state layout for Swimmer: [x, y, body_angle, j1_angle, j2_angle, vx, vy, body_angvel, j1_vel, j2_vel]
+#define SW_STATE_DIM 10
+
+__device__ float swimmer_step_device(float* state, float* actions) {
+    float x = state[0], y = state[1];
+    float body_angle = state[2];
+    float j1 = state[3], j2 = state[4];
+    float vx = state[5], vy = state[6];
+    float body_angvel = state[7];
+    float j1_vel = state[8], j2_vel = state[9];
+
+    for (int sub = 0; sub < SW_FRAME_SKIP; sub++) {
+        // Viscous drag (anisotropic: 5x more normal to segments)
+        float drag_fx = 0.0f, drag_fy = 0.0f, drag_torque = 0.0f;
+        float angles[3] = { body_angle, body_angle + j1, body_angle + j1 + j2 };
+        float ang_vels[3] = { body_angvel, body_angvel + j1_vel, body_angvel + j1_vel + j2_vel };
+
+        for (int s = 0; s < 3; s++) {
+            float ca = cosf(angles[s]), sa = sinf(angles[s]);
+            float vt = vx * ca + vy * sa;
+            float vn = -vx * sa + vy * ca;
+            float dt_f = -SW_VISCOSITY * vt * SW_SEG_LEN;
+            float dn_f = -SW_VISCOSITY * 5.0f * vn * SW_SEG_LEN;
+            drag_fx += dt_f * ca - dn_f * sa;
+            drag_fy += dt_f * sa + dn_f * ca;
+            drag_torque += -SW_VISCOSITY * 2.0f * ang_vels[s] * SW_SEG_LEN * SW_SEG_LEN;
+        }
+
+        float ax = drag_fx / (SW_SEG_MASS * 3.0f);
+        float ay = drag_fy / (SW_SEG_MASS * 3.0f);
+        float body_alpha = (drag_torque - actions[0] - actions[1]) / (SW_SEG_INERTIA * 3.0f);
+        float j1_alpha = (actions[0] + (-SW_VISCOSITY * j1_vel * SW_SEG_LEN)) / SW_SEG_INERTIA;
+        float j2_alpha = (actions[1] + (-SW_VISCOSITY * j2_vel * SW_SEG_LEN)) / SW_SEG_INERTIA;
+
+        vx += ax * SW_DT; vy += ay * SW_DT;
+        x += vx * SW_DT; y += vy * SW_DT;
+        body_angvel += body_alpha * SW_DT;
+        body_angle += body_angvel * SW_DT;
+        j1_vel += j1_alpha * SW_DT;
+        j1 += j1_vel * SW_DT;
+        j1 = fmaxf(-1.5f, fminf(1.5f, j1));
+        j2_vel += j2_alpha * SW_DT;
+        j2 += j2_vel * SW_DT;
+        j2 = fmaxf(-1.5f, fminf(1.5f, j2));
+    }
+
+    float x_before = state[0];
+    state[0] = x; state[1] = y; state[2] = body_angle;
+    state[3] = j1; state[4] = j2;
+    state[5] = vx; state[6] = vy; state[7] = body_angvel;
+    state[8] = j1_vel; state[9] = j2_vel;
+
+    float dt_ctrl = SW_DT * SW_FRAME_SKIP;
+    float forward_reward = (x - x_before) / dt_ctrl;
+    float ctrl_cost = SW_CTRL_COST * (actions[0]*actions[0] + actions[1]*actions[1]);
+    return forward_reward - ctrl_cost;
+}
+
+// ─── N-Link Pendulum step ───────────────────────────────────────
+// N_LINKS is defined via {N_LINKS} substitution (default 2)
+#ifndef N_LINKS
+#define N_LINKS 2
+#endif
+#define PEND_GRAVITY 9.81f
+#define PEND_LINK_LEN 1.0f
+#define PEND_LINK_MASS 1.0f
+#define PEND_DT 0.05f
+#define PEND_MAX_VEL 8.0f
+#define PEND_CTRL_COST 0.01f
+
+// state layout: [angles[N_LINKS], velocities[N_LINKS]]
+__device__ float pendulum_step_device(float* angles, float* vels, float* actions, int n_links) {
+    for (int i = 0; i < n_links; i++) {
+        // Gravity torque on joint i
+        float grav_torque = 0.0f;
+        for (int j = i; j < n_links; j++) {
+            float mass_below = PEND_LINK_MASS * (float)(n_links - j);
+            float angle_sum = 0.0f;
+            for (int k = 0; k <= j; k++) angle_sum += angles[k];
+            grav_torque += -mass_below * PEND_GRAVITY * PEND_LINK_LEN * sinf(angle_sum);
+        }
+
+        float inertia = PEND_LINK_MASS * PEND_LINK_LEN * PEND_LINK_LEN * (float)(n_links - i);
+        float applied = fmaxf(-1.0f, fminf(1.0f, actions[i]));
+        float damping = -0.1f * vels[i];
+        float alpha = (grav_torque + applied + damping) / inertia;
+
+        vels[i] += alpha * PEND_DT;
+        vels[i] = fmaxf(-PEND_MAX_VEL, fminf(PEND_MAX_VEL, vels[i]));
+        angles[i] += vels[i] * PEND_DT;
+    }
+
+    // Height reward
+    float height = 0.0f;
+    float cum_angle = 0.0f;
+    for (int i = 0; i < n_links; i++) {
+        cum_angle += angles[i];
+        height += PEND_LINK_LEN * cosf(cum_angle);
+    }
+    float max_h = (float)n_links * PEND_LINK_LEN;
+    float height_reward = (height + max_h) / (2.0f * max_h);
+    float vel_penalty = 0.0f;
+    float ctrl_cost = 0.0f;
+    for (int i = 0; i < n_links; i++) {
+        vel_penalty += vels[i] * vels[i] * 0.01f;
+        ctrl_cost += actions[i] * actions[i] * PEND_CTRL_COST;
+    }
+    return height_reward - vel_penalty - ctrl_cost;
+}
+
 // ─── Main kernel: one thread = one full episode ─────────────────
 extern "C" __global__ void evaluate_episodes(
     const float* __restrict__ all_params,  // [n_candidates × N_PARAMS]
@@ -260,10 +379,25 @@ extern "C" __global__ void evaluate_episodes(
         state[2] = ((float)(seed >> 33) / (float)0xFFFFFFFF * 0.1f - 0.05f) * 0.1f; // vx
         seed = seed * 6364136223846793005ULL + 1ULL;
         state[3] = ((float)(seed >> 33) / (float)0xFFFFFFFF * 0.1f - 0.05f) * 0.1f; // vy
-        state[4] = 0.0f; // angle
-        state[5] = 0.0f; // angular vel
-        state[6] = 0.0f; // leg1
-        state[7] = 0.0f; // leg2
+        state[4] = 0.0f; state[5] = 0.0f; state[6] = 0.0f; state[7] = 0.0f;
+    #elif ENV_TYPE == 2
+        // Swimmer: [x, y, body_angle, j1, j2, vx, vy, body_angvel, j1_vel, j2_vel]
+        state[0] = 0.0f; state[1] = 0.0f;
+        seed = seed * 6364136223846793005ULL + 1ULL;
+        state[2] = ((float)(seed >> 33) / (float)0xFFFFFFFF * 0.2f - 0.1f); // body_angle
+        seed = seed * 6364136223846793005ULL + 1ULL;
+        state[3] = ((float)(seed >> 33) / (float)0xFFFFFFFF * 0.2f - 0.1f); // j1
+        seed = seed * 6364136223846793005ULL + 1ULL;
+        state[4] = ((float)(seed >> 33) / (float)0xFFFFFFFF * 0.2f - 0.1f); // j2
+        state[5] = 0.0f; state[6] = 0.0f; state[7] = 0.0f; state[8] = 0.0f; state[9] = 0.0f;
+    #elif ENV_TYPE == 3
+        // N-Link Pendulum: angles start at PI (hanging down) + small perturbation
+        for (int i = 0; i < N_LINKS; i++) {
+            seed = seed * 6364136223846793005ULL + 1ULL;
+            state[i] = 3.14159265f + ((float)(seed >> 33) / (float)0xFFFFFFFF * 0.2f - 0.1f);
+            seed = seed * 6364136223846793005ULL + 1ULL;
+            state[N_LINKS + i] = ((float)(seed >> 33) / (float)0xFFFFFFFF * 0.2f - 0.1f);
+        }
     #endif
 
     float total_reward = 0.0f;
@@ -282,6 +416,25 @@ extern "C" __global__ void evaluate_episodes(
             if (r <= -10000.0f) { total_reward -= 100.0f; break; } // crashed
             if (r >= 10000.0f) { total_reward += 100.0f + (r - 10000.0f); break; } // landed
             if (r <= -20000.0f) { break; } // out of bounds
+            total_reward += r;
+        #elif ENV_TYPE == 2
+            // Swimmer: continuous action, obs = [body_angle, j1, j2, vx, vy, angvel, j1vel, j2vel]
+            float obs_sw[8] = { state[2], state[3], state[4], state[5], state[6], state[7], state[8], state[9] };
+            float actions_sw[2];
+            forward_pass_continuous(obs_sw, params, actions_sw);
+            float r = swimmer_step_device(state, actions_sw);
+            total_reward += r;
+        #elif ENV_TYPE == 3
+            // N-Link Pendulum: continuous action, obs = [cos, sin, vel per link]
+            float obs_p[OBS_DIM];
+            for (int i = 0; i < N_LINKS; i++) {
+                obs_p[3*i] = cosf(state[i]);
+                obs_p[3*i+1] = sinf(state[i]);
+                obs_p[3*i+2] = state[N_LINKS + i];
+            }
+            float actions_p[ACT_DIM];
+            forward_pass_continuous(obs_p, params, actions_p);
+            float r = pendulum_step_device(state, &state[N_LINKS], actions_p, N_LINKS);
             total_reward += r;
         #endif
     }
@@ -316,25 +469,40 @@ impl GpuEvaluator {
         let env_type = match env_name {
             "CartPole-v1" => 0,
             "LunarLander-v3" => 1,
+            "Swimmer-v1" => 2,
+            _ if env_name.starts_with("Pendulum-") && env_name.ends_with("Link") => 3,
             _ => {
                 eprintln!("⚠️ GPU eval not supported for {}", env_name);
                 return None;
             }
         };
 
+        // For N-Link Pendulum, extract N
+        let n_links: usize = if env_type == 3 {
+            env_name.strip_prefix("Pendulum-")
+                .and_then(|s| s.strip_suffix("Link"))
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(2)
+        } else { 0 };
+
         // Compile kernel with concrete dimensions
+        let max_steps_str = match env_name {
+            "CartPole-v1" => "500",
+            "LunarLander-v3" | "Swimmer-v1" => "1000",
+            _ if env_name.starts_with("Pendulum-") => {
+                if n_links <= 3 { "500" } else { "1000" }
+            }
+            _ => "1000",
+        };
         let src = FULL_EVAL_KERNEL_TEMPLATE
             .replace("{OBS_DIM}", &policy.config.obs_dim.to_string())
             .replace("{ACT_DIM}", &policy.config.act_dim.to_string())
             .replace("{H1}", &h1.to_string())
             .replace("{H2}", &h2.to_string())
             .replace("{N_PARAMS}", &policy.n_params.to_string())
-            .replace("{MAX_STEPS}", &match env_name {
-                "CartPole-v1" => "500",
-                "LunarLander-v3" => "1000",
-                _ => "1000",
-            }.to_string())
-            .replace("{ENV_TYPE}", &env_type.to_string());
+            .replace("{MAX_STEPS}", max_steps_str)
+            .replace("{ENV_TYPE}", &env_type.to_string())
+            .replace("N_LINKS 2", &format!("N_LINKS {}", if n_links > 0 { n_links } else { 2 }));
 
         let ptx = compile_ptx(&src).ok()?;
         dev.load_ptx(ptx, "eval", &["evaluate_episodes"]).ok()?;
@@ -407,10 +575,7 @@ impl GpuEvaluator {
 
 pub fn run_gpu_full_cma_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
     let env_cfg = env::get_env_config(env_name).expect("Unknown env");
-    let hidden = match env_name {
-        "CartPole-v1" => vec![32, 16],
-        _ => vec![64, 32],
-    };
+    let hidden = super::env::default_hidden(env_name);
     let max_evals = params.get("max_evals").and_then(|v| v.as_u64()).unwrap_or(100000) as usize;
     let eval_episodes = params.get("eval_episodes").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
     let sigma0 = params.get("sigma0").and_then(|v| v.as_f64()).unwrap_or(0.5);
@@ -636,10 +801,7 @@ fn cpu_evaluate_batch(
 /// Benchmark: CPU (rayon) vs GPU (full on-device)
 pub fn run_gpu_full_benchmark(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
     let env_cfg = env::get_env_config(env_name).expect("Unknown env");
-    let hidden = match env_name {
-        "CartPole-v1" => vec![32, 16],
-        _ => vec![64, 32],
-    };
+    let hidden = super::env::default_hidden(env_name);
     let n_candidates = params.get("n_candidates").and_then(|v| v.as_u64()).unwrap_or(28) as usize;
     let eval_episodes = params.get("eval_episodes").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
 

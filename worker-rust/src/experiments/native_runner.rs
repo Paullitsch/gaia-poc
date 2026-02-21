@@ -31,7 +31,7 @@ pub struct RunResult {
 }
 
 /// Supported environments.
-const SUPPORTED_ENVS: &[&str] = &["CartPole-v1", "LunarLander-v3", "BipedalWalker-v3"];
+const SUPPORTED_ENVS: &[&str] = &["CartPole-v1", "LunarLander-v3", "BipedalWalker-v3", "Swimmer-v1"];
 
 /// All methods we can run natively.
 const SUPPORTED_METHODS: &[&str] = &[
@@ -44,7 +44,9 @@ const SUPPORTED_METHODS: &[&str] = &[
 
 /// Check if we can run this job natively in Rust.
 pub fn can_run_native(method: &str, environment: &str) -> bool {
-    SUPPORTED_ENVS.contains(&environment) && SUPPORTED_METHODS.contains(&method)
+    let env_ok = SUPPORTED_ENVS.contains(&environment)
+        || (environment.starts_with("Pendulum-") && environment.ends_with("Link"));
+    env_ok && SUPPORTED_METHODS.contains(&method)
 }
 
 /// Run a job natively. Dispatches to the correct method.

@@ -18,3 +18,5 @@ pub mod native_runner;
 pub mod gpu_env;
 pub mod gpu_methods;
 pub mod gpu_eval;
+pub mod swimmer;
+pub mod n_link_pendulum;

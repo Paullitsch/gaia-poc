@@ -101,6 +101,30 @@ pub fn get_env_config(name: &str) -> Option<EnvConfig> {
             max_steps: 1600,
             solved_threshold: 300.0,
         }),
+        "Swimmer-v1" => Some(EnvConfig {
+            name: name.to_string(),
+            obs_dim: 8,
+            action_space: ActionSpace::Continuous(2),
+            max_steps: 1000,
+            solved_threshold: 360.0,
+        }),
+        _ if name.starts_with("Pendulum-") && name.ends_with("Link") => {
+            // Parse "Pendulum-NLink" format
+            let n: usize = name.strip_prefix("Pendulum-")
+                .and_then(|s| s.strip_suffix("Link"))
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(2);
+            let obs_dim = 3 * n;
+            let max_steps = if n <= 3 { 500 } else { 1000 };
+            let max_height = n as f64;
+            Some(EnvConfig {
+                name: name.to_string(),
+                obs_dim,
+                action_space: ActionSpace::Continuous(n),
+                max_steps,
+                solved_threshold: max_height * 200.0,
+            })
+        }
         _ => None,
     }
 }
@@ -111,6 +135,15 @@ pub fn default_hidden(name: &str) -> Vec<usize> {
         "CartPole-v1" => vec![32, 16],
         "LunarLander-v3" => vec![64, 32],
         "BipedalWalker-v3" | "BipedalWalkerHardcore-v3" => vec![128, 64],
+        "Swimmer-v1" => vec![64, 32],
+        _ if name.starts_with("Pendulum-") => {
+            // Scale hidden layers with number of links
+            let n: usize = name.strip_prefix("Pendulum-")
+                .and_then(|s| s.strip_suffix("Link"))
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(2);
+            if n <= 3 { vec![64, 32] } else { vec![128, 64] }
+        }
         _ => vec![64, 32],
     }
 }
@@ -121,6 +154,14 @@ pub fn make(name: &str, seed: Option<u64>) -> Option<Box<dyn Environment>> {
         "CartPole-v1" => Some(Box::new(cartpole::CartPole::new(seed))),
         "LunarLander-v3" => Some(Box::new(super::lunar_lander::LunarLander::new(seed))),
         "BipedalWalker-v3" => Some(Box::new(super::bipedal_walker::BipedalWalker::new(seed))),
+        "Swimmer-v1" => Some(Box::new(super::swimmer::Swimmer::new(seed))),
+        _ if name.starts_with("Pendulum-") && name.ends_with("Link") => {
+            let n: usize = name.strip_prefix("Pendulum-")
+                .and_then(|s| s.strip_suffix("Link"))
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(2);
+            Some(Box::new(super::n_link_pendulum::NLinkPendulum::new(n, seed)))
+        }
         _ => None,
     }
 }

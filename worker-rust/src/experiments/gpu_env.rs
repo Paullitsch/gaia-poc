@@ -115,6 +115,16 @@ impl GpuVecEnv {
         let (obs_dim, act_dim, max_steps, state_dim) = match env_name {
             "CartPole-v1" => (CP_OBS_DIM, 2, CP_MAX_STEPS, CP_STATE_DIM),
             "LunarLander-v3" => (LL_OBS_DIM, 4, LL_MAX_STEPS, LL_STATE_DIM),
+            "Swimmer-v1" => (8, 2, 1000, 10), // [x,y,body_angle,j1,j2,vx,vy,angvel,j1vel,j2vel]
+            _ if env_name.starts_with("Pendulum-") && env_name.ends_with("Link") => {
+                let n: usize = env_name.strip_prefix("Pendulum-")
+                    .and_then(|s| s.strip_suffix("Link"))
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(2);
+                let obs = 3 * n; // cos, sin, vel per link
+                let max_s = if n <= 3 { 500 } else { 1000 };
+                (obs, n, max_s, 2 * n) // state = angles + velocities
+            }
             _ => panic!("GPU env not supported: {}", env_name),
         };
 
