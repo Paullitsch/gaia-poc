@@ -157,6 +157,73 @@ __device__ float cartpole_step_device(float* state, int action) {
     return terminated ? -1.0f : 1.0f; // -1 = done, reward = 1.0 per step
 }
 
+// ─── LunarLander constants ──────────────────────────────────────
+#define LL_GRAVITY -10.0f
+#define LL_MAIN_POWER 13.0f
+#define LL_SIDE_POWER 0.6f
+#define LL_FPS 50.0f
+#define LL_INITIAL_Y 1.4f
+
+// ─── LunarLander step ──────────────────────────────────────────
+// state: [x, y, vx, vy, angle, ang_vel, leg1, leg2]
+// Returns: reward (negative = done with crash penalty)
+__device__ float lunarlander_step_device(float* state, int action, int step) {
+    float x = state[0], y = state[1];
+    float vx = state[2], vy = state[3];
+    float angle = state[4], ang_vel = state[5];
+    float dt = 1.0f / LL_FPS;
+
+    // Gravity
+    vy += LL_GRAVITY / LL_FPS;
+
+    // Engine forces
+    if (action == 2) { // main engine
+        vx += -sinf(angle) * LL_MAIN_POWER / LL_FPS;
+        vy +=  cosf(angle) * LL_MAIN_POWER / LL_FPS;
+    } else if (action == 1) { // left engine
+        ang_vel -= LL_SIDE_POWER / LL_FPS;
+        vx += cosf(angle) * LL_SIDE_POWER * 0.1f / LL_FPS;
+    } else if (action == 3) { // right engine
+        ang_vel += LL_SIDE_POWER / LL_FPS;
+        vx -= cosf(angle) * LL_SIDE_POWER * 0.1f / LL_FPS;
+    }
+
+    // Integrate
+    x += vx * dt;
+    y += vy * dt;
+    angle += ang_vel * dt;
+
+    // Ground collision
+    float leg1 = 0.0f, leg2 = 0.0f;
+    if (y <= 0.0f) {
+        y = 0.0f; vy = 0.0f;
+        vx *= 0.5f; ang_vel *= 0.5f;
+        leg1 = 1.0f; leg2 = 1.0f;
+    }
+
+    state[0] = x; state[1] = y; state[2] = vx; state[3] = vy;
+    state[4] = angle; state[5] = ang_vel; state[6] = leg1; state[7] = leg2;
+
+    // Reward (Gymnasium-style shaping)
+    float shaping = -100.0f * sqrtf(x*x + y*y)
+                   - 100.0f * sqrtf(vx*vx + vy*vy)
+                   - 100.0f * fabsf(angle)
+                   + 10.0f * leg1 + 10.0f * leg2;
+    float fuel = (action == 2) ? -0.3f : ((action == 1 || action == 3) ? -0.03f : 0.0f);
+    float reward = shaping / 100.0f + fuel;
+
+    // Terminal conditions
+    int crashed = (y <= 0.0f) && (fabsf(vx) > 0.5f || fabsf(angle) > 0.5f);
+    int landed = (y <= 0.0f) && (fabsf(vx) < 0.1f) && (fabsf(angle) < 0.1f);
+    int oob = (fabsf(x) > 1.5f) || (y > 2.0f);
+
+    if (crashed) return -10000.0f; // signal: done + -100 penalty
+    if (landed) return 10000.0f + reward; // signal: done + +100 bonus
+    if (oob) return -20000.0f; // signal: done, no extra penalty
+
+    return reward;
+}
+
 // ─── Main kernel: one thread = one full episode ─────────────────
 extern "C" __global__ void evaluate_episodes(
     const float* __restrict__ all_params,  // [n_candidates × N_PARAMS]
@@ -170,7 +237,6 @@ extern "C" __global__ void evaluate_episodes(
     if (global_idx >= total) return;
 
     int cand_idx = global_idx / n_episodes;
-    int ep_idx = global_idx % n_episodes;
 
     const float* params = &all_params[cand_idx * N_PARAMS];
 
@@ -178,12 +244,27 @@ extern "C" __global__ void evaluate_episodes(
     float state[OBS_DIM];
     unsigned long long seed = base_seed + (unsigned long long)global_idx * 12345ULL + 1ULL;
 
-    // Reset: small random values in [-0.05, 0.05]
-    for (int i = 0; i < OBS_DIM; i++) {
+    #if ENV_TYPE == 0
+        // CartPole: small random init
+        for (int i = 0; i < OBS_DIM; i++) {
+            seed = seed * 6364136223846793005ULL + 1ULL;
+            float val = (float)(seed >> 33) / (float)0xFFFFFFFF;
+            state[i] = val * 0.1f - 0.05f;
+        }
+    #elif ENV_TYPE == 1
+        // LunarLander: specific init
         seed = seed * 6364136223846793005ULL + 1ULL;
-        float val = (float)(seed >> 33) / (float)0xFFFFFFFF;
-        state[i] = val * 0.1f - 0.05f;
-    }
+        state[0] = ((float)(seed >> 33) / (float)0xFFFFFFFF * 0.1f - 0.05f) * 0.1f; // x
+        state[1] = LL_INITIAL_Y;  // y
+        seed = seed * 6364136223846793005ULL + 1ULL;
+        state[2] = ((float)(seed >> 33) / (float)0xFFFFFFFF * 0.1f - 0.05f) * 0.1f; // vx
+        seed = seed * 6364136223846793005ULL + 1ULL;
+        state[3] = ((float)(seed >> 33) / (float)0xFFFFFFFF * 0.1f - 0.05f) * 0.1f; // vy
+        state[4] = 0.0f; // angle
+        state[5] = 0.0f; // angular vel
+        state[6] = 0.0f; // leg1
+        state[7] = 0.0f; // leg2
+    #endif
 
     float total_reward = 0.0f;
 
@@ -194,6 +275,14 @@ extern "C" __global__ void evaluate_episodes(
             float r = cartpole_step_device(state, action);
             if (r < 0.0f) break; // terminated
             total_reward += 1.0f;
+        #elif ENV_TYPE == 1
+            // LunarLander: discrete action
+            int action = forward_pass_discrete(state, params);
+            float r = lunarlander_step_device(state, action, step);
+            if (r <= -10000.0f) { total_reward -= 100.0f; break; } // crashed
+            if (r >= 10000.0f) { total_reward += 100.0f + (r - 10000.0f); break; } // landed
+            if (r <= -20000.0f) { break; } // out of bounds
+            total_reward += r;
         #endif
     }
 
@@ -226,7 +315,7 @@ impl GpuEvaluator {
 
         let env_type = match env_name {
             "CartPole-v1" => 0,
-            // "LunarLander-v3" => 1,
+            "LunarLander-v3" => 1,
             _ => {
                 eprintln!("⚠️ GPU eval not supported for {}", env_name);
                 return None;
@@ -404,6 +493,113 @@ pub fn run_gpu_full_cma_es(env_name: &str, params: &Value, mut on_gen: impl FnMu
         environment: env_name.into(), best_ever,
         final_mean: best_ever, final_std: 0.0,
         total_evals, generations: cma.gen,
+        elapsed: start.elapsed().as_secs_f64(), solved: best_ever >= solved,
+    }
+}
+
+// ─── GPU OpenAI-ES (full on-device) ─────────────────────────────
+
+pub fn run_gpu_full_openai_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)) -> RunResult {
+    let env_cfg = env::get_env_config(env_name).expect("Unknown env");
+    let hidden = if let Some(h) = params.get("hidden").and_then(|v| v.as_array()) {
+        h.iter().filter_map(|v| v.as_u64().map(|n| n as usize)).collect()
+    } else {
+        env::default_hidden(env_name)
+    };
+    let max_evals = params.get("max_evals").and_then(|v| v.as_u64()).unwrap_or(100000) as usize;
+    let eval_episodes = params.get("eval_episodes").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
+    let pop_size = params.get("pop_size").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+    let lr = params.get("lr").and_then(|v| v.as_f64()).unwrap_or(0.02);
+    let noise_std = params.get("noise_std").and_then(|v| v.as_f64()).unwrap_or(0.1);
+    let weight_decay = params.get("weight_decay").and_then(|v| v.as_f64()).unwrap_or(0.0);
+
+    let policy = Policy::new(env_cfg.obs_dim, env_cfg.action_space.size(), &hidden, env_cfg.action_space);
+    let n = policy.n_params;
+    let solved = env_cfg.solved_threshold;
+
+    #[cfg(feature = "cuda")]
+    let gpu_eval = super::gpu_eval::GpuEvaluator::new(env_name, &policy, eval_episodes);
+    #[cfg(not(feature = "cuda"))]
+    let gpu_eval: Option<()> = None;
+
+    let using_gpu = gpu_eval.is_some();
+    eprintln!("🦀{} Full OpenAI-ES on {} | {} params | pop={} | GPU={}",
+        if using_gpu { "🚀" } else { "💻" }, env_name, n, pop_size, using_gpu);
+
+    let mut rng = OptRng::new(42);
+    let mut theta: Vec<f64> = (0..n).map(|_| rng.randn() * 0.1).collect();
+
+    let mut best_ever = f64::NEG_INFINITY;
+    let mut best_params: Option<Vec<f64>> = None;
+    let mut total_evals = 0usize;
+    let mut gen = 0usize;
+    let start = Instant::now();
+
+    while total_evals < max_evals {
+        gen += 1;
+
+        let epsilons: Vec<Vec<f64>> = (0..pop_size).map(|_| rng.randn_vec(n)).collect();
+
+        // Build all candidates
+        let mut all_candidates: Vec<Vec<f64>> = Vec::with_capacity(pop_size * 2);
+        for eps in &epsilons {
+            let plus: Vec<f64> = (0..n).map(|i| theta[i] + noise_std * eps[i]).collect();
+            let minus: Vec<f64> = (0..n).map(|i| theta[i] - noise_std * eps[i]).collect();
+            all_candidates.push(plus);
+            all_candidates.push(minus);
+        }
+
+        let all_fitnesses = {
+            #[cfg(feature = "cuda")]
+            {
+                if let Some(ref eval) = gpu_eval {
+                    eval.evaluate_batch(&all_candidates)
+                } else {
+                    cpu_evaluate_batch(env_name, &all_candidates, &policy, eval_episodes, env_cfg.max_steps)
+                }
+            }
+            #[cfg(not(feature = "cuda"))]
+            {
+                cpu_evaluate_batch(env_name, &all_candidates, &policy, eval_episodes, env_cfg.max_steps)
+            }
+        };
+
+        total_evals += pop_size * 2 * eval_episodes;
+
+        let ranks = compute_centered_ranks(&all_fitnesses);
+        let mut grad = vec![0.0f64; n];
+        for (i, eps) in epsilons.iter().enumerate() {
+            let rank_diff = ranks[2 * i] - ranks[2 * i + 1];
+            for j in 0..n {
+                grad[j] += rank_diff * eps[j];
+            }
+        }
+
+        for j in 0..n {
+            theta[j] = theta[j] * (1.0 - weight_decay)
+                + lr / (pop_size as f64 * noise_std) * grad[j];
+        }
+
+        let gen_best = all_fitnesses.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let gen_mean = all_fitnesses.iter().sum::<f64>() / all_fitnesses.len() as f64;
+        if gen_best > best_ever {
+            best_ever = gen_best;
+            best_params = Some(theta.clone());
+        }
+
+        on_gen(GenResult {
+            generation: gen, best: gen_best, best_ever, mean: gen_mean,
+            sigma: noise_std, evals: total_evals, time: start.elapsed().as_secs_f64(),
+        });
+
+        if best_ever >= solved { break; }
+    }
+
+    RunResult {
+        method: if using_gpu { "GPU-Full-OpenAI-ES" } else { "CPU-OpenAI-ES" }.into(),
+        environment: env_name.into(), best_ever,
+        final_mean: best_ever, final_std: 0.0,
+        total_evals, generations: gen,
         elapsed: start.elapsed().as_secs_f64(), solved: best_ever >= solved,
     }
 }
