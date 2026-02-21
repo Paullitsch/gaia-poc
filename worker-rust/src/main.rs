@@ -56,6 +56,14 @@ struct Cli {
     /// Max evals for benchmark
     #[arg(long, default_value = "100000")]
     bench_evals: usize,
+
+    /// Enable CUDA auto-update: git pull + cargo build --release --features cuda
+    #[arg(long, default_value = "false")]
+    cuda_auto_update: bool,
+
+    /// Path to git repo root (for --cuda-auto-update)
+    #[arg(long)]
+    repo_path: Option<String>,
 }
 
 #[tokio::main]
@@ -105,6 +113,8 @@ async fn main() -> Result<()> {
     };
 
     let auto_update = cli.auto_update;
+    let cuda_auto_update = cli.cuda_auto_update;
+    let repo_path = cli.repo_path.clone();
     let sync_experiments = cli.sync_experiments;
     tracing::info!(
         worker = %cfg.worker_name, 
@@ -164,8 +174,21 @@ async fn main() -> Result<()> {
             break;
         }
 
-        // Auto-update check via heartbeat
-        if auto_update {
+        // CUDA auto-update: git pull + cargo build + restart
+        if cuda_auto_update {
+            if let Some(ref rp) = repo_path {
+                match updater::cuda_build_update(rp).await {
+                    Ok(true) => {
+                        updater::restart_from_source(rp);
+                    }
+                    Ok(false) => {} // no new commits
+                    Err(e) => tracing::warn!("CUDA auto-update check failed: {e}"),
+                }
+            }
+        }
+
+        // Auto-update check via heartbeat (binary download)
+        if auto_update && !cuda_auto_update {
             match client.heartbeat(&worker_id).await {
                 Ok((Some(latest_version), _force)) => {
                     if updater::is_newer(&latest_version, updater::VERSION) {

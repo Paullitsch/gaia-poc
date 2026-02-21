@@ -68,8 +68,7 @@ pub fn run_cancellable(
 ) -> RunResult {
     // Inject max_evals=1 into params when cancelled to make the loop exit
     use std::sync::atomic::Ordering;
-    let mut hacked_params = params.clone();
-    dispatch(method, env_name, &hacked_params, |gr| {
+    dispatch(method, env_name, params, |gr| {
         on_gen(gr);
         // After sending result, check cancel. If set, the next iteration
         // will see max_evals exceeded because we can't modify the running method.

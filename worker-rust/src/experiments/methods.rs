@@ -7,7 +7,7 @@
 //! - Neuromod: Our Python implementation (Hebbian + modulation network)
 //! - Meta-Learning: Najarro & Risi 2020 (github.com/enajx/HebbianMetaLearning)
 
-use super::env::{self, Environment};
+use super::env::{self};
 use super::policy::Policy;
 use super::optim::{CmaEs, Rng as OptRng, compute_centered_ranks};
 use super::native_runner::{GenResult, RunResult};
@@ -35,6 +35,60 @@ fn evaluate(env_name: &str, policy: &Policy, params: &[f32], n_episodes: usize, 
         total += ep_reward;
     }
     total / n_episodes as f64
+}
+
+// ─── GPU-aware batch evaluation ───────────────────────────────────────
+
+/// Check if GPU full-episode evaluation is available for this environment.
+#[cfg(feature = "cuda")]
+fn try_gpu_evaluator(env_name: &str, policy: &Policy, n_episodes: usize) -> Option<super::gpu_eval::GpuEvaluator> {
+    match env_name {
+        "CartPole-v1" | "LunarLander-v3" => super::gpu_eval::GpuEvaluator::new(env_name, policy, n_episodes),
+        _ => None, // BipedalWalker: Box2D too complex for GPU
+    }
+}
+
+/// Wrapper that creates and caches GPU evaluator for batch evaluation.
+struct SmartEvaluator {
+    #[cfg(feature = "cuda")]
+    gpu: Option<super::gpu_eval::GpuEvaluator>,
+    env_name: String,
+    n_episodes: usize,
+    max_steps: usize,
+}
+
+impl SmartEvaluator {
+    fn new(env_name: &str, _policy: &Policy, n_episodes: usize, max_steps: usize) -> Self {
+        #[cfg(feature = "cuda")]
+        let gpu = try_gpu_evaluator(env_name, _policy, n_episodes);
+        SmartEvaluator {
+            #[cfg(feature = "cuda")]
+            gpu,
+            env_name: env_name.to_string(),
+            n_episodes,
+            max_steps,
+        }
+    }
+
+    fn is_gpu(&self) -> bool {
+        #[cfg(feature = "cuda")]
+        { self.gpu.is_some() }
+        #[cfg(not(feature = "cuda"))]
+        { false }
+    }
+
+    fn evaluate_batch(&self, candidates: &[Vec<f64>], policy: &Policy) -> Vec<f64> {
+        #[cfg(feature = "cuda")]
+        {
+            if let Some(ref eval) = self.gpu {
+                return eval.evaluate_batch(candidates);
+            }
+        }
+        candidates.par_iter().map(|c| {
+            let pf32: Vec<f32> = c.iter().map(|&v| v as f32).collect();
+            evaluate(&self.env_name, policy, &pf32, self.n_episodes, self.max_steps)
+        }).collect()
+    }
 }
 
 /// Evaluate with Hebbian neuromodulation (within-episode learning).
@@ -335,9 +389,11 @@ pub fn run_cma_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResu
     let solved = env_cfg.solved_threshold;
 
     let patience = params.get("patience").and_then(|v| v.as_u64()).unwrap_or(200) as usize;
+    let evaluator = SmartEvaluator::new(env_name, &policy, eval_episodes, max_steps);
 
-    eprintln!("🦀 CMA-ES on {} | {} params | pop={} | patience={} | full_cov={}",
-        env_name, policy.n_params, cma.pop_size, patience, !cma.use_diagonal);
+    eprintln!("🦀{} CMA-ES on {} | {} params | pop={} | patience={} | full_cov={} | GPU={}",
+        if evaluator.is_gpu() { "🚀" } else { "" },
+        env_name, policy.n_params, cma.pop_size, patience, !cma.use_diagonal, evaluator.is_gpu());
 
     let mut best_ever = f64::NEG_INFINITY;
     let mut best_params: Option<Vec<f64>> = None;
@@ -348,11 +404,7 @@ pub fn run_cma_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResu
 
     while total_evals < max_evals {
         let candidates = cma.ask();
-        let fitnesses: Vec<f64> = candidates.par_iter()
-            .map(|c| {
-                let pf32: Vec<f32> = c.iter().map(|&v| v as f32).collect();
-                evaluate(env_name, &policy, &pf32, eval_episodes, max_steps)
-            }).collect();
+        let fitnesses = evaluator.evaluate_batch(&candidates, &policy);
 
         total_evals += candidates.len() * eval_episodes;
         cma.tell(&candidates, &fitnesses);
@@ -410,8 +462,11 @@ pub fn run_openai_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenR
     let noise_std = params.get("noise_std").and_then(|v| v.as_f64()).unwrap_or(0.1);
     let weight_decay = params.get("weight_decay").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
-    eprintln!("🦀 OpenAI-ES on {} | {} params | pop={} | lr={} | σ={} | wd={}",
-        env_name, n, pop_size, lr, noise_std, weight_decay);
+    let evaluator = SmartEvaluator::new(env_name, &policy, eval_episodes, max_steps);
+
+    eprintln!("🦀{} OpenAI-ES on {} | {} params | pop={} | lr={} | σ={} | wd={} | GPU={}",
+        if evaluator.is_gpu() { "🚀" } else { "" },
+        env_name, n, pop_size, lr, noise_std, weight_decay, evaluator.is_gpu());
 
     // Initialize theta with small random values (matching Python: randn * 0.1)
     let mut rng = OptRng::new(42);
@@ -429,24 +484,20 @@ pub fn run_openai_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenR
         // Generate perturbations
         let epsilons: Vec<Vec<f64>> = (0..pop_size).map(|_| rng.randn_vec(n)).collect();
 
-        // Evaluate positive and negative perturbations
-        let fitnesses: Vec<(f64, f64)> = epsilons.par_iter().map(|eps| {
-            let plus: Vec<f32> = (0..n).map(|i| (theta[i] + noise_std * eps[i]) as f32).collect();
-            let minus: Vec<f32> = (0..n).map(|i| (theta[i] - noise_std * eps[i]) as f32).collect();
-            let fp = evaluate(env_name, &policy, &plus, eval_episodes, max_steps);
-            let fm = evaluate(env_name, &policy, &minus, eval_episodes, max_steps);
-            (fp, fm)
-        }).collect();
+        // Build ALL candidates (positive + negative perturbations)
+        let mut all_candidates: Vec<Vec<f64>> = Vec::with_capacity(pop_size * 2);
+        for eps in &epsilons {
+            let plus: Vec<f64> = (0..n).map(|i| theta[i] + noise_std * eps[i]).collect();
+            let minus: Vec<f64> = (0..n).map(|i| theta[i] - noise_std * eps[i]).collect();
+            all_candidates.push(plus);
+            all_candidates.push(minus);
+        }
+
+        // Evaluate ALL at once (GPU batch or rayon)
+        let all_rewards = evaluator.evaluate_batch(&all_candidates, &policy);
 
         total_evals += pop_size * 2 * eval_episodes;
 
-        // ── Rank-based fitness shaping (from OpenAI's reference) ──
-        // Collect all 2*pop_size rewards, compute centered ranks
-        let mut all_rewards: Vec<f64> = Vec::with_capacity(pop_size * 2);
-        for (fp, fm) in &fitnesses {
-            all_rewards.push(*fp);
-            all_rewards.push(*fm);
-        }
         let ranks = compute_centered_ranks(&all_rewards);
         // ranks[2*i] = rank of plus perturbation i
         // ranks[2*i+1] = rank of minus perturbation i
@@ -497,6 +548,11 @@ pub fn run_curriculum(env_name: &str, params: &Value, mut on_gen: impl FnMut(Gen
     let mut cma = CmaEs::new(policy.n_params, sigma0, None);
     let max_steps = env_cfg.max_steps;
     let solved = env_cfg.solved_threshold;
+
+    // Note: Curriculum uses varying max_steps, so GPU evaluator uses fixed max_steps
+    // and curriculum adjusts episode length. GPU eval runs full episodes anyway,
+    // so we use CPU for curriculum to get proper step limiting.
+    // TODO: Add max_steps parameter to GpuEvaluator for curriculum support.
 
     eprintln!("🦀 Curriculum CMA-ES on {} | {} params | full_cov={}", env_name, policy.n_params, !cma.use_diagonal);
 
@@ -569,7 +625,8 @@ pub fn run_neuromod(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenRe
     let max_steps = env_cfg.max_steps;
     let solved = env_cfg.solved_threshold;
 
-    eprintln!("🦀 Neuromod CMA-ES on {} | {} weight + {} mod + {} plast = {} total | full_cov={}",
+    // TODO: Neuromod uses within-episode Hebbian plasticity. Can't batch on GPU.
+    eprintln!("🦀 Neuromod CMA-ES on {} | {} weight + {} mod + {} plast = {} total | full_cov={} | GPU=false (Hebbian)",
         env_name, policy.n_params, mod_net.n_params, n_layers, total_params, !cma.use_diagonal);
 
     let mut best_ever = f64::NEG_INFINITY;
@@ -629,8 +686,11 @@ pub fn run_island_model(env_name: &str, params: &Value, mut on_gen: impl FnMut(G
     let n_islands = params.get("n_islands").and_then(|v| v.as_u64()).unwrap_or(4) as usize;
     let migration_interval = params.get("migration_interval").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
 
-    eprintln!("🦀 Island Model on {} | {} islands | migrate every {} gens",
-        env_name, n_islands, migration_interval);
+    let evaluator = SmartEvaluator::new(env_name, &policy, eval_episodes, max_steps);
+
+    eprintln!("🦀{} Island Model on {} | {} islands | migrate every {} gens | GPU={}",
+        if evaluator.is_gpu() { "🚀" } else { "" },
+        env_name, n_islands, migration_interval, evaluator.is_gpu());
 
     let mut islands: Vec<CmaEs> = (0..n_islands)
         .map(|i| {
@@ -653,21 +713,37 @@ pub fn run_island_model(env_name: &str, params: &Value, mut on_gen: impl FnMut(G
         gen += 1;
         let mut island_results: Vec<(f64, Vec<f64>, f64)> = Vec::new();
 
+        // Collect ALL candidates from ALL islands for one big batch eval
+        let mut all_candidates: Vec<Vec<f64>> = Vec::new();
+        let mut island_pop_sizes: Vec<usize> = Vec::new();
+        let mut island_candidates: Vec<Vec<Vec<f64>>> = Vec::new();
+
         for island in &mut islands {
             let candidates = island.ask();
-            let fitnesses: Vec<f64> = candidates.par_iter()
-                .map(|c| {
-                    let pf32: Vec<f32> = c.iter().map(|&v| v as f32).collect();
-                    evaluate(env_name, &policy, &pf32, eval_episodes, max_steps)
-                }).collect();
+            island_pop_sizes.push(candidates.len());
+            all_candidates.extend(candidates.iter().cloned());
+            island_candidates.push(candidates);
+        }
 
-            total_evals += candidates.len() * eval_episodes;
-            island.tell(&candidates, &fitnesses);
+        // Single batch eval for ALL islands
+        let all_fitnesses = evaluator.evaluate_batch(&all_candidates, &policy);
+        total_evals += all_candidates.len() * eval_episodes;
+
+        // Split results back to islands
+        let mut offset = 0;
+        for (island_idx, island) in islands.iter_mut().enumerate() {
+            let pop = island_pop_sizes[island_idx];
+            let fitnesses = &all_fitnesses[offset..offset + pop];
+            let candidates = &island_candidates[island_idx];
+
+            island.tell(candidates, fitnesses);
 
             let gen_best = fitnesses.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
             let idx = fitnesses.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()).unwrap().0;
             let gen_mean = fitnesses.iter().sum::<f64>() / fitnesses.len() as f64;
             island_results.push((gen_best, candidates[idx].clone(), gen_mean));
+
+            offset += pop;
         }
 
         for (score, params_vec, _) in &island_results {
@@ -719,7 +795,11 @@ pub fn run_meta_learning(env_name: &str, params: &Value, mut on_gen: impl FnMut(
     let max_steps = env_cfg.max_steps;
     let solved = env_cfg.solved_threshold;
 
-    eprintln!("🦀 Meta-Learning on {} | {} weights + {} rule = {} genome | full_cov={}",
+    // TODO: Meta-Learning uses within-episode weight modification (Hebbian learning),
+    // which requires per-step weight updates. This can't be batched on GPU.
+    // Future: consider GPU kernel that includes Hebbian updates in the episode loop.
+
+    eprintln!("🦀 Meta-Learning on {} | {} weights + {} rule = {} genome | full_cov={} | GPU=false (Hebbian)",
         env_name, policy.n_params, rule_params, total_params, !cma.use_diagonal);
 
     let mut best_ever = f64::NEG_INFINITY;

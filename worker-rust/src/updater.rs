@@ -188,6 +188,115 @@ pub async fn sync_experiments(
     Ok(true)
 }
 
+/// CUDA auto-update: git pull → cargo build → restart with new binary.
+/// Used when worker is built locally from source with --features cuda.
+pub async fn cuda_build_update(repo_path: &str) -> Result<bool> {
+    let repo = std::path::Path::new(repo_path);
+    if !repo.join(".git").exists() {
+        anyhow::bail!("Not a git repository: {}", repo_path);
+    }
+
+    tracing::info!(repo = %repo_path, "CUDA auto-update: checking for changes...");
+
+    // git fetch
+    let fetch = tokio::process::Command::new("git")
+        .args(["fetch", "origin"])
+        .current_dir(repo)
+        .output()
+        .await
+        .context("git fetch failed")?;
+    if !fetch.status.success() {
+        anyhow::bail!("git fetch failed: {}", String::from_utf8_lossy(&fetch.stderr));
+    }
+
+    // Check if there are new commits
+    let _status = tokio::process::Command::new("git")
+        .args(["status", "-uno", "--porcelain"])
+        .current_dir(repo)
+        .output()
+        .await
+        .context("git status failed")?;
+
+    let diff = tokio::process::Command::new("git")
+        .args(["rev-list", "HEAD..origin/main", "--count"])
+        .current_dir(repo)
+        .output()
+        .await
+        .context("git rev-list failed")?;
+    let new_commits = String::from_utf8_lossy(&diff.stdout).trim().parse::<u64>().unwrap_or(0);
+
+    if new_commits == 0 {
+        tracing::debug!("No new commits on origin/main");
+        return Ok(false);
+    }
+
+    tracing::info!(new_commits = new_commits, "New commits found — pulling and building");
+
+    // git pull
+    let pull = tokio::process::Command::new("git")
+        .args(["pull", "origin", "main"])
+        .current_dir(repo)
+        .output()
+        .await
+        .context("git pull failed")?;
+    if !pull.status.success() {
+        anyhow::bail!("git pull failed: {}", String::from_utf8_lossy(&pull.stderr));
+    }
+    tracing::info!("git pull successful");
+
+    // cargo build --release --features cuda
+    tracing::info!("Building with CUDA... (this may take a while)");
+    let build = tokio::process::Command::new("cargo")
+        .args(["build", "--release", "--features", "cuda"])
+        .current_dir(repo.join("worker-rust"))
+        .output()
+        .await
+        .context("cargo build failed")?;
+    if !build.status.success() {
+        anyhow::bail!("cargo build failed: {}", String::from_utf8_lossy(&build.stderr));
+    }
+    tracing::info!("Build successful!");
+
+    // The new binary is at target/release/gaia-worker
+    let new_binary = repo.join("worker-rust/target/release/gaia-worker");
+    if !new_binary.exists() {
+        // Try repo root target dir
+        let alt = repo.join("target/release/gaia-worker");
+        if !alt.exists() {
+            anyhow::bail!("Built binary not found at {:?} or {:?}", new_binary, alt);
+        }
+    }
+
+    tracing::info!("CUDA build update complete — restarting");
+    Ok(true)
+}
+
+/// Restart using the binary built from source (not the current exe).
+pub fn restart_from_source(repo_path: &str) -> ! {
+    let binary = std::path::Path::new(repo_path)
+        .join("worker-rust/target/release/gaia-worker");
+    let binary = if binary.exists() {
+        binary
+    } else {
+        std::path::Path::new(repo_path).join("target/release/gaia-worker")
+    };
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    tracing::info!("Restarting from source build: {:?} {:?}", binary, args);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let err = std::process::Command::new(&binary).args(&args).exec();
+        panic!("Failed to exec: {err}");
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new(&binary).args(&args).spawn();
+        std::process::exit(0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
