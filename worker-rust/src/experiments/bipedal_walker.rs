@@ -328,13 +328,15 @@ impl BipedalWalker {
         }
 
         // Get joint angles and speeds
+        // IMPORTANT: joint_speed() = actual angular velocity (GetJointSpeed)
+        // NOT motor_speed() which is the target speed we set (GetMotorSpeed)
         let mut joint_angles = [0.0f32; 4];
         let mut joint_speeds = [0.0f32; 4];
         for i in 0..4 {
             let jref = self.world.joint(self.joints[i]);
             if let UnknownJoint::Revolute(ref rj) = **jref {
                 joint_angles[i] = rj.joint_angle();
-                joint_speeds[i] = rj.motor_speed();
+                joint_speeds[i] = rj.joint_speed(); // actual velocity, not motor target!
             }
         }
 
