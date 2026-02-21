@@ -401,10 +401,13 @@ pub fn run_openai_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenR
     let max_steps = env_cfg.max_steps;
     let solved = env_cfg.solved_threshold;
 
-    // Defaults matched to Python/OpenAI reference implementation
+    // Defaults: OpenAI paper used noise=0.02 with 720 workers and 1M+ params.
+    // For our smaller networks (722-2788 params) and fewer workers (50),
+    // noise_std must be larger to produce behavioral diversity.
+    // Scale noise inversely with sqrt(pop_size) to maintain gradient quality.
     let pop_size = params.get("pop_size").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
-    let lr = params.get("lr").and_then(|v| v.as_f64()).unwrap_or(0.01);
-    let noise_std = params.get("noise_std").and_then(|v| v.as_f64()).unwrap_or(0.02);
+    let lr = params.get("lr").and_then(|v| v.as_f64()).unwrap_or(0.02);
+    let noise_std = params.get("noise_std").and_then(|v| v.as_f64()).unwrap_or(0.1);
     let weight_decay = params.get("weight_decay").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
     eprintln!("🦀 OpenAI-ES on {} | {} params | pop={} | lr={} | σ={} | wd={}",
