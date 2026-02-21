@@ -179,40 +179,72 @@ impl Swimmer {
         // Apply motor gear (MuJoCo: gear="150")
         let torques = [actions[0] * MOTOR_GEAR, actions[1] * MOTOR_GEAR];
 
-        let segments = self.get_segment_info();
-
-        // ── Viscous drag forces on each segment ──
-        // MuJoCo drag: F = -viscosity * density * area * velocity
-        // For capsule: cross-sectional area ≈ diameter * length (normal) or radius*2 (tangential)
         let drag_coeff = VISCOSITY * FLUID_DENSITY;
+        let area_normal = 2.0 * SEGMENT_RADIUS * SEGMENT_LENGTH;
+        let area_tangential = std::f32::consts::PI * SEGMENT_RADIUS * SEGMENT_RADIUS;
+
+        // ── Compute segment centers and per-segment velocities ──
+        // Each segment has velocity = CoM velocity + angular contribution
+        // Segment i center position relative to body origin:
+        //   r_i = sum of previous segment endpoints
+        // Segment i angular velocity = body_angvel + sum(joint_vels[0..i])
+
+        let mut seg_angles = [0.0f32; N_SEGMENTS];
+        let mut seg_ang_vels = [0.0f32; N_SEGMENTS];
+        seg_angles[0] = self.body_angle;
+        seg_ang_vels[0] = self.body_angular_vel;
+        for i in 1..N_SEGMENTS {
+            seg_angles[i] = seg_angles[i - 1] + self.joint_angles[i - 1];
+            seg_ang_vels[i] = seg_ang_vels[i - 1] + self.joint_vels[i - 1];
+        }
+
+        // Compute center of each segment relative to body origin
+        let mut seg_cx = [0.0f32; N_SEGMENTS];
+        let mut seg_cy = [0.0f32; N_SEGMENTS];
+        let mut tip_x = 0.0f32; // running endpoint
+        let mut tip_y = 0.0f32;
+        for i in 0..N_SEGMENTS {
+            let half = SEGMENT_LENGTH * 0.5;
+            seg_cx[i] = tip_x + half * seg_angles[i].cos();
+            seg_cy[i] = tip_y + half * seg_angles[i].sin();
+            tip_x += SEGMENT_LENGTH * seg_angles[i].cos();
+            tip_y += SEGMENT_LENGTH * seg_angles[i].sin();
+        }
+
+        // Center of mass (all segments same mass)
+        let com_x: f32 = seg_cx.iter().sum::<f32>() / N_SEGMENTS as f32;
+        let com_y: f32 = seg_cy.iter().sum::<f32>() / N_SEGMENTS as f32;
+
+        // Per-segment velocity = CoM velocity + omega_i × (r_i - com)
+        // In 2D: omega × r = (-omega * ry, omega * rx)
         let mut drag_fx = 0.0f32;
         let mut drag_fy = 0.0f32;
         let mut drag_torque = 0.0f32;
 
         for i in 0..N_SEGMENTS {
-            let (_, _, angle) = segments[i];
+            let rx = seg_cx[i] - com_x;
+            let ry = seg_cy[i] - com_y;
+            let omega = seg_ang_vels[i];
 
-            let seg_vx = self.vx;
-            let seg_vy = self.vy;
+            // Segment velocity = body CoM velocity + rotational contribution
+            let seg_vx = self.vx + (-omega * ry);
+            let seg_vy = self.vy + (omega * rx);
 
-            let cos_a = angle.cos();
-            let sin_a = angle.sin();
+            let cos_a = seg_angles[i].cos();
+            let sin_a = seg_angles[i].sin();
             let v_tangential = seg_vx * cos_a + seg_vy * sin_a;
             let v_normal = -seg_vx * sin_a + seg_vy * cos_a;
 
-            // Drag areas: normal = diameter*length, tangential = much less
-            let area_normal = 2.0 * SEGMENT_RADIUS * SEGMENT_LENGTH;
-            let area_tangential = std::f32::consts::PI * SEGMENT_RADIUS * SEGMENT_RADIUS;
             let drag_t = -drag_coeff * v_tangential * area_tangential;
             let drag_n = -drag_coeff * v_normal * area_normal;
 
             drag_fx += drag_t * cos_a - drag_n * sin_a;
             drag_fy += drag_t * sin_a + drag_n * cos_a;
 
-            // Angular drag
-            let total_ang_vel = self.body_angular_vel
-                + if i > 0 { self.joint_vels[..i].iter().sum::<f32>() } else { 0.0 };
-            drag_torque += -drag_coeff * total_ang_vel * area_normal * SEGMENT_LENGTH;
+            // Torque from drag about CoM: r × F
+            let fx_i = drag_t * cos_a - drag_n * sin_a;
+            let fy_i = drag_t * sin_a + drag_n * cos_a;
+            drag_torque += rx * fy_i - ry * fx_i;
         }
 
         let total_mass = SEGMENT_MASS * N_SEGMENTS as f32;
@@ -223,16 +255,14 @@ impl Swimmer {
 
         // ── Angular acceleration of body ──
         let total_inertia = SEGMENT_INERTIA * N_SEGMENTS as f32;
-        // Joint torques create reaction on body
         let body_torque = drag_torque - torques[0] - torques[1];
         let body_alpha = body_torque / total_inertia;
 
         // ── Joint accelerations ──
-        // Each joint: applied torque - drag, with armature added to inertia
         let joint_inertia = SEGMENT_INERTIA + JOINT_ARMATURE;
         let mut joint_alphas = [0.0f32; N_JOINTS];
         for i in 0..N_JOINTS {
-            let joint_drag = -drag_coeff * self.joint_vels[i] * 2.0 * SEGMENT_RADIUS * SEGMENT_LENGTH;
+            let joint_drag = -drag_coeff * self.joint_vels[i] * area_normal;
             joint_alphas[i] = (torques[i] + joint_drag) / joint_inertia;
         }
 
@@ -328,3 +358,7 @@ mod tests {
         assert_eq!(result.observation.len(), 8);
     }
 }
+
+
+
+

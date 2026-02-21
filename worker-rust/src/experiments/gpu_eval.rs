@@ -272,15 +272,37 @@ __device__ float swimmer_step_device(float* state, float* actions) {
         float angles[3] = { body_angle, body_angle + j1, body_angle + j1 + j2 };
         float ang_vels[3] = { body_angvel, body_angvel + j1_vel, body_angvel + j1_vel + j2_vel };
 
+        // Compute segment centers relative to body origin
+        float seg_cx[3], seg_cy[3];
+        float tip_x2 = 0.0f, tip_y2 = 0.0f;
         for (int s = 0; s < 3; s++) {
+            float half = SW_SEG_LEN * 0.5f;
+            seg_cx[s] = tip_x2 + half * cosf(angles[s]);
+            seg_cy[s] = tip_y2 + half * sinf(angles[s]);
+            tip_x2 += SW_SEG_LEN * cosf(angles[s]);
+            tip_y2 += SW_SEG_LEN * sinf(angles[s]);
+        }
+        float com_x = (seg_cx[0] + seg_cx[1] + seg_cx[2]) / 3.0f;
+        float com_y = (seg_cy[0] + seg_cy[1] + seg_cy[2]) / 3.0f;
+
+        for (int s = 0; s < 3; s++) {
+            float rx = seg_cx[s] - com_x;
+            float ry = seg_cy[s] - com_y;
+            float omega = ang_vels[s];
+            // Per-segment velocity = CoM vel + omega × r
+            float svx = vx + (-omega * ry);
+            float svy = vy + (omega * rx);
+
             float ca = cosf(angles[s]), sa = sinf(angles[s]);
-            float vt = vx * ca + vy * sa;
-            float vn = -vx * sa + vy * ca;
+            float vt = svx * ca + svy * sa;
+            float vn = -svx * sa + svy * ca;
             float dt_f = -drag_coeff * vt * area_tangential;
             float dn_f = -drag_coeff * vn * area_normal;
-            drag_fx += dt_f * ca - dn_f * sa;
-            drag_fy += dt_f * sa + dn_f * ca;
-            drag_torque += -drag_coeff * ang_vels[s] * area_normal * SW_SEG_LEN;
+            float fx_i = dt_f * ca - dn_f * sa;
+            float fy_i = dt_f * sa + dn_f * ca;
+            drag_fx += fx_i;
+            drag_fy += fy_i;
+            drag_torque += rx * fy_i - ry * fx_i;
         }
 
         float ax = drag_fx / (SW_SEG_MASS * 3.0f);
