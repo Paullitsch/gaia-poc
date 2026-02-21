@@ -86,12 +86,18 @@ impl SmartEvaluator {
         #[cfg(feature = "cuda")]
         {
             if let Some(ref eval) = self.gpu {
-                return eval.evaluate_batch(candidates);
+                let mut fits = eval.evaluate_batch(candidates);
+                // NaN guard: replace NaN/Inf with large negative
+                for f in &mut fits {
+                    if f.is_nan() || f.is_infinite() { *f = -1e6; }
+                }
+                return fits;
             }
         }
         candidates.par_iter().map(|c| {
             let pf32: Vec<f32> = c.iter().map(|&v| v as f32).collect();
-            evaluate(&self.env_name, policy, &pf32, self.n_episodes, self.max_steps)
+            let r = evaluate(&self.env_name, policy, &pf32, self.n_episodes, self.max_steps);
+            if r.is_nan() || r.is_infinite() { -1e6 } else { r }
         }).collect()
     }
 }

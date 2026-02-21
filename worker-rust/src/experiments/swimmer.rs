@@ -231,16 +231,19 @@ impl Swimmer {
         // ── Euler integration ──
         self.vx += ax * DT;
         self.vy += ay * DT;
+        self.vx = self.vx.clamp(-10.0, 10.0);
+        self.vy = self.vy.clamp(-10.0, 10.0);
         self.x += self.vx * DT;
         self.y += self.vy * DT;
 
         self.body_angular_vel += body_alpha * DT;
+        self.body_angular_vel = self.body_angular_vel.clamp(-20.0, 20.0);
         self.body_angle += self.body_angular_vel * DT;
 
         for i in 0..N_JOINTS {
             self.joint_vels[i] += joint_alphas[i] * DT;
+            self.joint_vels[i] = self.joint_vels[i].clamp(-20.0, 20.0);
             self.joint_angles[i] += self.joint_vels[i] * DT;
-            // Clamp joint angles to prevent instability
             self.joint_angles[i] = self.joint_angles[i].clamp(-1.5, 1.5);
         }
     }

@@ -269,13 +269,18 @@ __device__ float swimmer_step_device(float* state, float* actions) {
         float j2_alpha = (actions[1] + (-SW_VISCOSITY * j2_vel * SW_SEG_LEN)) / SW_SEG_INERTIA;
 
         vx += ax * SW_DT; vy += ay * SW_DT;
+        vx = fmaxf(-10.0f, fminf(10.0f, vx));
+        vy = fmaxf(-10.0f, fminf(10.0f, vy));
         x += vx * SW_DT; y += vy * SW_DT;
         body_angvel += body_alpha * SW_DT;
+        body_angvel = fmaxf(-20.0f, fminf(20.0f, body_angvel));
         body_angle += body_angvel * SW_DT;
         j1_vel += j1_alpha * SW_DT;
+        j1_vel = fmaxf(-20.0f, fminf(20.0f, j1_vel));
         j1 += j1_vel * SW_DT;
         j1 = fmaxf(-1.5f, fminf(1.5f, j1));
         j2_vel += j2_alpha * SW_DT;
+        j2_vel = fmaxf(-20.0f, fminf(20.0f, j2_vel));
         j2 += j2_vel * SW_DT;
         j2 = fmaxf(-1.5f, fminf(1.5f, j2));
     }
@@ -289,7 +294,9 @@ __device__ float swimmer_step_device(float* state, float* actions) {
     float dt_ctrl = SW_DT * SW_FRAME_SKIP;
     float forward_reward = (x - x_before) / dt_ctrl;
     float ctrl_cost = SW_CTRL_COST * (actions[0]*actions[0] + actions[1]*actions[1]);
-    return forward_reward - ctrl_cost;
+    float reward = forward_reward - ctrl_cost;
+    if (isnan(reward) || isinf(reward)) reward = -100.0f;
+    return reward;
 }
 
 // ─── N-Link Pendulum step ───────────────────────────────────────
@@ -321,8 +328,10 @@ __device__ float pendulum_step_device(float* angles, float* vels, float* actions
         float damping = -0.1f * vels[i];
         float alpha = (grav_torque + applied + damping) / inertia;
 
-        vels[i] += alpha * PEND_DT;
-        vels[i] = fmaxf(-PEND_MAX_VEL, fminf(PEND_MAX_VEL, vels[i]));
+        float new_vel = vels[i] + alpha * PEND_DT;
+        // NaN guard
+        if (isnan(new_vel) || isinf(new_vel)) new_vel = 0.0f;
+        vels[i] = fmaxf(-PEND_MAX_VEL, fminf(PEND_MAX_VEL, new_vel));
         angles[i] += vels[i] * PEND_DT;
     }
 

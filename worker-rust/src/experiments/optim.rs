@@ -312,7 +312,7 @@ impl CmaEs {
 
         // Sort by fitness (descending — best first)
         let mut indices: Vec<usize> = (0..self.pop_size).collect();
-        indices.sort_by(|&a, &b| fitnesses[b].partial_cmp(&fitnesses[a]).unwrap());
+        indices.sort_by(|&a, &b| fitnesses[b].partial_cmp(&fitnesses[a]).unwrap_or(std::cmp::Ordering::Equal));
 
         // Weighted recombination
         let old_mean = self.mean.clone();
