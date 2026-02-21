@@ -202,18 +202,19 @@ impl GpuVecEnv {
     /// GPU reset: upload seeds, launch kernel, download observations.
     #[cfg(feature = "cuda")]
     fn gpu_reset_all(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let gpu = self.gpu.as_ref().ok_or("no gpu")?;
         let n = self.n_envs;
+        let seeds_copy = self.seeds.clone();
 
-        gpu.dev.htod_copy_into(self.seeds.clone(), &mut self.gpu.as_mut().unwrap().d_seeds)?;
+        let gpu = self.gpu.as_mut().ok_or("no gpu")?;
+        gpu.dev.htod_copy_into(seeds_copy, &mut gpu.d_seeds)?;
 
-        let f = gpu.dev.get_func("cartpole", &gpu.reset_fn_name).ok_or("no kernel")?;
+        let reset_fn_name = gpu.reset_fn_name.clone();
+        let f = gpu.dev.get_func("cartpole", &reset_fn_name).ok_or("no kernel")?;
         let cfg = LaunchConfig {
             block_dim: (256, 1, 1),
             grid_dim: (((n + 255) / 256) as u32, 1, 1),
             shared_mem_bytes: 0,
         };
-        let gpu = self.gpu.as_ref().unwrap();
         unsafe {
             f.launch(cfg, (
                 &gpu.d_states,
@@ -226,10 +227,10 @@ impl GpuVecEnv {
         }
 
         // Download observations
-        let gpu = self.gpu.as_ref().unwrap();
         let obs = gpu.dev.dtoh_sync_copy(&gpu.d_observations)?;
-        self.observations[..obs.len()].copy_from_slice(&obs);
         let dones = gpu.dev.dtoh_sync_copy(&gpu.d_dones)?;
+        drop(gpu);
+        self.observations[..obs.len()].copy_from_slice(&obs);
         self.dones[..dones.len()].copy_from_slice(&dones);
 
         Ok(())
@@ -268,11 +269,11 @@ impl GpuVecEnv {
     fn gpu_step_all(&mut self, actions: &[f32]) -> Result<(), Box<dyn std::error::Error>> {
         let n = self.n_envs;
 
-        // Upload actions
         let gpu = self.gpu.as_mut().unwrap();
         gpu.dev.htod_copy_into(actions.to_vec(), &mut gpu.d_actions)?;
 
-        let f = gpu.dev.get_func("cartpole", &gpu.step_fn_name).ok_or("no kernel")?;
+        let step_fn_name = gpu.step_fn_name.clone();
+        let f = gpu.dev.get_func("cartpole", &step_fn_name).ok_or("no kernel")?;
         let cfg = LaunchConfig {
             block_dim: (256, 1, 1),
             grid_dim: (((n + 255) / 256) as u32, 1, 1),
@@ -290,13 +291,12 @@ impl GpuVecEnv {
             ))?;
         }
 
-        // Download results
-        let gpu = self.gpu.as_ref().unwrap();
         let obs = gpu.dev.dtoh_sync_copy(&gpu.d_observations)?;
-        self.observations[..obs.len()].copy_from_slice(&obs);
         let rewards = gpu.dev.dtoh_sync_copy(&gpu.d_rewards)?;
-        self.rewards[..rewards.len()].copy_from_slice(&rewards);
         let dones = gpu.dev.dtoh_sync_copy(&gpu.d_dones)?;
+        drop(gpu); // release borrow before writing to self
+        self.observations[..obs.len()].copy_from_slice(&obs);
+        self.rewards[..rewards.len()].copy_from_slice(&rewards);
         self.dones[..dones.len()].copy_from_slice(&dones);
 
         Ok(())
