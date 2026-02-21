@@ -194,6 +194,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
         <div class="card-body">
           <div class="submit-form" style="margin-top:0;padding-top:0;border-top:none;flex-wrap:wrap">
             <select id="env-select" style="min-width:160px">
+              <option value="CartPole-v1">CartPole-v1</option>
               <option value="LunarLander-v3">LunarLander-v3</option>
               <option value="BipedalWalker-v3">BipedalWalker-v3</option>
               <option value="BipedalWalkerHardcore-v3">BipedalWalkerHardcore-v3</option>
@@ -228,6 +229,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
         <div class="card-header"><h2>🏆 Leaderboards</h2></div>
         <div class="card-body">
           <div class="env-tabs" id="bench-env-tabs">
+            <div class="env-tab" data-env="CartPole-v1">🎯 CartPole-v1</div>
             <div class="env-tab active" data-env="LunarLander-v3">🚀 LunarLander-v3</div>
             <div class="env-tab" data-env="BipedalWalker-v3">🦿 BipedalWalker-v3</div>
             <div class="env-tab" data-env="BipedalWalkerHardcore-v3">🔥 BipedalWalkerHardcore-v3</div>
@@ -304,6 +306,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
           <div class="toolbar">
             <select id="history-env-filter" onchange="renderHistory()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:.75rem">
               <option value="all">All Environments</option>
+              <option value="CartPole-v1">CartPole-v1</option>
               <option value="LunarLander-v3">LunarLander-v3</option>
               <option value="BipedalWalker-v3">BipedalWalker-v3</option>
               <option value="BipedalWalkerHardcore-v3">BipedalWalkerHardcore-v3</option>
@@ -349,6 +352,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 <script>
 // ======= BENCHMARK CONFIG =======
 const BENCHMARKS = {
+  'CartPole-v1':              { threshold: 475, obs_dim: 4,  act_dim: 2, action_type: 'discrete',   emoji: '🎯' },
   'LunarLander-v3':           { threshold: 200, obs_dim: 8,  act_dim: 4, action_type: 'discrete',   emoji: '🚀' },
   'BipedalWalker-v3':         { threshold: 300, obs_dim: 24, act_dim: 4, action_type: 'continuous', emoji: '🦿' },
   'BipedalWalkerHardcore-v3': { threshold: 300, obs_dim: 24, act_dim: 4, action_type: 'continuous', emoji: '🔥' },
