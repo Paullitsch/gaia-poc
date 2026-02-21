@@ -166,8 +166,9 @@ __device__ float cartpole_step_device(float* state, int action) {
 #define LL_INITIAL_Y 1.4f
 
 // ─── LunarLander step ──────────────────────────────────────────
-// state: [x, y, vx, vy, angle, ang_vel, leg1, leg2]
-// Returns: reward (negative = done with crash penalty)
+// state: [x, y, vx, vy, angle, ang_vel, leg1, leg2, prev_shaping]
+// prev_shaping initialized to -999999 as "None" sentinel
+// Returns: reward (sentinel values for terminal states)
 __device__ float lunarlander_step_device(float* state, int action, int step) {
     float x = state[0], y = state[1];
     float vx = state[2], vy = state[3];
@@ -205,13 +206,22 @@ __device__ float lunarlander_step_device(float* state, int action, int step) {
     state[0] = x; state[1] = y; state[2] = vx; state[3] = vy;
     state[4] = angle; state[5] = ang_vel; state[6] = leg1; state[7] = leg2;
 
-    // Reward (Gymnasium-style shaping)
+    // Reward: shaping difference (Gymnasium-style)
     float shaping = -100.0f * sqrtf(x*x + y*y)
                    - 100.0f * sqrtf(vx*vx + vy*vy)
                    - 100.0f * fabsf(angle)
                    + 10.0f * leg1 + 10.0f * leg2;
-    float fuel = (action == 2) ? -0.3f : ((action == 1 || action == 3) ? -0.03f : 0.0f);
-    float reward = shaping / 100.0f + fuel;
+
+    float reward = 0.0f;
+    float prev_shaping = state[8];
+    if (prev_shaping > -999000.0f) { // not first step
+        reward = shaping - prev_shaping;
+    }
+    state[8] = shaping;
+
+    // Fuel cost
+    if (action == 2) reward -= 0.30f;
+    else if (action == 1 || action == 3) reward -= 0.03f;
 
     // Terminal conditions
     int crashed = (y <= 0.0f) && (fabsf(vx) > 0.5f || fabsf(angle) > 0.5f);
@@ -227,8 +237,12 @@ __device__ float lunarlander_step_device(float* state, int action, int step) {
 
 // ─── Swimmer constants ──────────────────────────────────────────
 #define SW_VISCOSITY 0.1f
-#define SW_SEG_LEN 0.1f
-#define SW_SEG_MASS 1.0f
+#define SW_FLUID_DENSITY 4000.0f
+#define SW_SEG_LEN 1.0f
+#define SW_SEG_RADIUS 0.1f
+#define SW_SEG_MASS 34.56f
+#define SW_MOTOR_GEAR 150.0f
+#define SW_JOINT_ARMATURE 0.1f
 #define SW_DT 0.01f
 #define SW_FRAME_SKIP 4
 #define SW_CTRL_COST 0.0001f
@@ -245,8 +259,15 @@ __device__ float swimmer_step_device(float* state, float* actions) {
     float body_angvel = state[7];
     float j1_vel = state[8], j2_vel = state[9];
 
+    // Apply motor gear
+    float torque0 = actions[0] * SW_MOTOR_GEAR;
+    float torque1 = actions[1] * SW_MOTOR_GEAR;
+    float drag_coeff = SW_VISCOSITY * SW_FLUID_DENSITY;
+    float area_normal = 2.0f * SW_SEG_RADIUS * SW_SEG_LEN;
+    float area_tangential = 3.14159265f * SW_SEG_RADIUS * SW_SEG_RADIUS;
+    float joint_inertia = SW_SEG_INERTIA + SW_JOINT_ARMATURE;
+
     for (int sub = 0; sub < SW_FRAME_SKIP; sub++) {
-        // Viscous drag (anisotropic: 5x more normal to segments)
         float drag_fx = 0.0f, drag_fy = 0.0f, drag_torque = 0.0f;
         float angles[3] = { body_angle, body_angle + j1, body_angle + j1 + j2 };
         float ang_vels[3] = { body_angvel, body_angvel + j1_vel, body_angvel + j1_vel + j2_vel };
@@ -255,18 +276,18 @@ __device__ float swimmer_step_device(float* state, float* actions) {
             float ca = cosf(angles[s]), sa = sinf(angles[s]);
             float vt = vx * ca + vy * sa;
             float vn = -vx * sa + vy * ca;
-            float dt_f = -SW_VISCOSITY * vt * SW_SEG_LEN;
-            float dn_f = -SW_VISCOSITY * 5.0f * vn * SW_SEG_LEN;
+            float dt_f = -drag_coeff * vt * area_tangential;
+            float dn_f = -drag_coeff * vn * area_normal;
             drag_fx += dt_f * ca - dn_f * sa;
             drag_fy += dt_f * sa + dn_f * ca;
-            drag_torque += -SW_VISCOSITY * 2.0f * ang_vels[s] * SW_SEG_LEN * SW_SEG_LEN;
+            drag_torque += -drag_coeff * ang_vels[s] * area_normal * SW_SEG_LEN;
         }
 
         float ax = drag_fx / (SW_SEG_MASS * 3.0f);
         float ay = drag_fy / (SW_SEG_MASS * 3.0f);
-        float body_alpha = (drag_torque - actions[0] - actions[1]) / (SW_SEG_INERTIA * 3.0f);
-        float j1_alpha = (actions[0] + (-SW_VISCOSITY * j1_vel * SW_SEG_LEN)) / SW_SEG_INERTIA;
-        float j2_alpha = (actions[1] + (-SW_VISCOSITY * j2_vel * SW_SEG_LEN)) / SW_SEG_INERTIA;
+        float body_alpha = (drag_torque - torque0 - torque1) / (SW_SEG_INERTIA * 3.0f);
+        float j1_alpha = (torque0 + (-drag_coeff * j1_vel * area_normal)) / joint_inertia;
+        float j2_alpha = (torque1 + (-drag_coeff * j2_vel * area_normal)) / joint_inertia;
 
         vx += ax * SW_DT; vy += ay * SW_DT;
         vx = fmaxf(-10.0f, fminf(10.0f, vx));
@@ -370,7 +391,9 @@ extern "C" __global__ void evaluate_episodes(
     const float* params = &all_params[cand_idx * N_PARAMS];
 
     // Init state with LCG random
-    float state[OBS_DIM];
+    // Extra space for internal state (e.g. LunarLander prev_shaping at index 8)
+    #define STATE_SIZE (OBS_DIM + 2)
+    float state[STATE_SIZE];
     unsigned long long seed = base_seed + (unsigned long long)global_idx * 12345ULL + 1ULL;
 
     #if ENV_TYPE == 0
@@ -390,6 +413,7 @@ extern "C" __global__ void evaluate_episodes(
         seed = seed * 6364136223846793005ULL + 1ULL;
         state[3] = ((float)(seed >> 33) / (float)0xFFFFFFFF * 0.1f - 0.05f) * 0.1f; // vy
         state[4] = 0.0f; state[5] = 0.0f; state[6] = 0.0f; state[7] = 0.0f;
+        state[8] = -999999.0f; // prev_shaping sentinel (None)
     #elif ENV_TYPE == 2
         // Swimmer: [x, y, body_angle, j1, j2, vx, vy, body_angvel, j1_vel, j2_vel]
         state[0] = 0.0f; state[1] = 0.0f;

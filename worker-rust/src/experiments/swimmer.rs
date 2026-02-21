@@ -19,15 +19,19 @@ use super::env::*;
 // ─── Constants ────────────────────────────────────────────────────────
 const N_SEGMENTS: usize = 3;
 const N_JOINTS: usize = N_SEGMENTS - 1; // 2
-const SEGMENT_LENGTH: f32 = 0.1;
-const SEGMENT_MASS: f32 = 1.0;
-const VISCOSITY: f32 = 0.1;
-const DT: f32 = 0.01; // 100 Hz physics
+const SEGMENT_LENGTH: f32 = 1.0; // MuJoCo: capsule fromto spans 1.0 unit
+const SEGMENT_RADIUS: f32 = 0.1; // MuJoCo: capsule size="0.1"
+const SEGMENT_MASS: f32 = 34.56; // MuJoCo: capsule density=1000, radius=0.1, length=1.0
+const VISCOSITY: f32 = 0.1; // MuJoCo: viscosity=0.1
+const FLUID_DENSITY: f32 = 4000.0; // MuJoCo: density=4000
+const MOTOR_GEAR: f32 = 150.0; // MuJoCo: gear="150"
+const JOINT_ARMATURE: f32 = 0.1; // MuJoCo: armature=0.1
+const DT: f32 = 0.01; // 100 Hz physics (MuJoCo: timestep=0.01)
 const FRAME_SKIP: usize = 4; // 25 Hz control
 const MAX_STEPS: usize = 1000;
 const CTRL_COST_WEIGHT: f32 = 0.0001;
 
-// Moment of inertia for thin rod: I = (1/12) * m * L^2
+// Moment of inertia for capsule: I_rod = (1/12)*m*L² + armature
 const SEGMENT_INERTIA: f32 = SEGMENT_MASS * SEGMENT_LENGTH * SEGMENT_LENGTH / 12.0;
 
 struct Rng {
@@ -172,10 +176,15 @@ impl Swimmer {
     }
 
     fn physics_step(&mut self, actions: &[f32; 2]) {
+        // Apply motor gear (MuJoCo: gear="150")
+        let torques = [actions[0] * MOTOR_GEAR, actions[1] * MOTOR_GEAR];
+
         let segments = self.get_segment_info();
 
         // ── Viscous drag forces on each segment ──
-        // Drag is anisotropic: higher normal to segment, lower along it
+        // MuJoCo drag: F = -viscosity * density * area * velocity
+        // For capsule: cross-sectional area ≈ diameter * length (normal) or radius*2 (tangential)
+        let drag_coeff = VISCOSITY * FLUID_DENSITY;
         let mut drag_fx = 0.0f32;
         let mut drag_fy = 0.0f32;
         let mut drag_torque = 0.0f32;
@@ -183,29 +192,27 @@ impl Swimmer {
         for i in 0..N_SEGMENTS {
             let (_, _, angle) = segments[i];
 
-            // Segment velocity (approximate: using center of mass velocity)
-            // For a more accurate model, we'd track per-segment velocities
             let seg_vx = self.vx;
             let seg_vy = self.vy;
 
-            // Decompose velocity into tangential and normal components
             let cos_a = angle.cos();
             let sin_a = angle.sin();
             let v_tangential = seg_vx * cos_a + seg_vy * sin_a;
             let v_normal = -seg_vx * sin_a + seg_vy * cos_a;
 
-            // Drag: higher for normal motion (like a flat plate)
-            let drag_t = -VISCOSITY * v_tangential * SEGMENT_LENGTH;
-            let drag_n = -VISCOSITY * 5.0 * v_normal * SEGMENT_LENGTH; // 5x more drag normal
+            // Drag areas: normal = diameter*length, tangential = much less
+            let area_normal = 2.0 * SEGMENT_RADIUS * SEGMENT_LENGTH;
+            let area_tangential = std::f32::consts::PI * SEGMENT_RADIUS * SEGMENT_RADIUS;
+            let drag_t = -drag_coeff * v_tangential * area_tangential;
+            let drag_n = -drag_coeff * v_normal * area_normal;
 
-            // Convert back to world frame
             drag_fx += drag_t * cos_a - drag_n * sin_a;
             drag_fy += drag_t * sin_a + drag_n * cos_a;
 
             // Angular drag
             let total_ang_vel = self.body_angular_vel
                 + if i > 0 { self.joint_vels[..i].iter().sum::<f32>() } else { 0.0 };
-            drag_torque += -VISCOSITY * 2.0 * total_ang_vel * SEGMENT_LENGTH * SEGMENT_LENGTH;
+            drag_torque += -drag_coeff * total_ang_vel * area_normal * SEGMENT_LENGTH;
         }
 
         let total_mass = SEGMENT_MASS * N_SEGMENTS as f32;
@@ -217,15 +224,16 @@ impl Swimmer {
         // ── Angular acceleration of body ──
         let total_inertia = SEGMENT_INERTIA * N_SEGMENTS as f32;
         // Joint torques create reaction on body
-        let body_torque = drag_torque - actions[0] - actions[1]; // reaction from joint torques
+        let body_torque = drag_torque - torques[0] - torques[1];
         let body_alpha = body_torque / total_inertia;
 
         // ── Joint accelerations ──
-        // Each joint responds to its applied torque minus drag
+        // Each joint: applied torque - drag, with armature added to inertia
+        let joint_inertia = SEGMENT_INERTIA + JOINT_ARMATURE;
         let mut joint_alphas = [0.0f32; N_JOINTS];
         for i in 0..N_JOINTS {
-            let joint_drag = -VISCOSITY * self.joint_vels[i] * SEGMENT_LENGTH;
-            joint_alphas[i] = (actions[i] + joint_drag) / SEGMENT_INERTIA;
+            let joint_drag = -drag_coeff * self.joint_vels[i] * 2.0 * SEGMENT_RADIUS * SEGMENT_LENGTH;
+            joint_alphas[i] = (torques[i] + joint_drag) / joint_inertia;
         }
 
         // ── Euler integration ──
