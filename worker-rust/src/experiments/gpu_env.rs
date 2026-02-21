@@ -14,9 +14,11 @@
 //! - LunarLander-v3 (rigid body + thrusters, simplified contacts)
 
 #[cfg(feature = "cuda")]
-use cudarc::driver::*;
+use cudarc::driver::{CudaDevice, CudaSlice, LaunchConfig, LaunchAsync};
 #[cfg(feature = "cuda")]
-use cudarc::nvrtc::Ptx;
+use cudarc::nvrtc::compile_ptx;
+#[cfg(feature = "cuda")]
+use std::sync::Arc;
 
 /// Vectorized environment state on GPU (or CPU fallback).
 pub struct GpuVecEnv {
@@ -25,14 +27,15 @@ pub struct GpuVecEnv {
     pub obs_dim: usize,
     pub act_dim: usize,
     pub max_steps: usize,
+    pub using_gpu: bool,
 
     // CPU fallback storage
-    states: Vec<f32>,        // [n_envs × state_dim] flattened
-    observations: Vec<f32>,  // [n_envs × obs_dim] flattened
-    rewards: Vec<f32>,       // [n_envs]
-    dones: Vec<u8>,          // [n_envs]
-    steps: Vec<u32>,         // [n_envs] step counter
-    seeds: Vec<u64>,         // [n_envs] per-env RNG seed
+    states: Vec<f32>,
+    observations: Vec<f32>,
+    rewards: Vec<f32>,
+    dones: Vec<u8>,
+    steps: Vec<u32>,
+    seeds: Vec<u64>,
 
     #[cfg(feature = "cuda")]
     gpu: Option<GpuState>,
@@ -48,8 +51,8 @@ struct GpuState {
     d_steps: CudaSlice<u32>,
     d_seeds: CudaSlice<u64>,
     d_actions: CudaSlice<f32>,
-    step_kernel: CudaFunction,
-    reset_kernel: CudaFunction,
+    step_fn_name: String,
+    reset_fn_name: String,
 }
 
 // ─── CartPole Constants ─────────────────────────────────────────────
@@ -86,8 +89,28 @@ const LL_STATE_DIM: usize = 8;
 const LL_OBS_DIM: usize = 8;
 const LL_MAX_STEPS: usize = 1000;
 
+#[cfg(feature = "cuda")]
+fn is_gpu_available() -> bool {
+    static GPU_AVAILABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *GPU_AVAILABLE.get_or_init(|| {
+        match CudaDevice::new(0) {
+            Ok(_) => {
+                eprintln!("🟢 CUDA GPU detected — GPU acceleration available");
+                true
+            }
+            Err(e) => {
+                eprintln!("🟡 No CUDA GPU ({}) — using CPU fallback", e);
+                false
+            }
+        }
+    })
+}
+
+#[cfg(not(feature = "cuda"))]
+fn is_gpu_available() -> bool { false }
+
 impl GpuVecEnv {
-    /// Create N parallel environments.
+    /// Create N parallel environments. Tries GPU first, falls back to CPU.
     pub fn new(env_name: &str, n_envs: usize) -> Self {
         let (obs_dim, act_dim, max_steps, state_dim) = match env_name {
             "CartPole-v1" => (CP_OBS_DIM, 2, CP_MAX_STEPS, CP_STATE_DIM),
@@ -95,12 +118,25 @@ impl GpuVecEnv {
             _ => panic!("GPU env not supported: {}", env_name),
         };
 
+        #[cfg(feature = "cuda")]
+        let gpu = if is_gpu_available() && env_name == "CartPole-v1" {
+            Self::init_gpu_cartpole(n_envs)
+        } else {
+            None
+        };
+
+        #[cfg(feature = "cuda")]
+        let using_gpu = gpu.is_some();
+        #[cfg(not(feature = "cuda"))]
+        let using_gpu = false;
+
         GpuVecEnv {
             env_name: env_name.to_string(),
             n_envs,
             obs_dim,
             act_dim,
             max_steps,
+            using_gpu,
             states: vec![0.0; n_envs * state_dim],
             observations: vec![0.0; n_envs * obs_dim],
             rewards: vec![0.0; n_envs],
@@ -108,16 +144,95 @@ impl GpuVecEnv {
             steps: vec![0; n_envs],
             seeds: (0..n_envs).map(|i| i as u64 * 12345 + 42).collect(),
             #[cfg(feature = "cuda")]
-            gpu: None,
+            gpu,
         }
+    }
+
+    /// Initialize GPU state for CartPole.
+    #[cfg(feature = "cuda")]
+    fn init_gpu_cartpole(n_envs: usize) -> Option<GpuState> {
+        let dev = CudaDevice::new(0).ok()?;
+
+        // Compile CartPole CUDA kernel
+        let ptx = compile_ptx(CARTPOLE_CUDA_SRC).ok()?;
+        dev.load_ptx(ptx, "cartpole", &["cartpole_step", "cartpole_reset"]).ok()?;
+
+        let d_states = dev.alloc_zeros::<f32>(n_envs * CP_STATE_DIM).ok()?;
+        let d_observations = dev.alloc_zeros::<f32>(n_envs * CP_OBS_DIM).ok()?;
+        let d_rewards = dev.alloc_zeros::<f32>(n_envs).ok()?;
+        let d_dones = dev.alloc_zeros::<u8>(n_envs).ok()?;
+        let d_steps = dev.alloc_zeros::<u32>(n_envs).ok()?;
+        let d_seeds = dev.alloc_zeros::<u64>(n_envs).ok()?;
+        let d_actions = dev.alloc_zeros::<f32>(n_envs).ok()?;
+
+        eprintln!("🚀 CartPole CUDA kernel compiled — {} envs on GPU", n_envs);
+
+        Some(GpuState {
+            dev,
+            d_states,
+            d_observations,
+            d_rewards,
+            d_dones,
+            d_steps,
+            d_seeds,
+            d_actions,
+            step_fn_name: "cartpole_step".to_string(),
+            reset_fn_name: "cartpole_reset".to_string(),
+        })
     }
 
     /// Reset all environments with sequential seeds.
     pub fn reset_all(&mut self, base_seed: u64) {
         for i in 0..self.n_envs {
             self.seeds[i] = base_seed + i as u64;
+        }
+
+        #[cfg(feature = "cuda")]
+        if self.gpu.is_some() {
+            if let Ok(()) = self.gpu_reset_all() {
+                return;
+            }
+        }
+
+        for i in 0..self.n_envs {
             self.reset_env(i);
         }
+    }
+
+    /// GPU reset: upload seeds, launch kernel, download observations.
+    #[cfg(feature = "cuda")]
+    fn gpu_reset_all(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let gpu = self.gpu.as_ref().ok_or("no gpu")?;
+        let n = self.n_envs;
+
+        gpu.dev.htod_copy_into(self.seeds.clone(), &mut self.gpu.as_mut().unwrap().d_seeds)?;
+
+        let f = gpu.dev.get_func("cartpole", &gpu.reset_fn_name).ok_or("no kernel")?;
+        let cfg = LaunchConfig {
+            block_dim: (256, 1, 1),
+            grid_dim: (((n + 255) / 256) as u32, 1, 1),
+            shared_mem_bytes: 0,
+        };
+        let gpu = self.gpu.as_ref().unwrap();
+        unsafe {
+            f.launch(cfg, (
+                &gpu.d_states,
+                &gpu.d_observations,
+                &gpu.d_dones,
+                &gpu.d_steps,
+                &gpu.d_seeds,
+                n as i32,
+            ))?;
+        }
+
+        // Download observations
+        let gpu = self.gpu.as_ref().unwrap();
+        let obs = gpu.dev.dtoh_sync_copy(&gpu.d_observations)?;
+        self.observations[..obs.len()].copy_from_slice(&obs);
+        let dones = gpu.dev.dtoh_sync_copy(&gpu.d_dones)?;
+        self.dones[..dones.len()].copy_from_slice(&dones);
+
+        Ok(())
     }
 
     /// Reset a single environment.
@@ -133,12 +248,58 @@ impl GpuVecEnv {
     /// For discrete envs: actions[i] is the action index as f32.
     /// For continuous envs: actions[i * act_dim .. (i+1) * act_dim].
     pub fn step_all(&mut self, actions: &[f32]) -> (&[f32], &[f32], &[u8]) {
+        #[cfg(feature = "cuda")]
+        if self.gpu.is_some() {
+            if let Ok(()) = self.gpu_step_all(actions) {
+                return (&self.observations, &self.rewards, &self.dones);
+            }
+        }
+
         match self.env_name.as_str() {
             "CartPole-v1" => self.step_all_cartpole(actions),
             "LunarLander-v3" => self.step_all_lunar_lander(actions),
             _ => {}
         }
         (&self.observations, &self.rewards, &self.dones)
+    }
+
+    /// GPU step: upload actions, launch kernel, download results.
+    #[cfg(feature = "cuda")]
+    fn gpu_step_all(&mut self, actions: &[f32]) -> Result<(), Box<dyn std::error::Error>> {
+        let n = self.n_envs;
+
+        // Upload actions
+        let gpu = self.gpu.as_mut().unwrap();
+        gpu.dev.htod_copy_into(actions.to_vec(), &mut gpu.d_actions)?;
+
+        let f = gpu.dev.get_func("cartpole", &gpu.step_fn_name).ok_or("no kernel")?;
+        let cfg = LaunchConfig {
+            block_dim: (256, 1, 1),
+            grid_dim: (((n + 255) / 256) as u32, 1, 1),
+            shared_mem_bytes: 0,
+        };
+        unsafe {
+            f.launch(cfg, (
+                &gpu.d_states,
+                &gpu.d_observations,
+                &gpu.d_rewards,
+                &gpu.d_dones,
+                &gpu.d_steps,
+                &gpu.d_actions,
+                n as i32,
+            ))?;
+        }
+
+        // Download results
+        let gpu = self.gpu.as_ref().unwrap();
+        let obs = gpu.dev.dtoh_sync_copy(&gpu.d_observations)?;
+        self.observations[..obs.len()].copy_from_slice(&obs);
+        let rewards = gpu.dev.dtoh_sync_copy(&gpu.d_rewards)?;
+        self.rewards[..rewards.len()].copy_from_slice(&rewards);
+        let dones = gpu.dev.dtoh_sync_copy(&gpu.d_dones)?;
+        self.dones[..dones.len()].copy_from_slice(&dones);
+
+        Ok(())
     }
 
     /// Auto-reset environments that are done.
@@ -494,7 +655,6 @@ pub fn vec_evaluate(
 // ─── CUDA Kernels ───────────────────────────────────────────────────
 
 /// CUDA kernel source for CartPole (compiled at runtime via nvrtc).
-#[cfg(feature = "cuda")]
 pub const CARTPOLE_CUDA_SRC: &str = r#"
 extern "C" __global__ void cartpole_step(
     float* states,       // [N, 4]

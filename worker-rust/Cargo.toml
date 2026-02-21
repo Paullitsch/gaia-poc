@@ -1,6 +1,6 @@
 [package]
 name = "gaia-worker"
-version = "0.9.5"
+version = "0.9.6"
 edition = "2021"
 description = "GAIA distributed experiment worker — connects outbound to gaia-server"
 
@@ -22,7 +22,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
 wrapped2d = "0.4.2"
 rayon = "1.11.0"
-cudarc = { version = "0.12", features = ["std"], optional = true }
+cudarc = { version = "0.12", features = ["std", "driver", "nvrtc", "cuda-12060"], optional = true }
 
 [features]
 default = []
