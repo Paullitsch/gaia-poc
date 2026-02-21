@@ -92,6 +92,9 @@ fn dispatch(
         "island_model" | "island_advanced" => methods::run_island_model(env_name, params, on_gen),
         "meta_learning" | "meta_learning_pure" => methods::run_meta_learning(env_name, params, on_gen),
         "ppo_baseline" => ppo::run_ppo(env_name, params, on_gen),
+        "gpu_cma_es" => super::gpu_methods::run_gpu_cma_es(env_name, params, on_gen),
+        "gpu_openai_es" => super::gpu_methods::run_gpu_openai_es(env_name, params, on_gen),
+        "gpu_benchmark" => super::gpu_methods::run_gpu_benchmark(env_name, params, on_gen),
         _ => RunResult {
             method: method.into(), environment: env_name.into(),
             best_ever: 0.0, final_mean: 0.0, final_std: 0.0,
