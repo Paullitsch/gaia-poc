@@ -1,6 +1,6 @@
 //! Generic CMA-ES benchmark runner with Rayon parallel evaluation.
 
-use super::env::{self, Environment};
+use super::env::{self};
 use super::policy::Policy;
 use super::optim::CmaEs;
 use rayon::prelude::*;

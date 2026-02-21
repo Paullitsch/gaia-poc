@@ -3,7 +3,7 @@
 //! Manual forward + backward pass for small FF networks. No autograd framework needed.
 //! This is the BACKPROP CONTROL GROUP — proves that our gradient-free methods compete.
 
-use super::env::{self, Environment, ActionSpace, Action};
+use super::env::{self, ActionSpace, Action};
 use super::native_runner::{GenResult, RunResult};
 use super::optim::Rng;
 use serde_json::Value;
@@ -331,6 +331,7 @@ impl ValueNet {
         self.inner.forward(obs).output[0]
     }
 
+    #[allow(dead_code)]
     fn train_step(&mut self, obs: &[f64], target: f64, adam: &mut Adam) -> f64 {
         let fwd = self.inner.forward(obs);
         let prediction = fwd.output[0];

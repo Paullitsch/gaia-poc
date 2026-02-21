@@ -47,6 +47,7 @@ impl Rng {
         let u = (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64;
         lo + (hi - lo) * u as f32
     }
+    #[allow(dead_code)]
     fn random(&mut self) -> f32 { self.uniform(0.0, 1.0) }
     fn integers(&mut self, lo: i32, hi: i32) -> i32 {
         lo + ((self.next_u64() % (hi - lo) as u64) as i32)

@@ -158,7 +158,7 @@ impl CmaEs {
         let mu = lam / 2;
 
         // Weights (log-scale, normalized)
-        let raw_w: Vec<f64> = (0..mu).map(|i| ((mu as f64 + 0.5).ln() - ((i + 1) as f64).ln())).collect();
+        let raw_w: Vec<f64> = (0..mu).map(|i| (mu as f64 + 0.5).ln() - ((i + 1) as f64).ln()).collect();
         let sum_w: f64 = raw_w.iter().sum();
         let weights: Vec<f64> = raw_w.iter().map(|w| w / sum_w).collect();
         let mu_eff = 1.0 / weights.iter().map(|w| w * w).sum::<f64>();

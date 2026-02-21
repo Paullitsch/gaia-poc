@@ -192,7 +192,7 @@ pub fn run_gpu_cma_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(Gen
     // Final evaluation
     let (fm, fs) = if let Some(ref bp) = best_params {
         let pf32: Vec<f32> = bp.iter().map(|&v| v as f32).collect();
-        let scores: Vec<f64> = (0..20).map(|ep| {
+        let scores: Vec<f64> = (0..20).map(|_| {
             super::gpu_env::vec_evaluate(
                 env_name, &pf32, &policy.layer_dims, 1, max_steps,
                 policy.config.obs_dim, policy.config.act_dim,
@@ -329,7 +329,7 @@ pub fn run_gpu_benchmark(env_name: &str, params: &Value, mut on_gen: impl FnMut(
     let hidden = vec![64, 32];
     let policy = Policy::new(env_cfg.obs_dim, env_cfg.action_space.size(), &hidden, env_cfg.action_space);
     let max_steps = env_cfg.max_steps;
-    let discrete = matches!(env_cfg.action_space, ActionSpace::Discrete(_));
+    let _discrete = matches!(env_cfg.action_space, ActionSpace::Discrete(_));
 
     let n_candidates = params.get("n_candidates").and_then(|v| v.as_u64()).unwrap_or(28) as usize;
     let eval_episodes = params.get("eval_episodes").and_then(|v| v.as_u64()).unwrap_or(5) as usize;

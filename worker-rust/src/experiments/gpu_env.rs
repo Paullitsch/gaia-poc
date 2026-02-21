@@ -73,18 +73,10 @@ const CP_MAX_STEPS: usize = 500;
 // ─── LunarLander Constants ──────────────────────────────────────────
 
 const LL_GRAVITY: f32 = -10.0;
-const LL_SCALE: f32 = 30.0;
 const LL_FPS: f32 = 50.0;
 const LL_MAIN_ENGINE_POWER: f32 = 13.0;
 const LL_SIDE_ENGINE_POWER: f32 = 0.6;
-const LL_LEG_SPRING_TORQUE: f32 = 40.0;
 const LL_INITIAL_Y: f32 = 1.4;  // viewport fraction
-const LL_VIEWPORT_W: f32 = 600.0;
-const LL_VIEWPORT_H: f32 = 400.0;
-// Lander body: width=2/SCALE, height=~3/SCALE
-const LL_LANDER_HALF_W: f32 = 1.0; // /SCALE applied in sim
-const LL_LANDER_HALF_H: f32 = 1.5;
-// State: x, y, vx, vy, angle, angular_vel, leg1_contact, leg2_contact
 const LL_STATE_DIM: usize = 8;
 const LL_OBS_DIM: usize = 8;
 const LL_MAX_STEPS: usize = 1000;
@@ -107,6 +99,7 @@ fn is_gpu_available() -> bool {
 }
 
 #[cfg(not(feature = "cuda"))]
+#[allow(dead_code)]
 fn is_gpu_available() -> bool { false }
 
 impl GpuVecEnv {
@@ -495,7 +488,7 @@ impl GpuVecEnv {
             self.steps[i] += 1;
 
             // Reward: matching Gymnasium formula
-            let prev_shaping = 0.0; // simplified: no prev tracking in vectorized version
+            // simplified: no prev shaping tracking in vectorized version
             let shaping = -100.0 * (x * x + y * y).sqrt()
                          - 100.0 * (vx * vx + vy * vy).sqrt()
                          - 100.0 * angle.abs()

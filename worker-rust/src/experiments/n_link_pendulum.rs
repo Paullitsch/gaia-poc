@@ -138,10 +138,6 @@ impl NLinkPendulum {
         let mut grav_torques = vec![0.0f32; n];
         for i in 0..n {
             let mut torque = 0.0f32;
-            let mut cumulative_angle = 0.0f32;
-            for j in 0..=i {
-                cumulative_angle += self.angles[j];
-            }
             // Gravity torque: sum of mass * g * distance * sin(angle) for links below
             for j in i..n {
                 let mass_below = LINK_MASS * (n - j) as f32;
@@ -214,7 +210,7 @@ impl Environment for NLinkPendulum {
     fn step(&mut self, action: &Action) -> StepResult {
         match action {
             Action::Continuous(v) => self.do_step(v),
-            Action::Discrete(a) => {
+            Action::Discrete(_) => {
                 // Map discrete to continuous: 0=no torque on all joints
                 let actions = vec![0.0f32; self.n_links];
                 self.do_step(&actions)

@@ -8,6 +8,7 @@ use tokio::process::Command;
 use crate::client::{Job, ServerClient};
 use crate::config::Config;
 
+#[allow(unused_variables)]
 pub async fn execute_job(
     client: &ServerClient,
     cfg: &Config,

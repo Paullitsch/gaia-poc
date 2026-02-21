@@ -14,7 +14,7 @@ use cudarc::nvrtc::compile_ptx;
 #[cfg(feature = "cuda")]
 use std::sync::Arc;
 
-use super::env::{self, ActionSpace};
+use super::env::{self};
 use super::policy::Policy;
 use super::native_runner::{GenResult, RunResult};
 use super::optim::{CmaEs, Rng as OptRng, compute_centered_ranks};
@@ -28,6 +28,7 @@ use std::time::Instant;
 /// Template params compiled into kernel via string substitution:
 /// - OBS_DIM, ACT_DIM, H1, H2, N_PARAMS, MAX_STEPS
 /// - ENV_TYPE: 0=CartPole, 1=LunarLander, 2=Swimmer, 3=NLinkPendulum
+#[allow(dead_code)]
 const FULL_EVAL_KERNEL_TEMPLATE: &str = r#"
 // ─── Network constants (substituted at compile time) ────────────
 #define OBS_DIM {OBS_DIM}
@@ -695,7 +696,6 @@ pub fn run_gpu_full_openai_es(env_name: &str, params: &Value, mut on_gen: impl F
     let mut theta: Vec<f64> = (0..n).map(|_| rng.randn() * 0.1).collect();
 
     let mut best_ever = f64::NEG_INFINITY;
-    let mut best_params: Option<Vec<f64>> = None;
     let mut total_evals = 0usize;
     let mut gen = 0usize;
     let start = Instant::now();
@@ -749,7 +749,6 @@ pub fn run_gpu_full_openai_es(env_name: &str, params: &Value, mut on_gen: impl F
         let gen_mean = all_fitnesses.iter().sum::<f64>() / all_fitnesses.len() as f64;
         if gen_best > best_ever {
             best_ever = gen_best;
-            best_params = Some(theta.clone());
         }
 
         on_gen(GenResult {
@@ -818,7 +817,9 @@ pub fn run_gpu_full_benchmark(env_name: &str, params: &Value, mut on_gen: impl F
     let cpu_time = cpu_start.elapsed().as_secs_f64();
 
     // GPU full on-device
+    #[allow(unused_mut)]
     let mut gpu_time = f64::MAX;
+    #[allow(unused_mut)]
     let mut speedup = 0.0;
 
     #[cfg(feature = "cuda")]
