@@ -15,3 +15,4 @@ pub mod methods;
 pub mod ppo;
 pub mod bench_cartpole;
 pub mod native_runner;
+pub mod gpu_env;
