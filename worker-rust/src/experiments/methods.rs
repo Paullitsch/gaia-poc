@@ -461,9 +461,10 @@ pub fn run_openai_es(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenR
         }
 
         // Update theta: gradient ascent with optional weight decay
+        // FIX: normalize by pop_size (not 2*pop_size) — matches OpenAI reference es.py
         for j in 0..n {
             theta[j] = theta[j] * (1.0 - weight_decay)
-                + lr / (2.0 * pop_size as f64 * noise_std) * grad[j];
+                + lr / (pop_size as f64 * noise_std) * grad[j];
         }
 
         // Track best

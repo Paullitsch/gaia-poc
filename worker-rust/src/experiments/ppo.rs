@@ -18,6 +18,9 @@ struct DiffPolicy {
     weights: Vec<Vec<f64>>,    // [layer][fan_in * fan_out]  (row-major)
     biases: Vec<Vec<f64>>,     // [layer][fan_out]
     action_space: ActionSpace,
+    /// Learnable log standard deviation for continuous actions (per action dim).
+    /// FIX: was hardcoded to -0.5, now learned via gradient descent.
+    log_std: Option<Vec<f64>>,
 }
 
 impl DiffPolicy {
@@ -42,11 +45,17 @@ impl DiffPolicy {
             biases.push(b);
         }
 
-        DiffPolicy { layer_dims: dims, weights, biases, action_space }
+        let log_std = match &action_space {
+            ActionSpace::Continuous(n) => Some(vec![-0.5; *n]), // initial std ≈ 0.6
+            _ => None,
+        };
+
+        DiffPolicy { layer_dims: dims, weights, biases, action_space, log_std }
     }
 
     fn n_params(&self) -> usize {
-        self.layer_dims.iter().map(|(i, o)| i * o + o).sum()
+        let net: usize = self.layer_dims.iter().map(|(i, o)| i * o + o).sum();
+        net + self.log_std.as_ref().map_or(0, |v| v.len())
     }
 
     /// Forward pass returning logits/means + all intermediate activations for backprop.
@@ -149,11 +158,17 @@ impl DiffPolicy {
     }
 
     /// Apply gradients with Adam optimizer step.
-    fn apply_gradients(&mut self, d_weights: &[Vec<f64>], d_biases: &[Vec<f64>], adam: &mut Adam) {
+    /// `d_log_std` is optional gradient for learnable log_std (continuous only).
+    fn apply_gradients(&mut self, d_weights: &[Vec<f64>], d_biases: &[Vec<f64>],
+                       d_log_std: Option<&[f64]>, adam: &mut Adam) {
         let mut flat_grad = Vec::new();
         for layer_idx in 0..self.layer_dims.len() {
             flat_grad.extend_from_slice(&d_weights[layer_idx]);
             flat_grad.extend_from_slice(&d_biases[layer_idx]);
+        }
+        // Append log_std gradients
+        if let Some(dls) = d_log_std {
+            flat_grad.extend_from_slice(dls);
         }
 
         let updates = adam.step(&flat_grad);
@@ -170,6 +185,13 @@ impl DiffPolicy {
                 self.biases[layer_idx][j] -= updates[offset + j];
             }
             offset += fan_out;
+        }
+        // Update log_std
+        if let Some(ref mut ls) = self.log_std {
+            for i in 0..ls.len() {
+                ls[i] -= updates[offset + i];
+                ls[i] = ls[i].clamp(-2.0, 0.5); // keep std in reasonable range
+            }
         }
     }
 
@@ -198,17 +220,22 @@ impl DiffPolicy {
                 (Action::Discrete(action), log_prob)
             }
             ActionSpace::Continuous(n) => {
-                // output = mean, fixed log_std = -0.5 (std ≈ 0.6)
-                let log_std: f64 = -0.5;
-                let std = log_std.exp();
+                // FIX: use learnable log_std per action dimension
+                let log_std_vec = self.log_std.as_ref().unwrap();
                 let mut actions = Vec::with_capacity(n);
                 let mut log_prob = 0.0;
                 for i in 0..n {
-                    let mean = output[i].tanh(); // squash mean to [-1, 1]
+                    let log_s = log_std_vec[i].clamp(-2.0, 0.5); // clamp for stability
+                    let std = log_s.exp();
+                    let mean = output[i]; // raw output, tanh applied below
                     let noise = rng.randn() * std;
-                    let a = (mean + noise).clamp(-1.0, 1.0);
-                    // Gaussian log prob
-                    log_prob += -0.5 * ((a - mean) / std).powi(2) - log_std - 0.5 * (2.0 * std::f64::consts::PI).ln();
+                    let raw_a = mean + noise;
+                    let a = raw_a.tanh(); // squash to [-1, 1]
+                    // FIX: Squashed Gaussian log-prob (tanh correction)
+                    // log π(a|s) = log N(raw_a; mean, std) - log(1 - tanh²(raw_a))
+                    let gauss_lp = -0.5 * ((raw_a - mean) / std).powi(2) - log_s - 0.5 * (2.0 * std::f64::consts::PI).ln();
+                    let tanh_correction = (1.0 - a * a + 1e-6).ln();
+                    log_prob += gauss_lp - tanh_correction;
                     actions.push(a as f32);
                 }
                 (Action::Continuous(actions), log_prob)
@@ -227,12 +254,18 @@ impl DiffPolicy {
                 probs[*a].max(1e-10).ln()
             }
             (ActionSpace::Continuous(_n), Action::Continuous(actions)) => {
-                let log_std: f64 = -0.5;
-                let std = log_std.exp();
+                let log_std_vec = self.log_std.as_ref().unwrap();
                 let mut lp = 0.0;
                 for (i, &a) in actions.iter().enumerate() {
-                    let mean = output[i].tanh();
-                    lp += -0.5 * ((a as f64 - mean) / std).powi(2) - log_std - 0.5 * (2.0 * std::f64::consts::PI).ln();
+                    let log_s = log_std_vec[i].clamp(-2.0, 0.5);
+                    let std = log_s.exp();
+                    let mean = output[i];
+                    // Inverse tanh to recover raw_a from squashed action
+                    let a64 = (a as f64).clamp(-0.999, 0.999);
+                    let raw_a = 0.5 * ((1.0 + a64) / (1.0 - a64)).ln(); // atanh
+                    let gauss_lp = -0.5 * ((raw_a - mean) / std).powi(2) - log_s - 0.5 * (2.0 * std::f64::consts::PI).ln();
+                    let tanh_correction = (1.0 - a64 * a64 + 1e-6).ln();
+                    lp += gauss_lp - tanh_correction;
                 }
                 lp
             }
@@ -256,14 +289,16 @@ impl DiffPolicy {
                 d
             }
             (ActionSpace::Continuous(n), Action::Continuous(actions)) => {
-                let log_std: f64 = -0.5;
-                let std = log_std.exp();
+                let log_std_vec = self.log_std.as_ref().unwrap();
                 let mut d = vec![0.0; *n];
                 for i in 0..*n {
-                    let mean = output[i].tanh();
-                    let dtanh = 1.0 - mean * mean;
-                    // d log_prob / d output_i = (a - tanh(o)) / std² * dtanh/d_output
-                    d[i] = (actions[i] as f64 - mean) / (std * std) * dtanh;
+                    let log_s = log_std_vec[i].clamp(-2.0, 0.5);
+                    let std = log_s.exp();
+                    let mean = output[i];
+                    let a64 = (actions[i] as f64).clamp(-0.999, 0.999);
+                    let raw_a = 0.5 * ((1.0 + a64) / (1.0 - a64)).ln(); // atanh
+                    // d log_prob / d mean = (raw_a - mean) / std²
+                    d[i] = (raw_a - mean) / (std * std);
                 }
                 d
             }
@@ -305,7 +340,7 @@ impl ValueNet {
         // d_loss/d_output = 2 * error
         let d_output = vec![2.0 * error];
         let (d_weights, d_biases) = self.inner.backward(&fwd, &d_output);
-        self.inner.apply_gradients(&d_weights, &d_biases, adam);
+        self.inner.apply_gradients(&d_weights, &d_biases, None, adam);
 
         loss
     }
@@ -413,7 +448,7 @@ pub fn run_ppo(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)
     let gamma = params.get("gamma").and_then(|v| v.as_f64()).unwrap_or(0.99);
     let lambda = params.get("lambda").and_then(|v| v.as_f64()).unwrap_or(0.95);
     let lr = params.get("lr").and_then(|v| v.as_f64()).unwrap_or(3e-4);
-    let _vf_coeff = params.get("vf_coeff").and_then(|v| v.as_f64()).unwrap_or(0.5);
+    let vf_coeff = params.get("vf_coeff").and_then(|v| v.as_f64()).unwrap_or(0.5);
     let ent_coeff = params.get("ent_coeff").and_then(|v| v.as_f64()).unwrap_or(0.01);
 
     let obs_dim = env_cfg.obs_dim;
@@ -501,6 +536,8 @@ pub fn run_ppo(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)
                     .map(|w| vec![0.0; w.len()]).collect();
                 let mut total_d_biases: Vec<Vec<f64>> = policy.biases.iter()
                     .map(|b| vec![0.0; b.len()]).collect();
+                let n_log_std = policy.log_std.as_ref().map_or(0, |v| v.len());
+                let mut total_d_log_std = vec![0.0; n_log_std];
                 let batch_size = batch_indices.len() as f64;
 
                 for &idx in batch_indices {
@@ -514,26 +551,21 @@ pub fn run_ppo(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)
                     let ratio = (new_log_prob - t.log_prob).exp();
                     let surr1 = ratio * advantages[idx];
                     let surr2 = ratio.clamp(1.0 - clip_eps, 1.0 + clip_eps) * advantages[idx];
-                    // Gradient of log_prob w.r.t. output
-                    let d_log_prob = policy.d_log_prob(&fwd.output, &t.action);
 
-                    // PPO gradient: d_loss/d_theta = -d/d_theta min(r*A, clip(r)*A)
-                    // If ratio in [1-eps, 1+eps]: gradient flows (use advantage * ratio)
-                    // If clipped and clipping is active: zero gradient
-                    let use_surr1 = surr1 <= surr2; // min picks surr1
+                    let use_surr1 = surr1 <= surr2;
                     let clip_grad = if use_surr1 {
                         ratio * advantages[idx]
                     } else {
                         0.0
                     };
 
-                    // Entropy gradient: d(-H)/d(output) for entropy bonus
-                    // For discrete: H = -Σ p_i log(p_i), d(-H)/d(logit_j) = p_j*(1 + log(p_j)) - mean
-                    // We maximize entropy, so subtract its gradient from the loss gradient
-                    let d_entropy = compute_d_entropy(&fwd.output, &policy.action_space);
+                    // Gradient of log_prob w.r.t. output (for network weights)
+                    let d_log_prob = policy.d_log_prob(&fwd.output, &t.action);
 
-                    // Combined gradient: policy_loss - ent_coeff * entropy
-                    // d_output = d(policy_loss)/d(output) - ent_coeff * d(entropy)/d(output)
+                    // Entropy gradient
+                    let d_entropy = compute_d_entropy(&fwd.output, &policy.action_space, &policy.log_std);
+
+                    // Combined gradient for network output
                     let d_output: Vec<f64> = (0..fwd.output.len()).map(|i| {
                         (-clip_grad * d_log_prob[i] - ent_coeff * d_entropy[i]) / batch_size
                     }).collect();
@@ -544,11 +576,36 @@ pub fn run_ppo(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)
                         for i in 0..db[l].len() { total_d_biases[l][i] += db[l][i]; }
                     }
 
-                    // Value function update
-                    value_net.train_step(&t.obs, returns[idx], &mut value_adam);
+                    // FIX: Gradient for learnable log_std (continuous only)
+                    if n_log_std > 0 {
+                        if let (ActionSpace::Continuous(_), Action::Continuous(actions)) = (&policy.action_space, &t.action) {
+                            let log_std_vec = policy.log_std.as_ref().unwrap();
+                            for i in 0..n_log_std {
+                                let log_s = log_std_vec[i].clamp(-2.0, 0.5);
+                                let std = log_s.exp();
+                                let mean = fwd.output[i];
+                                let a64 = (actions[i] as f64).clamp(-0.999, 0.999);
+                                let raw_a = 0.5 * ((1.0 + a64) / (1.0 - a64)).ln();
+                                // d log_prob / d log_std = (raw_a - mean)²/std² - 1
+                                let d_lp_d_ls = ((raw_a - mean) / std).powi(2) - 1.0;
+                                // d entropy / d log_std = 1 (Gaussian entropy = log_std + const)
+                                let d_ent_d_ls = 1.0;
+                                total_d_log_std[i] += (-clip_grad * d_lp_d_ls - ent_coeff * d_ent_d_ls) / batch_size;
+                            }
+                        }
+                    }
+
+                    // FIX: Value function update with vf_coeff
+                    let fwd_v = value_net.inner.forward(&t.obs);
+                    let prediction = fwd_v.output[0];
+                    let error = prediction - returns[idx];
+                    let d_output_v = vec![2.0 * vf_coeff * error];
+                    let (dw_v, db_v) = value_net.inner.backward(&fwd_v, &d_output_v);
+                    value_net.inner.apply_gradients(&dw_v, &db_v, None, &mut value_adam);
                 }
 
-                policy.apply_gradients(&total_d_weights, &total_d_biases, &mut policy_adam);
+                let d_ls = if n_log_std > 0 { Some(total_d_log_std.as_slice()) } else { None };
+                policy.apply_gradients(&total_d_weights, &total_d_biases, d_ls, &mut policy_adam);
             }
         }
 
@@ -561,7 +618,7 @@ pub fn run_ppo(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)
             best: recent_rewards.last().copied().unwrap_or(0.0),
             best_ever,
             mean: mean_reward,
-            sigma: 0.0, // not applicable for PPO
+            sigma: policy.log_std.as_ref().map_or(0.0, |ls| ls.iter().map(|v| v.exp()).sum::<f64>() / ls.len() as f64),
             evals: total_evals,
             time: start.elapsed().as_secs_f64(),
         });
@@ -615,17 +672,13 @@ pub fn run_ppo(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)
 
 /// Gradient of entropy w.r.t. logits (for backpropagation).
 /// Returns d(H)/d(output) — positive direction increases entropy.
-fn compute_d_entropy(output: &[f64], action_space: &ActionSpace) -> Vec<f64> {
+fn compute_d_entropy(output: &[f64], action_space: &ActionSpace, _log_std: &Option<Vec<f64>>) -> Vec<f64> {
     match action_space {
         ActionSpace::Discrete(_) => {
             let max_v = output.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
             let exp: Vec<f64> = output.iter().map(|v| (v - max_v).exp()).collect();
             let sum: f64 = exp.iter().sum();
             let probs: Vec<f64> = exp.iter().map(|v| v / sum).collect();
-            // H = -Σ p_i log(p_i)
-            // dH/d(logit_j) = -p_j * (1 + log(p_j)) + p_j * Σ_i p_i * (1 + log(p_i))
-            // Simplified: dH/d(logit_j) = p_j * (H + log(p_j)) — but with sign that increases H
-            // Actually: dH/d(logit_j) = -p_j * (log(p_j) + 1) + p_j * Σ_k p_k * (log(p_k) + 1)
             let weighted_sum: f64 = probs.iter()
                 .map(|p| p * (p.max(1e-10).ln() + 1.0))
                 .sum();
@@ -634,10 +687,14 @@ fn compute_d_entropy(output: &[f64], action_space: &ActionSpace) -> Vec<f64> {
             }).collect()
         }
         ActionSpace::Continuous(n) => {
-            // Gaussian entropy with fixed std doesn't depend on output
+            // FIX: Gaussian entropy w.r.t. output (mean).
+            // H = 0.5 * ln(2πe) + log_std — does NOT depend on mean (output).
+            // The mean doesn't affect entropy; entropy gradient for log_std is
+            // handled separately in the training loop.
+            // So d(H)/d(output) = 0 is actually correct for Gaussian!
+            // But we include squash correction: effective entropy includes tanh,
+            // which depends on mean. d(entropy_correction)/d(mean) ≈ 0 in expectation.
             vec![0.0; *n]
         }
     }
 }
-
-// compute_entropy removed — entropy gradient is computed directly via compute_d_entropy
