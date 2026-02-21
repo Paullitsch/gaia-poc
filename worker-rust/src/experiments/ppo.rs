@@ -413,7 +413,7 @@ pub fn run_ppo(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)
     let gamma = params.get("gamma").and_then(|v| v.as_f64()).unwrap_or(0.99);
     let lambda = params.get("lambda").and_then(|v| v.as_f64()).unwrap_or(0.95);
     let lr = params.get("lr").and_then(|v| v.as_f64()).unwrap_or(3e-4);
-    let vf_coeff = params.get("vf_coeff").and_then(|v| v.as_f64()).unwrap_or(0.5);
+    let _vf_coeff = params.get("vf_coeff").and_then(|v| v.as_f64()).unwrap_or(0.5);
     let ent_coeff = params.get("ent_coeff").and_then(|v| v.as_f64()).unwrap_or(0.01);
 
     let obs_dim = env_cfg.obs_dim;
@@ -514,13 +514,7 @@ pub fn run_ppo(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)
                     let ratio = (new_log_prob - t.log_prob).exp();
                     let surr1 = ratio * advantages[idx];
                     let surr2 = ratio.clamp(1.0 - clip_eps, 1.0 + clip_eps) * advantages[idx];
-                    let policy_loss = -surr1.min(surr2);
-
-                    // Entropy bonus (approximate)
-                    let entropy = compute_entropy(&fwd.output, &policy.action_space);
-                    let loss = policy_loss - ent_coeff * entropy;
-
-                    // Gradient of loss w.r.t. output
+                    // Gradient of log_prob w.r.t. output
                     let d_log_prob = policy.d_log_prob(&fwd.output, &t.action);
 
                     // PPO gradient: d_loss/d_theta = -d/d_theta min(r*A, clip(r)*A)
@@ -528,14 +522,21 @@ pub fn run_ppo(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)
                     // If clipped and clipping is active: zero gradient
                     let use_surr1 = surr1 <= surr2; // min picks surr1
                     let clip_grad = if use_surr1 {
-                        // surr1 = ratio * A, d(surr1)/d(logprob) = ratio * A
                         ratio * advantages[idx]
                     } else {
-                        // surr2 = clip(ratio) * A — ratio is outside clip range, no gradient
                         0.0
                     };
 
-                    let d_output: Vec<f64> = d_log_prob.iter().map(|&d| -clip_grad * d / batch_size).collect();
+                    // Entropy gradient: d(-H)/d(output) for entropy bonus
+                    // For discrete: H = -Σ p_i log(p_i), d(-H)/d(logit_j) = p_j*(1 + log(p_j)) - mean
+                    // We maximize entropy, so subtract its gradient from the loss gradient
+                    let d_entropy = compute_d_entropy(&fwd.output, &policy.action_space);
+
+                    // Combined gradient: policy_loss - ent_coeff * entropy
+                    // d_output = d(policy_loss)/d(output) - ent_coeff * d(entropy)/d(output)
+                    let d_output: Vec<f64> = (0..fwd.output.len()).map(|i| {
+                        (-clip_grad * d_log_prob[i] - ent_coeff * d_entropy[i]) / batch_size
+                    }).collect();
 
                     let (dw, db) = policy.backward(&fwd, &d_output);
                     for l in 0..dw.len() {
@@ -612,19 +613,31 @@ pub fn run_ppo(env_name: &str, params: &Value, mut on_gen: impl FnMut(GenResult)
     }
 }
 
-fn compute_entropy(output: &[f64], action_space: &ActionSpace) -> f64 {
+/// Gradient of entropy w.r.t. logits (for backpropagation).
+/// Returns d(H)/d(output) — positive direction increases entropy.
+fn compute_d_entropy(output: &[f64], action_space: &ActionSpace) -> Vec<f64> {
     match action_space {
         ActionSpace::Discrete(_) => {
             let max_v = output.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
             let exp: Vec<f64> = output.iter().map(|v| (v - max_v).exp()).collect();
             let sum: f64 = exp.iter().sum();
             let probs: Vec<f64> = exp.iter().map(|v| v / sum).collect();
-            -probs.iter().map(|p| if *p > 1e-10 { p * p.ln() } else { 0.0 }).sum::<f64>()
+            // H = -Σ p_i log(p_i)
+            // dH/d(logit_j) = -p_j * (1 + log(p_j)) + p_j * Σ_i p_i * (1 + log(p_i))
+            // Simplified: dH/d(logit_j) = p_j * (H + log(p_j)) — but with sign that increases H
+            // Actually: dH/d(logit_j) = -p_j * (log(p_j) + 1) + p_j * Σ_k p_k * (log(p_k) + 1)
+            let weighted_sum: f64 = probs.iter()
+                .map(|p| p * (p.max(1e-10).ln() + 1.0))
+                .sum();
+            probs.iter().map(|p| {
+                -p * (p.max(1e-10).ln() + 1.0) + p * weighted_sum
+            }).collect()
         }
         ActionSpace::Continuous(n) => {
-            // Gaussian entropy = 0.5 * ln(2πe * σ²) per dimension
-            let log_std: f64 = -0.5;
-            *n as f64 * (0.5 * (2.0 * std::f64::consts::PI * std::f64::consts::E).ln() + log_std)
+            // Gaussian entropy with fixed std doesn't depend on output
+            vec![0.0; *n]
         }
     }
 }
+
+// compute_entropy removed — entropy gradient is computed directly via compute_d_entropy
