@@ -302,6 +302,9 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 2
                   <option value="Pendulum-2Link">Pendulum-2Link</option>
                   <option value="Pendulum-3Link">Pendulum-3Link</option>
                   <option value="Pendulum-5Link">Pendulum-5Link</option>
+                  <option value="Pendulum-10Link">Pendulum-10Link</option>
+                  <option value="Pendulum-15Link">Pendulum-15Link</option>
+                  <option value="Pendulum-20Link">Pendulum-20Link</option>
                 </optgroup>
               </select>
             </div>
@@ -346,6 +349,9 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 2
             <div class="env-tab" data-env="Pendulum-2Link">🔗 2-Link</div>
             <div class="env-tab" data-env="Pendulum-3Link">🔗 3-Link</div>
             <div class="env-tab" data-env="Pendulum-5Link">🔗 5-Link</div>
+            <div class="env-tab" data-env="Pendulum-10Link">🔗 10-Link</div>
+            <div class="env-tab" data-env="Pendulum-15Link">🔗 15-Link</div>
+            <div class="env-tab" data-env="Pendulum-20Link">🔗 20-Link</div>
           </div>
           <div id="leaderboard-body"><div class="empty"><div class="empty-icon">🔬</div>Run experiments to see leaderboards</div></div>
         </div>
@@ -432,6 +438,9 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 2
             <option value="Pendulum-2Link">Pendulum-2Link</option>
             <option value="Pendulum-3Link">Pendulum-3Link</option>
             <option value="Pendulum-5Link">Pendulum-5Link</option>
+            <option value="Pendulum-10Link">Pendulum-10Link</option>
+            <option value="Pendulum-15Link">Pendulum-15Link</option>
+            <option value="Pendulum-20Link">Pendulum-20Link</option>
           </select>
           <button class="btn-ghost" onclick="downloadAllCSV()">⬇ CSV</button>
           <button class="btn-ghost" onclick="downloadSummaryJSON()">⬇ JSON</button>
@@ -461,6 +470,9 @@ const BENCHMARKS = {
   'Pendulum-2Link':  { threshold: 400, obs: 6,  act: 2, type: 'continuous', emoji: '🔗', gpu: true },
   'Pendulum-3Link':  { threshold: 600, obs: 9,  act: 3, type: 'continuous', emoji: '🔗', gpu: true },
   'Pendulum-5Link':  { threshold:1000, obs: 15, act: 5, type: 'continuous', emoji: '🔗', gpu: true },
+  'Pendulum-10Link': { threshold:2000, obs: 30, act: 10, type: 'continuous', emoji: '🔗', gpu: true },
+  'Pendulum-15Link': { threshold:3000, obs: 45, act: 15, type: 'continuous', emoji: '🔗', gpu: true },
+  'Pendulum-20Link': { threshold:4000, obs: 60, act: 20, type: 'continuous', emoji: '🔗', gpu: true },
 };
 
 const METHOD_NAMES = {
