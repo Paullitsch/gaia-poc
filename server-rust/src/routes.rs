@@ -481,6 +481,10 @@ struct UploadQuery {
     notes: Option<String>,
 }
 
+fn is_valid_path_component(s: &str) -> bool {
+    !s.contains("..") && !s.contains('/') && !s.contains('\\')
+}
+
 async fn upload_release(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -489,13 +493,13 @@ async fn upload_release(
 ) -> Result<Json<Value>, StatusCode> {
     check_auth(&state, &headers)?;
 
-    let releases_dir = state.releases_dir().join(&q.tag);
-    tokio::fs::create_dir_all(&releases_dir).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    // Validate filename (no path traversal)
-    if q.filename.contains("..") || q.filename.contains('/') || q.filename.contains('\\') {
+    // Validate tag and filename (no path traversal)
+    if !is_valid_path_component(&q.tag) || !is_valid_path_component(&q.filename) {
         return Err(StatusCode::BAD_REQUEST);
     }
+
+    let releases_dir = state.releases_dir().join(&q.tag);
+    tokio::fs::create_dir_all(&releases_dir).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let file_path = releases_dir.join(&q.filename);
     tokio::fs::write(&file_path, &body).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -591,7 +595,7 @@ async fn serve_release_file(
     tag: &str,
     filename: &str,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
+    if !is_valid_path_component(tag) || !is_valid_path_component(filename) {
         return Err(StatusCode::BAD_REQUEST);
     }
     let path = state.releases_dir().join(tag).join(filename);
