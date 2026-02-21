@@ -2,229 +2,281 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>GAIA – Mission Control</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>🧬</text></svg>">
 <style>
+/* ═══════ RESET & TOKENS ═══════ */
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#09090b;--surface:#111113;--surface2:#18181b;--surface3:#1f1f23;
-  --border:#27272a;--border2:#3f3f46;
-  --text:#fafafa;--text2:#a1a1aa;--text3:#71717a;
-  --accent:#8b5cf6;--accent2:#a78bfa;--accent-bg:rgba(139,92,246,.08);
-  --green:#22c55e;--green-bg:rgba(34,197,94,.1);
-  --red:#ef4444;--red-bg:rgba(239,68,68,.1);
-  --yellow:#eab308;--yellow-bg:rgba(234,179,8,.1);
-  --blue:#3b82f6;--cyan:#06b6d4;--orange:#f97316;--pink:#ec4899;
-  --radius:10px;--radius-sm:6px;
+  --bg:#0a0a0c;--bg2:#101014;
+  --surface:#141418;--surface2:#1a1a20;--surface3:#222228;
+  --border:rgba(255,255,255,.06);--border2:rgba(255,255,255,.1);
+  --text:#eeeef0;--text2:#9898a4;--text3:#5c5c6a;
+  --accent:#7c6aef;--accent2:#9d8df7;--accent-dim:rgba(124,106,239,.1);
+  --green:#34d399;--green-dim:rgba(52,211,153,.1);
+  --red:#f87171;--red-dim:rgba(248,113,113,.1);
+  --yellow:#fbbf24;--yellow-dim:rgba(251,191,36,.1);
+  --cyan:#22d3ee;--cyan-dim:rgba(34,211,238,.1);
+  --orange:#fb923c;--pink:#f472b6;
+  --radius:12px;--radius-sm:8px;--radius-xs:6px;
+  --shadow:0 1px 3px rgba(0,0,0,.3),0 1px 2px rgba(0,0,0,.2);
+  --font:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono','SF Mono','Fira Code',monospace;
 }
-html{-webkit-text-size-adjust:100%}
-body{background:var(--bg);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;line-height:1.5;min-height:100dvh;font-size:14px;overflow-x:hidden}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;min-height:100dvh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 
-/* Auth */
-#auth-overlay{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px}
+/* ═══════ AUTH OVERLAY ═══════ */
+#auth-overlay{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
 #auth-overlay.hidden{display:none}
-#auth-overlay .logo-big{font-size:3rem;margin-bottom:-8px}
-#auth-overlay h1{font-size:1.5rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-#auth-overlay p{color:var(--text3);font-size:.875rem}
-#auth-overlay input{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;color:var(--text);font-size:1rem;width:min(320px,85vw);outline:none;transition:border .2s}
-#auth-overlay input:focus{border-color:var(--accent)}
-#auth-overlay button{background:var(--accent);color:#fff;border:none;border-radius:var(--radius);padding:12px 32px;font-size:.95rem;cursor:pointer;font-weight:600;transition:opacity .2s}
-#auth-overlay button:hover{opacity:.9}
+.auth-logo{font-size:3.5rem;filter:drop-shadow(0 0 24px rgba(124,106,239,.3))}
+.auth-title{font-size:1.4rem;font-weight:700;color:var(--text)}
+.auth-sub{color:var(--text3);font-size:.85rem}
+.auth-input{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:14px 18px;color:var(--text);font-size:1rem;width:min(320px,85vw);outline:none;transition:border .2s;font-family:var(--font)}
+.auth-input:focus{border-color:var(--accent)}
+.auth-input::placeholder{color:var(--text3)}
+.auth-btn{background:var(--accent);color:#fff;border:none;border-radius:var(--radius);padding:14px 36px;font-size:.95rem;cursor:pointer;font-weight:600;transition:all .2s;font-family:var(--font)}
+.auth-btn:hover{opacity:.9;transform:translateY(-1px)}
+.auth-btn:active{transform:translateY(0)}
 #auth-error{color:var(--red);font-size:.8rem;min-height:1.2rem}
 
-/* Header */
-header{display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-.logo{display:flex;align-items:center;gap:8px}
-.logo span{font-size:1.25rem}
-.logo h1{font-size:.95rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.header-meta{display:flex;align-items:center;gap:12px;font-size:.75rem;color:var(--text3)}
-.header-meta .sep{width:1px;height:16px;background:var(--border)}
-.status-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px}
-.status-dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
-.status-dot.off{background:var(--red)}
+/* ═══════ HEADER ═══════ */
+header{display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:56px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{font-size:1.3rem}
+.logo h1{font-size:1rem;font-weight:700;color:var(--text);letter-spacing:-.02em}
+.logo h1 span{color:var(--accent2)}
+.header-right{display:flex;align-items:center;gap:16px;font-size:.75rem;color:var(--text3)}
+.header-right .sep{width:1px;height:16px;background:var(--border2)}
+.conn-indicator{display:flex;align-items:center;gap:5px}
+.conn-dot{width:7px;height:7px;border-radius:50%;transition:all .3s}
+.conn-dot.on{background:var(--green);box-shadow:0 0 8px rgba(52,211,153,.4)}
+.conn-dot.off{background:var(--red);box-shadow:0 0 8px rgba(248,113,113,.4)}
 
-.container{max-width:1400px;margin:0 auto;padding:12px}
+/* ═══════ LAYOUT ═══════ */
+.container{max-width:1440px;margin:0 auto;padding:16px 20px}
 
-/* Tabs */
-.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+/* ═══════ TABS ═══════ */
+.tabs{display:flex;gap:2px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .tabs::-webkit-scrollbar{display:none}
-.tab{padding:10px 18px;font-size:.8rem;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.tab{padding:12px 16px;font-size:.8rem;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all .2s;white-space:nowrap;flex-shrink:0;user-select:none}
 .tab:hover{color:var(--text2)}
 .tab.active{color:var(--accent2);border-bottom-color:var(--accent)}
-.tab-content{display:none;padding-top:16px}
-.tab-content.active{display:block}
+.tab-content{display:none;padding-top:20px}
+.tab-content.active{display:block;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
-/* Grid */
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* ═══════ STATS ROW ═══════ */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;text-align:center;transition:border-color .2s}
+.stat-card:hover{border-color:var(--border2)}
+.stat-val{font-size:2rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1;letter-spacing:-.02em}
+.stat-label{font-size:.7rem;color:var(--text3);margin-top:4px;text-transform:uppercase;letter-spacing:.06em;font-weight:500}
+.stat-sub{font-size:.7rem;color:var(--text3);margin-top:6px}
+
+/* ═══════ GRID ═══════ */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .full-width{grid-column:1/-1}
 
-/* Cards */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;min-height:44px}
-.card-header h2{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
-.card-body{padding:14px 16px}
+/* ═══════ CARDS ═══════ */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:border-color .2s}
+.card:hover{border-color:var(--border2)}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;min-height:52px}
+.card-header h2{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);font-weight:600;display:flex;align-items:center;gap:8px}
+.card-body{padding:20px}
 
-/* Stat cards */
-.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px}
-.stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center}
-.stat-card .val{font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
-.stat-card .lbl{font-size:.65rem;color:var(--text3);margin-top:2px;text-transform:uppercase;letter-spacing:.04em}
-.stat-card .sub{font-size:.7rem;color:var(--text3);margin-top:4px}
-.solved{color:var(--green)!important}
+/* ═══════ BADGES ═══════ */
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:.65rem;font-weight:600;letter-spacing:.02em}
+.badge-idle{background:var(--green-dim);color:var(--green)}
+.badge-busy{background:var(--cyan-dim);color:var(--cyan)}
+.badge-offline{background:var(--red-dim);color:var(--red)}
+.badge-queued{background:var(--accent-dim);color:var(--accent2)}
+.badge-running{background:var(--cyan-dim);color:var(--cyan)}
+.badge-completed{background:var(--green-dim);color:var(--green)}
+.badge-failed{background:var(--red-dim);color:var(--red)}
+.badge-cancelled{background:var(--yellow-dim);color:var(--yellow)}
+.badge-timed_out{background:var(--yellow-dim);color:var(--orange)}
+.badge-gpu{background:var(--cyan-dim);color:var(--cyan)}
+.badge-cpu{background:var(--yellow-dim);color:var(--yellow)}
+.badge-backprop{background:var(--red-dim);color:var(--red)}
+.badge-gradfree{background:var(--green-dim);color:var(--green)}
 
-/* Badges */
-.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
-.badge-idle{background:var(--green-bg);color:var(--green)}
-.badge-busy{background:var(--yellow-bg);color:var(--yellow)}
-.badge-offline{background:var(--red-bg);color:var(--red)}
-.badge-queued{background:var(--accent-bg);color:var(--accent2)}
-.badge-running{background:rgba(6,182,212,.1);color:var(--cyan)}
-.badge-completed{background:var(--green-bg);color:var(--green)}
-.badge-failed{background:var(--red-bg);color:var(--red)}
-.badge-timed_out{background:var(--yellow-bg);color:var(--orange)}
-
-/* Worker cards */
-.worker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px}
-.worker-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;transition:border-color .2s}
-.worker-card.busy{border-left:3px solid var(--cyan)}
-.worker-card.idle{border-left:3px solid var(--green)}
-.worker-card.offline{border-left:3px solid var(--red);opacity:.5}
-.worker-name{font-weight:600;font-size:.85rem;display:flex;align-items:center;justify-content:space-between}
-.worker-details{margin-top:8px;font-size:.75rem;color:var(--text3);display:grid;grid-template-columns:auto 1fr;gap:2px 10px}
-.worker-details .v{color:var(--text2)}
-.pulse{width:7px;height:7px;border-radius:50%;display:inline-block}
+/* ═══════ WORKERS ═══════ */
+.worker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.worker-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;transition:all .2s;position:relative;overflow:hidden}
+.worker-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px}
+.worker-card.busy::before{background:var(--cyan)}
+.worker-card.idle::before{background:var(--green)}
+.worker-card.offline::before{background:var(--red)}
+.worker-card.offline{opacity:.45}
+.worker-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.worker-name{font-weight:600;font-size:.9rem;display:flex;align-items:center;gap:8px}
+.worker-meta{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:.75rem}
+.worker-meta .k{color:var(--text3)}
+.worker-meta .v{color:var(--text2)}
+.pulse{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
 .pulse.live{background:var(--green);animation:pulse 2s infinite}
 .pulse.stale{background:var(--yellow)}
 .pulse.dead{background:var(--red)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
-/* Env tabs */
-.env-tabs{display:flex;gap:0;margin-bottom:10px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+/* ═══════ ENV TABS ═══════ */
+.env-tabs{display:flex;gap:0;margin-bottom:16px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow-x:auto;scrollbar-width:none;background:var(--bg2)}
 .env-tabs::-webkit-scrollbar{display:none}
-.env-tab{padding:6px 14px;font-size:.75rem;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all .15s;white-space:nowrap;flex-shrink:0}
-.env-tab:hover{color:var(--text2)}
-.env-tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.env-tab{padding:8px 16px;font-size:.75rem;color:var(--text3);cursor:pointer;font-weight:500;transition:all .2s;white-space:nowrap;flex-shrink:0;border-right:1px solid var(--border)}
+.env-tab:last-child{border-right:none}
+.env-tab:hover{color:var(--text2);background:rgba(255,255,255,.02)}
+.env-tab.active{color:var(--cyan);background:var(--cyan-dim)}
 
-/* Tables */
-.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.leaderboard{width:100%;border-collapse:collapse;font-size:.8rem;min-width:600px}
-.leaderboard th{text-align:left;padding:8px 10px;color:var(--text3);font-size:.65rem;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);font-weight:600}
-.leaderboard td{padding:8px 10px;border-bottom:1px solid var(--border)}
-.leaderboard tr:hover{background:rgba(139,92,246,.03)}
+/* ═══════ TABLES ═══════ */
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius-sm)}
+.table{width:100%;border-collapse:collapse;font-size:.8rem;min-width:600px}
+.table th{text-align:left;padding:10px 14px;color:var(--text3);font-size:.65rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);font-weight:600;background:var(--bg2)}
+.table td{padding:10px 14px;border-bottom:1px solid var(--border)}
+.table tbody tr{transition:background .15s}
+.table tbody tr:hover{background:rgba(255,255,255,.02)}
+.table tbody tr:last-child td{border-bottom:none}
 .rank-1{color:var(--yellow);font-weight:700}
 .rank-2{color:#c0c0c0;font-weight:600}
 .rank-3{color:#cd7f32;font-weight:600}
 
-/* Charts */
-.chart-wrap{position:relative;width:100%;height:320px;margin-top:8px}
-.chart-wrap canvas{width:100%!important;height:100%!important;touch-action:none}
+/* ═══════ PROGRESS BAR ═══════ */
+.progress-bar{height:6px;background:var(--bg);border-radius:3px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;border-radius:3px;transition:width .5s ease;background:linear-gradient(90deg,var(--accent),var(--cyan))}
 
-/* Submit form */
-.submit-row{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
-.submit-row select,.submit-row input{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text);font-size:.8rem;outline:none;transition:border .2s}
-.submit-row select:focus,.submit-row input:focus{border-color:var(--accent)}
-.submit-row .btn-submit{background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);padding:8px 20px;cursor:pointer;font-size:.8rem;font-weight:600;white-space:nowrap;transition:opacity .15s}
-.submit-row .btn-submit:hover{opacity:.85}
-.param-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;margin-top:10px}
-.param-grid label{font-size:.7rem;color:var(--text3);display:flex;flex-direction:column;gap:3px}
-.param-grid input,.param-grid select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;color:var(--text);font-size:.8rem;outline:none;width:100%}
+/* ═══════ CHARTS ═══════ */
+.chart-wrap{position:relative;width:100%;height:340px}
+.chart-wrap canvas{width:100%!important;height:100%!important;touch-action:pan-y;border-radius:var(--radius-sm)}
+.chart-hint{position:absolute;bottom:8px;right:12px;font-size:.65rem;color:var(--text3);pointer-events:none;opacity:.6}
 
-/* Buttons */
-.btn-sm{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 10px;color:var(--text3);cursor:pointer;font-size:.7rem;transition:all .15s}
-.btn-sm:hover{background:var(--border);color:var(--text)}
-.btn-sm.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* ═══════ SUBMIT FORM ═══════ */
+.form-row{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group label{font-size:.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;font-weight:500}
+.form-select,.form-input{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-xs);padding:10px 14px;color:var(--text);font-size:.8rem;outline:none;transition:border .2s;font-family:var(--font);min-width:0}
+.form-select:focus,.form-input:focus{border-color:var(--accent)}
+.form-select{cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%235c5c6a'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+.form-select option{background:var(--surface);color:var(--text)}
+.btn{border:none;border-radius:var(--radius-xs);padding:10px 24px;cursor:pointer;font-size:.8rem;font-weight:600;transition:all .15s;font-family:var(--font);display:inline-flex;align-items:center;gap:6px}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text2);padding:8px 14px;font-size:.75rem}
+.btn-ghost:hover{background:rgba(255,255,255,.04);color:var(--text)}
+.btn-ghost.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent2)}
+.btn-danger{background:transparent;border:1px solid var(--border);color:var(--red);padding:6px 12px;font-size:.7rem}
+.btn-danger:hover{background:var(--red-dim)}
+.param-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:14px}
+.param-grid .form-group{gap:3px}
+.param-grid .form-input{padding:8px 12px}
 
-/* Toolbar */
-.toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+/* ═══════ JOBS ═══════ */
+.job-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:8px;transition:all .2s;position:relative}
+.job-card.running{border-left:3px solid var(--cyan)}
+.job-card.queued{border-left:3px solid var(--accent)}
+.job-top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.job-info{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.job-id{font-family:var(--mono);color:var(--text3);font-size:.7rem}
+.job-method{font-weight:600;font-size:.85rem}
+.job-env{font-size:.7rem;color:var(--text3)}
+.job-details{margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;font-size:.72rem}
+.job-detail{display:flex;flex-direction:column;gap:1px}
+.job-detail .k{color:var(--text3);font-size:.65rem;text-transform:uppercase;letter-spacing:.03em}
+.job-detail .v{color:var(--text2);font-family:var(--mono);font-size:.75rem}
+.section-label{font-size:.7rem;font-weight:600;color:var(--text3);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.04em}
 
-/* Jobs */
-.job-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2);border-radius:var(--radius-sm);margin-bottom:4px;font-size:.8rem;border:1px solid var(--border)}
-.job-item.running{border-left:3px solid var(--cyan)}
-.job-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.job-id{font-family:'JetBrains Mono',monospace;color:var(--text3);font-size:.7rem}
+/* ═══════ ACTIVITY LOG ═══════ */
+.activity-log{max-height:200px;overflow-y:auto;font-size:.72rem;font-family:var(--mono)}
+.activity-entry{padding:5px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:baseline}
+.activity-time{color:var(--text3);min-width:55px;flex-shrink:0}
 
-/* Activity */
-.activity-log{max-height:160px;overflow-y:auto;font-size:.7rem;font-family:'JetBrains Mono',monospace}
-.activity-log .entry{padding:3px 0;border-bottom:1px solid rgba(39,39,42,.5);display:flex;gap:8px}
-.activity-log .time{color:var(--text3);min-width:60px}
+/* ═══════ EMPTY STATE ═══════ */
+.empty{color:var(--text3);text-align:center;padding:32px 20px;font-size:.85rem}
+.empty-icon{font-size:2rem;margin-bottom:8px;opacity:.5}
 
-/* Empty */
-.empty{color:var(--text3);text-align:center;padding:24px;font-size:.8rem}
+/* ═══════ SCROLLBAR ═══════ */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+::-webkit-scrollbar-track{background:transparent}
 
-/* Mobile */
+/* ═══════ MOBILE ═══════ */
 @media(max-width:768px){
   .grid{grid-template-columns:1fr}
-  .container{padding:8px}
-  header{padding:0 10px;height:48px}
-  .card-body{padding:10px}
-  .card-header{padding:10px}
-  .chart-wrap{height:240px}
-  .submit-row{flex-direction:column;align-items:stretch}
-  .submit-row select,.submit-row input,.submit-row .btn-submit{width:100%}
-  .stats-row{grid-template-columns:repeat(2,1fr)}
-  .stat-card .val{font-size:1.3rem}
+  .container{padding:12px}
+  header{padding:0 12px;height:50px}
+  .card-body{padding:14px}
+  .card-header{padding:12px 14px}
+  .chart-wrap{height:260px}
+  .form-row{flex-direction:column;align-items:stretch}
+  .form-row .form-group{width:100%}
+  .form-row .btn-primary{width:100%}
+  .stats-row{grid-template-columns:repeat(2,1fr);gap:8px}
+  .stat-val{font-size:1.5rem}
+  .stat-card{padding:14px}
   .worker-grid{grid-template-columns:1fr}
-  .leaderboard{font-size:.7rem;min-width:500px}
-  .leaderboard th,.leaderboard td{padding:5px 6px}
-  .tab{padding:8px 12px;font-size:.75rem}
-  .header-meta .hide-mobile{display:none}
+  .table{font-size:.72rem;min-width:520px}
+  .table th,.table td{padding:8px 10px}
+  .tab{padding:10px 14px;font-size:.75rem}
+  .header-right .hide-mobile{display:none}
+  .env-tab{padding:8px 12px;font-size:.7rem}
+  .param-grid{grid-template-columns:repeat(2,1fr)}
+  .job-details{grid-template-columns:repeat(2,1fr)}
 }
 @media(max-width:380px){
   .stats-row{grid-template-columns:1fr 1fr}
-  .stat-card{padding:10px}
+  .param-grid{grid-template-columns:1fr 1fr}
 }
-
-/* Scrollbar */
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-::-webkit-scrollbar-track{background:transparent}
 </style>
 </head>
 <body>
 
-<!-- Auth -->
+<!-- ═══════ AUTH ═══════ -->
 <div id="auth-overlay">
-  <div class="logo-big">🧬</div>
-  <h1>GAIA Mission Control</h1>
-  <p>Decentralized AI Research Platform</p>
-  <input type="password" id="token-input" placeholder="Auth token" autofocus>
+  <div class="auth-logo">🧬</div>
+  <div class="auth-title">GAIA Mission Control</div>
+  <div class="auth-sub">Decentralized Neuroevolution Platform</div>
+  <input type="password" id="token-input" class="auth-input" placeholder="Enter auth token" autofocus>
   <div id="auth-error"></div>
-  <button onclick="authenticate()">Connect</button>
+  <button class="auth-btn" onclick="authenticate()">Connect</button>
 </div>
 
-<!-- Header -->
+<!-- ═══════ HEADER ═══════ -->
 <header>
   <div class="logo">
-    <span>🧬</span>
-    <h1>GAIA</h1>
+    <span class="logo-icon">🧬</span>
+    <h1>GAIA <span>Mission Control</span></h1>
   </div>
-  <div class="header-meta">
+  <div class="header-right">
     <span class="hide-mobile">v0.10.0</span>
     <span class="hide-mobile sep"></span>
     <span class="hide-mobile">⏱ <strong id="uptime">—</strong></span>
-    <span><span class="status-dot" id="conn-dot"></span><span id="conn-text">…</span></span>
+    <div class="conn-indicator">
+      <span class="conn-dot" id="conn-dot"></span>
+      <span id="conn-text">…</span>
+    </div>
   </div>
 </header>
 
+<!-- ═══════ TABS ═══════ -->
+<div class="tabs">
+  <div class="tab active" data-tab="benchmarks">🏆 Benchmarks</div>
+  <div class="tab" data-tab="overview">⚡ Overview</div>
+  <div class="tab" data-tab="charts">📊 Charts</div>
+  <div class="tab" data-tab="history">📋 History</div>
+  <div class="tab" data-tab="network">🌐 Network</div>
+</div>
+
 <div class="container">
-  <!-- Tabs -->
-  <div class="tabs">
-    <div class="tab active" data-tab="benchmarks">🏆 Benchmarks</div>
-    <div class="tab" data-tab="overview">⚡ Overview</div>
-    <div class="tab" data-tab="charts">📊 Charts</div>
-    <div class="tab" data-tab="history">📋 History</div>
-    <div class="tab" data-tab="network">🌐 Network</div>
-  </div>
 
   <!-- ═══════ TAB: BENCHMARKS ═══════ -->
   <div class="tab-content active" id="tab-benchmarks">
-    <!-- Stats -->
     <div class="stats-row" id="stats-row">
-      <div class="stat-card"><div class="val" id="stat-workers">0</div><div class="lbl">Workers</div></div>
-      <div class="stat-card"><div class="val" id="stat-jobs">0</div><div class="lbl">Active Jobs</div></div>
-      <div class="stat-card"><div class="val" id="stat-completed">0</div><div class="lbl">Completed</div></div>
-      <div class="stat-card"><div class="val" id="stat-envs">0</div><div class="lbl">Environments</div></div>
+      <div class="stat-card"><div class="stat-val" id="stat-workers">0</div><div class="stat-label">Workers</div></div>
+      <div class="stat-card"><div class="stat-val" id="stat-jobs">0</div><div class="stat-label">Active Jobs</div></div>
+      <div class="stat-card"><div class="stat-val" id="stat-completed">0</div><div class="stat-label">Completed</div></div>
+      <div class="stat-card"><div class="stat-val" id="stat-envs">0</div><div class="stat-label">Environments</div></div>
     </div>
 
     <div class="grid">
@@ -232,43 +284,51 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
       <div class="card full-width">
         <div class="card-header"><h2>⚡ Submit Experiment</h2></div>
         <div class="card-body">
-          <div class="submit-row">
-            <select id="env-select" style="min-width:160px">
-              <optgroup label="🎮 Classic Control">
-                <option value="CartPole-v1">CartPole-v1</option>
-              </optgroup>
-              <optgroup label="🚀 Discrete Control">
-                <option value="LunarLander-v3">LunarLander-v3</option>
-              </optgroup>
-              <optgroup label="🦿 Continuous Control (CPU)">
-                <option value="BipedalWalker-v3">BipedalWalker-v3</option>
-              </optgroup>
-              <optgroup label="🚀 GPU-Native Continuous">
-                <option value="Swimmer-v1">Swimmer-v1</option>
-                <option value="Pendulum-2Link">Pendulum-2Link</option>
-                <option value="Pendulum-3Link">Pendulum-3Link</option>
-                <option value="Pendulum-5Link">Pendulum-5Link</option>
-              </optgroup>
-            </select>
-            <select id="method-select" onchange="updateMethodParams()" style="min-width:180px">
-              <optgroup label="🧬 Gradient-Free (GAIA)">
-                <option value="cma_es">CMA-ES</option>
-                <option value="openai_es">OpenAI-ES</option>
-                <option value="curriculum">Curriculum CMA-ES</option>
-                <option value="neuromod">Neuromod CMA-ES</option>
-                <option value="island_model">Island Model</option>
-                <option value="meta_learning">Meta-Learning</option>
-              </optgroup>
-              <optgroup label="🚀 GPU Full-Episode">
-                <option value="gpu_full_cma_es">GPU CMA-ES</option>
-                <option value="gpu_full_openai_es">GPU OpenAI-ES</option>
-                <option value="gpu_full_benchmark">GPU Benchmark</option>
-              </optgroup>
-              <optgroup label="⚡ Backprop Baseline">
-                <option value="ppo_baseline">PPO (Backprop)</option>
-              </optgroup>
-            </select>
-            <button class="btn-submit" onclick="submitJob()">Submit ⚡</button>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Environment</label>
+              <select id="env-select" class="form-select" style="min-width:180px">
+                <optgroup label="🎮 Classic Control">
+                  <option value="CartPole-v1">CartPole-v1</option>
+                </optgroup>
+                <optgroup label="🚀 Discrete Control">
+                  <option value="LunarLander-v3" selected>LunarLander-v3</option>
+                </optgroup>
+                <optgroup label="🦿 Continuous (CPU)">
+                  <option value="BipedalWalker-v3">BipedalWalker-v3</option>
+                </optgroup>
+                <optgroup label="🚀 GPU-Native Continuous">
+                  <option value="Swimmer-v1">Swimmer-v1</option>
+                  <option value="Pendulum-2Link">Pendulum-2Link</option>
+                  <option value="Pendulum-3Link">Pendulum-3Link</option>
+                  <option value="Pendulum-5Link">Pendulum-5Link</option>
+                </optgroup>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Method</label>
+              <select id="method-select" class="form-select" onchange="updateMethodParams()" style="min-width:200px">
+                <optgroup label="🧬 Gradient-Free (GAIA)">
+                  <option value="cma_es">CMA-ES</option>
+                  <option value="openai_es">OpenAI-ES</option>
+                  <option value="curriculum">Curriculum CMA-ES</option>
+                  <option value="neuromod">Neuromod CMA-ES</option>
+                  <option value="island_model">Island Model</option>
+                  <option value="meta_learning">Meta-Learning</option>
+                </optgroup>
+                <optgroup label="🚀 GPU Full-Episode">
+                  <option value="gpu_full_cma_es">GPU CMA-ES</option>
+                  <option value="gpu_full_openai_es">GPU OpenAI-ES</option>
+                  <option value="gpu_full_benchmark">GPU Benchmark</option>
+                </optgroup>
+                <optgroup label="⚡ Backprop Baseline">
+                  <option value="ppo_baseline">PPO (Backprop)</option>
+                </optgroup>
+              </select>
+            </div>
+            <div class="form-group" style="justify-content:end">
+              <button class="btn btn-primary" onclick="submitJob()">Submit ⚡</button>
+            </div>
           </div>
           <div class="param-grid" id="method-params"></div>
         </div>
@@ -276,7 +336,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 
       <!-- Leaderboard -->
       <div class="card full-width">
-        <div class="card-header"><h2>🏆 Leaderboards</h2></div>
+        <div class="card-header"><h2>🏆 Leaderboard</h2></div>
         <div class="card-body">
           <div class="env-tabs" id="bench-env-tabs">
             <div class="env-tab" data-env="CartPole-v1">🎯 CartPole</div>
@@ -287,7 +347,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
             <div class="env-tab" data-env="Pendulum-3Link">🔗 3-Link</div>
             <div class="env-tab" data-env="Pendulum-5Link">🔗 5-Link</div>
           </div>
-          <div id="leaderboard-body"><div class="empty">Run experiments to see leaderboards</div></div>
+          <div id="leaderboard-body"><div class="empty"><div class="empty-icon">🔬</div>Run experiments to see leaderboards</div></div>
         </div>
       </div>
 
@@ -295,15 +355,15 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
       <div class="card full-width">
         <div class="card-header">
           <h2>📈 Learning Curves</h2>
-          <div class="toolbar">
-            <button class="btn-sm active" data-metric="best_ever" onclick="setMetric(this,'best_ever')">Best Ever</button>
-            <button class="btn-sm" data-metric="mean" onclick="setMetric(this,'mean')">Mean</button>
-            <span style="color:var(--text3);font-size:.65rem;margin-left:4px" id="chart1-info"></span>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn-ghost active" data-metric="best_ever" onclick="setMetric(this,'best_ever')">Best</button>
+            <button class="btn-ghost" data-metric="mean" onclick="setMetric(this,'mean')">Mean</button>
+            <span style="color:var(--text3);font-size:.65rem;margin-left:6px" id="chart1-info"></span>
           </div>
         </div>
         <div class="card-body">
-          <div id="method-toggles" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;font-size:.7rem"></div>
-          <div class="chart-wrap"><canvas id="learning-canvas"></canvas></div>
+          <div id="method-toggles" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
+          <div class="chart-wrap"><canvas id="learning-canvas"></canvas><div class="chart-hint">Scroll to zoom · Drag to pan · Double-click to reset</div></div>
         </div>
       </div>
     </div>
@@ -313,20 +373,28 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
   <div class="tab-content" id="tab-overview">
     <div class="grid">
       <div class="card">
-        <div class="card-header"><h2>⚡ Workers</h2><div class="toolbar"><label style="font-size:.7rem;color:var(--text3);cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="show-offline" onchange="refresh()" style="accent-color:var(--accent)"> Offline</label><span id="worker-count" class="badge badge-idle">0</span></div></div>
-        <div class="card-body" id="workers-body"><div class="empty">No workers connected</div></div>
+        <div class="card-header">
+          <h2>⚡ Workers</h2>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label style="font-size:.7rem;color:var(--text3);cursor:pointer;display:flex;align-items:center;gap:5px">
+              <input type="checkbox" id="show-offline" onchange="refresh()" style="accent-color:var(--accent)"> Offline
+            </label>
+            <span id="worker-count" class="badge badge-idle">0</span>
+          </div>
+        </div>
+        <div class="card-body" id="workers-body"><div class="empty"><div class="empty-icon">⚡</div>No workers connected</div></div>
       </div>
       <div class="card">
-        <div class="card-header"><h2>🔬 Jobs</h2><span id="job-count" class="badge badge-queued">0</span></div>
-        <div class="card-body" id="jobs-body"><div class="empty">No jobs yet</div></div>
+        <div class="card-header"><h2>🔬 Active Jobs</h2><span id="job-count" class="badge badge-queued">0</span></div>
+        <div class="card-body" id="jobs-body"><div class="empty"><div class="empty-icon">🔬</div>No active jobs</div></div>
       </div>
       <div class="card full-width">
         <div class="card-header"><h2>📊 Best Scores</h2></div>
-        <div class="card-body"><div class="stats-row" id="best-scores"><div class="empty">Run experiments to see scores</div></div></div>
+        <div class="card-body"><div class="stats-row" id="best-scores"><div class="empty" style="grid-column:1/-1"><div class="empty-icon">📊</div>Run experiments to see scores</div></div></div>
       </div>
       <div class="card full-width">
-        <div class="card-header"><h2>📋 Activity</h2><button class="btn-sm" onclick="activityLog.length=0;renderActivity()">Clear</button></div>
-        <div class="card-body"><div class="activity-log" id="activity-log"><div class="empty">Waiting…</div></div></div>
+        <div class="card-header"><h2>📋 Activity</h2><button class="btn-ghost" onclick="activityLog.length=0;renderActivity()">Clear</button></div>
+        <div class="card-body"><div class="activity-log" id="activity-log"><div class="empty">Waiting for events…</div></div></div>
       </div>
     </div>
   </div>
@@ -336,54 +404,51 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
     <div class="grid">
       <div class="card">
         <div class="card-header"><h2>🏆 Method Comparison</h2></div>
-        <div class="card-body"><div class="chart-wrap" style="height:280px"><canvas id="comparison-canvas"></canvas></div></div>
+        <div class="card-body"><div class="chart-wrap" style="height:300px"><canvas id="comparison-canvas"></canvas></div></div>
       </div>
       <div class="card">
         <div class="card-header"><h2>🔬 Convergence (σ)</h2></div>
-        <div class="card-body"><div class="chart-wrap" style="height:280px"><canvas id="sigma-canvas"></canvas></div></div>
+        <div class="card-body"><div class="chart-wrap" style="height:300px"><canvas id="sigma-canvas"></canvas></div></div>
       </div>
       <div class="card full-width">
         <div class="card-header"><h2>📊 Score Distribution</h2></div>
-        <div class="card-body"><div class="chart-wrap" style="height:260px"><canvas id="dist-canvas"></canvas></div></div>
+        <div class="card-body"><div class="chart-wrap" style="height:280px"><canvas id="dist-canvas"></canvas></div></div>
       </div>
     </div>
   </div>
 
   <!-- ═══════ TAB: HISTORY ═══════ -->
   <div class="tab-content" id="tab-history">
-    <div class="grid">
-      <div class="card full-width">
-        <div class="card-header">
-          <h2>📋 Job History</h2>
-          <div class="toolbar">
-            <select id="history-env-filter" onchange="renderHistory()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 8px;font-size:.75rem">
-              <option value="all">All Environments</option>
-              <option value="CartPole-v1">CartPole-v1</option>
-              <option value="LunarLander-v3">LunarLander-v3</option>
-              <option value="BipedalWalker-v3">BipedalWalker-v3</option>
-              <option value="Swimmer-v1">Swimmer-v1</option>
-              <option value="Pendulum-2Link">Pendulum-2Link</option>
-              <option value="Pendulum-3Link">Pendulum-3Link</option>
-              <option value="Pendulum-5Link">Pendulum-5Link</option>
-            </select>
-            <button class="btn-sm" onclick="downloadAllCSV()">⬇️ CSV</button>
-            <button class="btn-sm" onclick="downloadSummaryJSON()">⬇️ JSON</button>
-          </div>
+    <div class="card full-width">
+      <div class="card-header">
+        <h2>📋 Job History</h2>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="history-env-filter" class="form-select" onchange="renderHistory()" style="font-size:.75rem;padding:6px 28px 6px 10px">
+            <option value="all">All Environments</option>
+            <option value="CartPole-v1">CartPole-v1</option>
+            <option value="LunarLander-v3">LunarLander-v3</option>
+            <option value="BipedalWalker-v3">BipedalWalker-v3</option>
+            <option value="Swimmer-v1">Swimmer-v1</option>
+            <option value="Pendulum-2Link">Pendulum-2Link</option>
+            <option value="Pendulum-3Link">Pendulum-3Link</option>
+            <option value="Pendulum-5Link">Pendulum-5Link</option>
+          </select>
+          <button class="btn-ghost" onclick="downloadAllCSV()">⬇ CSV</button>
+          <button class="btn-ghost" onclick="downloadSummaryJSON()">⬇ JSON</button>
         </div>
-        <div class="card-body" id="history-body"><div class="empty">No jobs yet</div></div>
       </div>
+      <div class="card-body" id="history-body"><div class="empty"><div class="empty-icon">📋</div>No jobs yet</div></div>
     </div>
   </div>
 
   <!-- ═══════ TAB: NETWORK ═══════ -->
   <div class="tab-content" id="tab-network">
-    <div class="grid">
-      <div class="card full-width">
-        <div class="card-header"><h2>🌐 GAIA P2P Network</h2></div>
-        <div class="card-body" id="network-body"><div class="empty">Loading network status...</div></div>
-      </div>
+    <div class="card full-width">
+      <div class="card-header"><h2>🌐 GAIA P2P Network</h2></div>
+      <div class="card-body" id="network-body"><div class="empty"><div class="empty-icon">🌐</div>Loading network status…</div></div>
     </div>
   </div>
+
 </div>
 
 <script>
@@ -418,7 +483,7 @@ let allJobData={}, allJobs=[];
 let chartZoom={x0:0,x1:1,dragging:false,startX:0,yOff:0};
 let hiddenMethods=new Set();
 let currentMetric='best_ever';
-const COLORS=['#8b5cf6','#06b6d4','#22c55e','#eab308','#f97316','#ec4899','#ef4444','#a855f7','#14b8a6','#f43f5e','#3b82f6','#d946ef'];
+const COLORS=['#7c6aef','#22d3ee','#34d399','#fbbf24','#fb923c','#f472b6','#f87171','#a78bfa','#14b8a6','#f43f5e','#60a5fa','#c084fc'];
 
 // ═══════ AUTH ═══════
 function authenticate(){
@@ -451,12 +516,15 @@ document.querySelectorAll('#bench-env-tabs .env-tab').forEach(t=>t.addEventListe
 
 // ═══════ HELPERS ═══════
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
-function setHtml(el,html){const scrolls=new Map();el.querySelectorAll('.table-scroll').forEach((s,i)=>{if(s.scrollLeft)scrolls.set(i,s.scrollLeft)});el.innerHTML=html;el.querySelectorAll('.table-scroll').forEach((s,i)=>{if(scrolls.has(i))s.scrollLeft=scrolls.get(i)})}
-function timeSince(iso){if(!iso)return'—';const s=Math.floor((Date.now()-new Date(iso).getTime())/1000);if(s<0)return'now';if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m';if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'d'}
-function dur(a,b){if(!a)return'—';const s=Math.floor(((b?new Date(b):new Date).getTime()-new Date(a).getTime())/1000);if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m'+s%60+'s';return Math.floor(s/3600)+'h'+Math.floor(s%3600/60)+'m'}
+function setHtml(el,html){const scrolls=new Map();el.querySelectorAll('.table-wrap').forEach((s,i)=>{if(s.scrollLeft)scrolls.set(i,s.scrollLeft)});el.innerHTML=html;el.querySelectorAll('.table-wrap').forEach((s,i)=>{if(scrolls.has(i))s.scrollLeft=scrolls.get(i)})}
+function timeSince(iso){if(!iso)return'—';const s=Math.floor((Date.now()-new Date(iso).getTime())/1000);if(s<0)return'now';if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'}
+function dur(a,b){if(!a)return'—';const s=Math.floor(((b?new Date(b):new Date).getTime()-new Date(a).getTime())/1000);if(s<0)return'—';if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+s%60+'s';return Math.floor(s/3600)+'h '+Math.floor(s%3600/60)+'m'}
 function fmtTime(t){if(!t)return'—';return new Date(t).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})}
+function fmtNum(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toString()}
 function addLog(m,ts){const d=ts?new Date(ts):new Date();activityLog.unshift({ts:d.getTime(),time:d.toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}),msg:m});activityLog.sort((a,b)=>b.ts-a.ts);if(activityLog.length>MAX_LOG)activityLog.pop()}
 function resolveEnv(j){return j.environment}
+function methodType(key){if(BACKPROP_METHODS.has(key))return'backprop';if(GPU_METHODS.has(key))return'gpu';return'gradfree'}
+function methodTypeBadge(key){const t=methodType(key);if(t==='backprop')return'<span class="badge badge-backprop">Backprop</span>';if(t==='gpu')return'<span class="badge badge-gpu">GPU</span>';return'<span class="badge badge-gradfree">Grad-Free</span>'}
 
 // ═══════ POLLING ═══════
 function startPolling(){refresh();setInterval(refresh,3000)}
@@ -466,17 +534,17 @@ async function refresh(){
     const r=await fetch('/api/status',{headers:{'Authorization':'Bearer '+TOKEN}});
     if(!r.ok)throw 0;
     const d=await r.json();
-    document.getElementById('conn-dot').className='status-dot on';
+    document.getElementById('conn-dot').className='conn-dot on';
     document.getElementById('conn-text').textContent='Connected';
     if(d.server_start_time)serverStart=new Date(d.server_start_time);
     if(serverStart){const s=Math.floor((Date.now()-serverStart)/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60);document.getElementById('uptime').textContent=h>0?h+'h '+m+'m':m+'m'}
     allJobs=d.jobs||[];
 
-    // Activity
+    // Activity detection
     const cw=new Set((d.workers||[]).map(w=>w.id));
     for(const w of d.workers||[])if(!prevWorkerIds.has(w.id))addLog('🟢 <b>'+esc(w.name)+'</b> connected',w.registered_at);
     prevWorkerIds=cw;
-    for(const j of d.jobs||[]){const p=prevJobStatuses[j.id];if(!p&&j.status==='queued')addLog('📤 <b>'+esc(j.method)+'</b> queued',j.created_at);if(p!==j.status){if(j.status==='running')addLog('▶️ <b>'+esc(j.method)+'</b> running');if(j.status==='completed')addLog('✅ <b>'+esc(j.method)+'</b> done');if(j.status==='failed')addLog('❌ <b>'+esc(j.method)+'</b> failed')}prevJobStatuses[j.id]=j.status}
+    for(const j of d.jobs||[]){const p=prevJobStatuses[j.id];if(!p&&j.status==='queued')addLog('📤 <b>'+esc(j.method)+'</b> queued on '+esc(j.environment),j.created_at);if(p!==j.status){if(j.status==='running')addLog('▶️ <b>'+esc(j.method)+'</b> started');if(j.status==='completed')addLog('✅ <b>'+esc(j.method)+'</b> completed');if(j.status==='failed')addLog('❌ <b>'+esc(j.method)+'</b> failed');if(j.status==='cancelled')addLog('🚫 <b>'+esc(j.method)+'</b> cancelled')}prevJobStatuses[j.id]=j.status}
 
     // Stats
     const workers=d.workers||[];
@@ -499,7 +567,7 @@ async function refresh(){
     if(document.getElementById('tab-charts').classList.contains('active'))drawAllCharts();
     if(document.getElementById('tab-network')?.classList.contains('active'))renderNetwork();
     if(document.getElementById('tab-history')?.classList.contains('active'))renderHistory();
-  }catch(e){document.getElementById('conn-dot').className='status-dot off';document.getElementById('conn-text').textContent='Disconnected'}
+  }catch(e){document.getElementById('conn-dot').className='conn-dot off';document.getElementById('conn-text').textContent='Disconnected'}
 }
 
 // ═══════ WORKERS ═══════
@@ -510,7 +578,7 @@ function renderWorkers(ws){
   const off=ws.filter(w=>(Date.now()-new Date(w.last_heartbeat))/1000>=60);
   document.getElementById('worker-count').textContent=on.length+' online';
   const visible=showOffline?ws:on;
-  if(!visible.length){el.innerHTML='<div class="empty">No workers connected<br><code style="font-size:.7rem;color:var(--text3)">gaia-worker --server URL --token TOKEN --name NAME</code></div>';return}
+  if(!visible.length){el.innerHTML='<div class="empty"><div class="empty-icon">⚡</div>No workers connected<br><code style="font-size:.7rem;color:var(--text3);margin-top:8px;display:inline-block">gaia-worker --server URL --token TOKEN --name NAME</code></div>';return}
   let h='<div class="worker-grid">';
   for(const w of visible){
     const age=(Date.now()-new Date(w.last_heartbeat))/1000;
@@ -521,18 +589,18 @@ function renderWorkers(ws){
     const ver=w.version?'v'+w.version:'—';
     const disabled=w.enabled===false;
     h+=`<div class="worker-card ${sc}">
-      <div class="worker-name">
-        <span><span class="pulse ${pc}"></span> ${esc(w.name)}</span>
-        <div style="display:flex;gap:4px;align-items:center">
+      <div class="worker-top">
+        <div class="worker-name"><span class="pulse ${pc}"></span> ${esc(w.name)}</div>
+        <div style="display:flex;gap:6px;align-items:center">
           <span class="badge badge-${sc}">${disabled?'disabled':sc}</span>
-          <button class="btn-sm" onclick="toggleWorker('${w.id}')" title="${disabled?'Enable':'Disable'}">${disabled?'▶':'⏸'}</button>
+          <button class="btn-ghost" onclick="toggleWorker('${w.id}')" title="${disabled?'Enable':'Disable'}" style="padding:4px 8px">${disabled?'▶':'⏸'}</button>
         </div>
       </div>
-      <div class="worker-details">
-        <span>GPU:</span><span class="v">${esc(gpu)} ${gpuMem}</span>
-        <span>Version:</span><span class="v" style="color:var(--accent2)">${ver}</span>
-        <span>Heartbeat:</span><span class="v">${timeSince(w.last_heartbeat)}</span>
-        ${w.current_job?'<span>Job:</span><span class="v" style="color:var(--cyan)">'+w.current_job.slice(0,8)+'</span>':''}
+      <div class="worker-meta">
+        <span class="k">GPU</span><span class="v">${esc(gpu)} ${gpuMem}</span>
+        <span class="k">Version</span><span class="v" style="color:var(--accent2)">${ver}</span>
+        <span class="k">Heartbeat</span><span class="v">${timeSince(w.last_heartbeat)}</span>
+        ${w.current_job?'<span class="k">Job</span><span class="v" style="color:var(--cyan)">'+w.current_job.slice(0,8)+'</span>':''}
       </div>
     </div>`;
   }
@@ -542,19 +610,69 @@ function renderWorkers(ws){
 // ═══════ JOBS ═══════
 function renderJobs(jobs){
   const el=document.getElementById('jobs-body');
-  document.getElementById('job-count').textContent=jobs.length;
   const run=jobs.filter(j=>j.status==='running'),que=jobs.filter(j=>j.status==='queued');
+  document.getElementById('job-count').textContent=run.length+que.length;
   let h='';
-  if(run.length){h+='<div style="font-size:.7rem;font-weight:600;color:var(--text3);margin:6px 0 4px">▶ Running</div>';for(const j of run){h+=`<div class="job-item running"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><strong>${esc(j.method)}</strong><span style="font-size:.7rem;color:var(--text3)">${esc(j.environment)}</span></div><div style="display:flex;gap:6px;align-items:center"><span style="color:var(--text3);font-size:.7rem">${dur(j.started_at)}</span><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div></div>`}}
-  if(que.length){h+=`<div style="font-size:.7rem;font-weight:600;color:var(--text3);margin:8px 0 4px">⏳ Queue (${que.length})</div>`;for(const j of que){h+=`<div class="job-item"><div class="job-left"><span class="job-id">${j.id.slice(0,8)}</span><strong>${esc(j.method)}</strong><span style="font-size:.7rem;color:var(--text3)">${esc(j.environment)}</span></div><button class="btn-sm" onclick="cancelJob('${j.id}')" style="color:var(--red)">✕</button></div>`}}
-  if(!h)h='<div class="empty">No active jobs</div>';
+  if(run.length){
+    h+='<div class="section-label">▶ Running</div>';
+    for(const j of run){
+      const d=allJobData[j.id];
+      const maxEvals=j.max_evals||j.params?.max_evals||0;
+      const curEvals=d&&d.points.length?Math.max(...d.points.map(p=>p.evals)):0;
+      const pct=maxEvals>0?Math.min(100,Math.round(curEvals/maxEvals*100)):0;
+      const bestScore=d&&d.points.length?Math.max(...d.points.map(p=>p.best_ever)).toFixed(1):'—';
+      h+=`<div class="job-card running">
+        <div class="job-top">
+          <div class="job-info">
+            <span class="job-id">${j.id.slice(0,8)}</span>
+            <span class="job-method">${esc(j.method)}</span>
+            ${methodTypeBadge(j.method)}
+            <span class="job-env">${esc(j.environment)}</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span style="font-size:.8rem;font-weight:700;color:var(--cyan)">${bestScore}</span>
+            <button class="btn-danger" onclick="cancelJob('${j.id}')">Cancel</button>
+          </div>
+        </div>
+        ${maxEvals>0?`<div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--text3);margin-top:4px">
+          <span>${fmtNum(curEvals)} / ${fmtNum(maxEvals)} evals</span>
+          <span>${pct}% · ${dur(j.started_at)}</span>
+        </div>`:''}
+        <div class="job-details">
+          ${Object.entries(j.params||{}).filter(([k])=>k!=='max_evals'&&k!=='eval_episodes').map(([k,v])=>`<div class="job-detail"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}
+        </div>
+      </div>`;
+    }
+  }
+  if(que.length){
+    h+=`<div class="section-label">⏳ Queue (${que.length})</div>`;
+    for(const j of que){
+      h+=`<div class="job-card queued">
+        <div class="job-top">
+          <div class="job-info">
+            <span class="job-id">${j.id.slice(0,8)}</span>
+            <span class="job-method">${esc(j.method)}</span>
+            ${methodTypeBadge(j.method)}
+            <span class="job-env">${esc(j.environment)}</span>
+          </div>
+          <button class="btn-danger" onclick="cancelJob('${j.id}')">Cancel</button>
+        </div>
+        <div class="job-details">
+          ${j.max_evals?`<div class="job-detail"><span class="k">Max Evals</span><span class="v">${fmtNum(j.max_evals)}</span></div>`:''}
+          ${Object.entries(j.params||{}).filter(([k])=>k!=='max_evals'&&k!=='eval_episodes').map(([k,v])=>`<div class="job-detail"><span class="k">${esc(k)}</span><span class="v">${v}</span></div>`).join('')}
+        </div>
+      </div>`;
+    }
+  }
+  if(!h)h='<div class="empty"><div class="empty-icon">🔬</div>No active jobs</div>';
   el.innerHTML=h;
 }
 
 function renderActivity(){
   const el=document.getElementById('activity-log');
-  if(!activityLog.length){el.innerHTML='<div class="empty">Waiting…</div>';return}
-  el.innerHTML=activityLog.slice(0,25).map(e=>`<div class="entry"><span class="time">${e.time}</span><span>${e.msg}</span></div>`).join('');
+  if(!activityLog.length){el.innerHTML='<div class="empty">Waiting for events…</div>';return}
+  el.innerHTML=activityLog.slice(0,30).map(e=>`<div class="activity-entry"><span class="activity-time">${e.time}</span><span>${e.msg}</span></div>`).join('');
 }
 
 // ═══════ RESULTS ═══════
@@ -570,10 +688,10 @@ async function fetchResults(jobs){
         best_ever:parseFloat(row.data?.best_ever||row.data?.best||0),
         mean:parseFloat(row.data?.mean||0),
         sigma:parseFloat(row.data?.sigma||0),
-        evals:parseInt((row.data?.evals||'0').replace(/,/g,'')),
+        evals:parseInt((row.data?.evals||'0').toString().replace(/,/g,'')),
         time:parseFloat(row.data?.time||0),
       })).sort((a,b)=>a.gen-b.gen);
-      allJobData[j.id]={method:j.method,environment:resolveEnv(j),status:j.status,points:pts,started_at:j.started_at,completed_at:j.completed_at};
+      allJobData[j.id]={method:j.method,environment:resolveEnv(j),status:j.status,points:pts,started_at:j.started_at,completed_at:j.completed_at,params:j.params};
     }catch(e){}
   }
 }
@@ -596,23 +714,31 @@ function renderLeaderboard(){
 
   const sorted=Object.values(methods).sort((a,b)=>b.best-a.best);
   if(!sorted.length){
-    el.innerHTML=`<div class="empty">No results for ${currentBenchEnv}<br><span style="font-size:.7rem">Solved ≥ ${bench.threshold} · ${bench.obs} obs · ${bench.act} act (${bench.type}) ${bench.gpu?'· 🚀 GPU':'· 💻 CPU'}</span></div>`;
+    el.innerHTML=`<div class="empty"><div class="empty-icon">${bench.emoji}</div>No results for ${currentBenchEnv}<br><span style="font-size:.75rem">Solved ≥ ${bench.threshold} · ${bench.obs} obs · ${bench.act} act (${bench.type}) ${bench.gpu?'· 🚀 GPU-native':'· 💻 CPU only'}</span></div>`;
     return;
   }
 
-  let h=`<div style="font-size:.7rem;color:var(--text3);margin-bottom:8px">Solved ≥ ${bench.threshold} · obs=${bench.obs} · act=${bench.act} (${bench.type}) ${bench.gpu?'· 🚀 GPU-native':'· 💻 CPU only'}</div>`;
-  h+='<div class="table-scroll"><table class="leaderboard"><tr><th>#</th><th>Method</th><th>Best Score</th><th>Evals</th><th>Solved</th><th>Runtime</th><th>Status</th></tr>';
+  let h=`<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.72rem;color:var(--text3);margin-bottom:14px;align-items:center">
+    <span>Solved ≥ <strong style="color:var(--green)">${bench.threshold}</strong></span>
+    <span>obs=${bench.obs} · act=${bench.act}</span>
+    <span class="badge ${bench.gpu?'badge-gpu':'badge-cpu'}">${bench.type} ${bench.gpu?'GPU':'CPU'}</span>
+  </div>`;
+  h+='<div class="table-wrap"><table class="table"><thead><tr><th>#</th><th>Method</th><th>Type</th><th>Best Score</th><th>Evals</th><th>Solved</th><th>Runtime</th></tr></thead><tbody>';
   sorted.forEach((m,i)=>{
-    const isBackprop=BACKPROP_METHODS.has(m.key);
-    const isGpu=GPU_METHODS.has(m.key);
-    const medal=i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'';
+    const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
     const rankClass=i<3?`rank-${i+1}`:'';
-    const solvedBadge=m.solved?'✅':'—';
-    const scoreColor=m.solved?'var(--green)':m.best>bench.threshold*0.8?'var(--yellow)':'var(--text)';
-    const typeBadge=isBackprop?'<span style="background:var(--red-bg);color:var(--red);padding:1px 6px;border-radius:4px;font-size:.6rem;margin-left:4px">BACKPROP</span>':isGpu?'<span style="background:rgba(6,182,212,.1);color:var(--cyan);padding:1px 6px;border-radius:4px;font-size:.6rem;margin-left:4px">GPU</span>':'<span style="background:var(--green-bg);color:var(--green);padding:1px 6px;border-radius:4px;font-size:.6rem;margin-left:4px">GRAD-FREE</span>';
-    h+=`<tr><td class="${rankClass}">${medal}${i+1}</td><td style="font-weight:600">${esc(m.name)}${typeBadge}</td><td style="color:${scoreColor};font-weight:700;font-variant-numeric:tabular-nums">${m.best.toFixed(1)}</td><td style="font-variant-numeric:tabular-nums">${m.evals>1000?(m.evals/1000).toFixed(1)+'K':m.evals}</td><td>${solvedBadge}</td><td style="color:var(--text3)">${m.runtime}</td><td><span class="badge badge-${m.status}">${m.status}</span></td></tr>`;
+    const scoreColor=m.solved?'var(--green)':m.best>bench.threshold*0.7?'var(--yellow)':'var(--text)';
+    h+=`<tr>
+      <td class="${rankClass}">${medal} ${i+1}</td>
+      <td style="font-weight:600">${esc(m.name)}</td>
+      <td>${methodTypeBadge(m.key)}</td>
+      <td style="color:${scoreColor};font-weight:700;font-variant-numeric:tabular-nums;font-family:var(--mono)">${m.best.toFixed(1)}</td>
+      <td style="font-variant-numeric:tabular-nums;color:var(--text2)">${fmtNum(m.evals)}</td>
+      <td>${m.solved?'<span style="color:var(--green)">✓ Solved</span>':'<span style="color:var(--text3)">—</span>'}</td>
+      <td style="color:var(--text3)">${m.runtime}</td>
+    </tr>`;
   });
-  h+='</table></div>';
+  h+='</tbody></table></div>';
   setHtml(el,h);
 }
 
@@ -625,11 +751,11 @@ function renderBestScores(){
     const best=Math.max(...d.points.map(p=>p.best_ever));
     if(!envBest[d.environment]||best>envBest[d.environment])envBest[d.environment]=best;
   }
-  if(!Object.keys(envBest).length){el.innerHTML='<div class="empty" style="grid-column:1/-1">Run experiments to see scores</div>';return}
+  if(!Object.keys(envBest).length){el.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📊</div>Run experiments to see scores</div>';return}
   el.innerHTML=Object.entries(envBest).map(([env,s])=>{
     const bench=BENCHMARKS[env]||{threshold:200,emoji:'🔬'};
     const ok=s>=bench.threshold;
-    return`<div class="stat-card"><div class="val ${ok?'solved':''}">${s.toFixed(1)}</div><div class="lbl">${bench.emoji} ${esc(env)}</div>${ok?'<div class="sub" style="color:var(--green)">SOLVED ✓</div>':''}</div>`;
+    return`<div class="stat-card"><div class="stat-val" style="color:${ok?'var(--green)':'var(--text)'}">${s.toFixed(1)}</div><div class="stat-label">${bench.emoji} ${esc(env)}</div>${ok?'<div class="stat-sub" style="color:var(--green)">✓ SOLVED</div>':`<div class="stat-sub">${Math.round(s/bench.threshold*100)}% of ${bench.threshold}</div>`}</div>`;
   }).join('');
 }
 
@@ -639,14 +765,28 @@ function renderHistory(){
   const filter=document.getElementById('history-env-filter').value;
   let jobs=[...allJobs].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   if(filter!=='all')jobs=jobs.filter(j=>resolveEnv(j)===filter);
-  if(!jobs.length){el.innerHTML='<div class="empty">No jobs</div>';return}
-  let h='<div class="table-scroll"><table class="leaderboard"><tr><th>ID</th><th>Env</th><th>Method</th><th>Status</th><th>Best</th><th>Queued</th><th>Runtime</th><th></th></tr>';
-  for(const j of jobs.slice(0,50)){
+  if(!jobs.length){el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No jobs</div>';return}
+  let h='<div class="table-wrap"><table class="table"><thead><tr><th>ID</th><th>Environment</th><th>Method</th><th>Type</th><th>Status</th><th>Best</th><th>Evals</th><th>Queued</th><th>Runtime</th><th></th></tr></thead><tbody>';
+  for(const j of jobs.slice(0,100)){
     const d=allJobData[j.id];
     const best=d&&d.points.length?Math.max(...d.points.map(p=>p.best_ever)).toFixed(1):'—';
-    h+=`<tr><td style="font-family:monospace;font-size:.7rem">${j.id.slice(0,8)}</td><td style="font-size:.75rem">${esc(j.environment)}</td><td>${esc(j.method)}</td><td><span class="badge badge-${j.status}">${j.status}</span></td><td style="font-weight:600">${best}</td><td style="font-size:.7rem;color:var(--text3)">${fmtTime(j.created_at)}</td><td style="font-size:.7rem">${dur(j.started_at,j.completed_at)}</td><td><button class="btn-sm" onclick="downloadCSV('${j.id}')">CSV</button></td></tr>`;
+    const evals=d&&d.points.length?fmtNum(Math.max(...d.points.map(p=>p.evals))):'—';
+    const bench=BENCHMARKS[j.environment];
+    const solved=bench&&d&&d.points.length&&Math.max(...d.points.map(p=>p.best_ever))>=bench.threshold;
+    h+=`<tr>
+      <td style="font-family:var(--mono);font-size:.7rem;color:var(--text3)">${j.id.slice(0,8)}</td>
+      <td style="font-size:.75rem">${esc(j.environment)}</td>
+      <td style="font-weight:500">${esc(j.method)}</td>
+      <td>${methodTypeBadge(j.method)}</td>
+      <td><span class="badge badge-${j.status}">${j.status}</span></td>
+      <td style="font-weight:600;font-family:var(--mono);color:${solved?'var(--green)':'var(--text)'}">${best}</td>
+      <td style="color:var(--text2)">${evals}</td>
+      <td style="font-size:.7rem;color:var(--text3)">${fmtTime(j.created_at)}</td>
+      <td style="font-size:.7rem;color:var(--text3)">${dur(j.started_at,j.completed_at)}</td>
+      <td><button class="btn-ghost" onclick="downloadCSV('${j.id}')" style="padding:4px 8px;font-size:.65rem">CSV</button></td>
+    </tr>`;
   }
-  h+='</table></div>';
+  h+='</tbody></table></div>';
   setHtml(el,h);
 }
 
@@ -665,12 +805,18 @@ function setupCanvas(id){
   return{ctx,w,h};
 }
 
-function drawGrid(ctx,pad,w,h,minY,maxY,maxX,xLabel,yLabel,steps=6){
+function drawGrid(ctx,pad,w,h,minY,maxY,maxX,xLabel,yLabel,steps=5){
   const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom,range=maxY-minY||1;
-  ctx.strokeStyle='#27272a';ctx.lineWidth=.5;
-  for(let i=0;i<=steps;i++){const y=pad.top+(ph/steps)*i;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();ctx.fillStyle='#52525b';ctx.font='9px sans-serif';ctx.textAlign='right';ctx.fillText((maxY-(range/steps)*i).toFixed(0),pad.left-5,y+3)}
-  ctx.textAlign='center';ctx.fillStyle='#52525b';
-  for(let i=0;i<=4;i++){const v=Math.round((maxX/4)*i);ctx.fillText(v,pad.left+(v/maxX)*pw,h-pad.bottom+14)}
+  ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=.5;
+  for(let i=0;i<=steps;i++){
+    const y=pad.top+(ph/steps)*i;
+    ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();
+    ctx.fillStyle='#5c5c6a';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='right';
+    ctx.fillText((maxY-(range/steps)*i).toFixed(0),pad.left-8,y+3);
+  }
+  ctx.textAlign='center';ctx.fillStyle='#5c5c6a';ctx.font='10px -apple-system,sans-serif';
+  for(let i=0;i<=4;i++){const v=Math.round((maxX/4)*i);ctx.fillText(fmtNum(v),pad.left+(v/maxX)*pw,h-pad.bottom+16)}
+  ctx.fillStyle='#5c5c6a';ctx.font='10px -apple-system,sans-serif';
   ctx.fillText(xLabel,w/2,h-2);
   ctx.save();ctx.translate(10,h/2);ctx.rotate(-Math.PI/2);ctx.fillText(yLabel,0,0);ctx.restore();
 }
@@ -679,20 +825,21 @@ function drawSolvedLine(ctx,pad,w,h,minY,maxY,val){
   if(val<minY||val>maxY)return;
   const ph=h-pad.top-pad.bottom,range=maxY-minY||1;
   const y=pad.top+ph-((val-minY)/range)*ph;
-  ctx.setLineDash([4,3]);ctx.strokeStyle='rgba(34,197,94,.25)';ctx.lineWidth=1;
+  ctx.setLineDash([6,4]);ctx.strokeStyle='rgba(52,211,153,.2)';ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();ctx.setLineDash([]);
-  ctx.fillStyle='rgba(34,197,94,.4)';ctx.font='8px sans-serif';ctx.textAlign='left';
-  ctx.fillText(`SOLVED (${val})`,pad.left+4,y-3);
+  ctx.fillStyle='rgba(52,211,153,.35)';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='left';
+  ctx.fillText(`Solved (${val})`,pad.left+6,y-5);
 }
 
 // Method toggles
 function buildMethodToggles(entries){
   const el=document.getElementById('method-toggles');
   const methods=new Map();let ci=0;
-  for(const[_,d]of entries){if(!methods.has(d.method)){methods.set(d.method,{name:METHOD_NAMES[d.method]||d.method,color:COLORS[ci%COLORS.length],isBackprop:BACKPROP_METHODS.has(d.method)});ci++}}
-  el.innerHTML=[...methods.entries()].map(([key,{name,color,isBackprop}])=>{
+  for(const[_,d]of entries){if(!methods.has(d.method)){methods.set(d.method,{name:METHOD_NAMES[d.method]||d.method,color:COLORS[ci%COLORS.length],type:methodType(d.method)});ci++}}
+  el.innerHTML=[...methods.entries()].map(([key,{name,color,type}])=>{
     const checked=!hiddenMethods.has(key)?'checked':'';
-    return`<label style="display:flex;align-items:center;gap:3px;cursor:pointer;opacity:${hiddenMethods.has(key)?'.4':'1'}"><input type="checkbox" ${checked} onchange="toggleMethod('${key}')" style="accent-color:${color}"><span style="color:${color};font-size:.7rem">${isBackprop?'⚡':'🧬'}${name}</span></label>`;
+    const icon=type==='backprop'?'⚡':type==='gpu'?'🚀':'🧬';
+    return`<label style="display:flex;align-items:center;gap:5px;cursor:pointer;opacity:${hiddenMethods.has(key)?'.35':'1'};transition:opacity .2s"><input type="checkbox" ${checked} onchange="toggleMethod('${key}')" style="accent-color:${color}"><span style="color:${color};font-size:.72rem;font-weight:500">${icon} ${name}</span></label>`;
   }).join('');
 }
 function toggleMethod(key){if(hiddenMethods.has(key))hiddenMethods.delete(key);else hiddenMethods.add(key);drawLearningCurves()}
@@ -706,7 +853,6 @@ function initChartZoom(){
   canvas.addEventListener('mousemove',e=>{if(!chartZoom.dragging)return;const rect=canvas.getBoundingClientRect();const r=chartZoom.dragStart.x1-chartZoom.dragStart.x0;const dx=(e.clientX-chartZoom.startX)/rect.width*r;chartZoom.x0=Math.max(0,Math.min(1-r,chartZoom.dragStart.x0-dx));chartZoom.x1=chartZoom.x0+r;const dy=(e.clientY-chartZoom.startY)/rect.height;chartZoom.yOff=chartZoom.dragStart.yOff+dy;drawLearningCurves()});
   canvas.addEventListener('mouseup',()=>{chartZoom.dragging=false});
   canvas.addEventListener('mouseleave',()=>{chartZoom.dragging=false});
-  // Touch
   let lastTouches=null;
   canvas.addEventListener('touchstart',e=>{if(e.touches.length===1){chartZoom.dragging=true;chartZoom.startX=e.touches[0].clientX;chartZoom.startY=e.touches[0].clientY;chartZoom.dragStart={x0:chartZoom.x0,x1:chartZoom.x1,yOff:chartZoom.yOff}}if(e.touches.length===2){chartZoom.dragging=false;lastTouches=[...e.touches]}e.preventDefault()},{passive:false});
   canvas.addEventListener('touchmove',e=>{e.preventDefault();const rect=canvas.getBoundingClientRect();if(e.touches.length===1&&chartZoom.dragging){const r=chartZoom.dragStart.x1-chartZoom.dragStart.x0;const dx=(e.touches[0].clientX-chartZoom.startX)/rect.width*r;chartZoom.x0=Math.max(0,Math.min(1-r,chartZoom.dragStart.x0-dx));chartZoom.x1=chartZoom.x0+r;const dy=(e.touches[0].clientY-chartZoom.startY)/rect.height;chartZoom.yOff=chartZoom.dragStart.yOff+dy;drawLearningCurves()}if(e.touches.length===2&&lastTouches){const prev=Math.hypot(lastTouches[0].clientX-lastTouches[1].clientX,lastTouches[0].clientY-lastTouches[1].clientY);const cur=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);const scale=prev/cur;const cx=((e.touches[0].clientX+e.touches[1].clientX)/2-rect.left)/rect.width;const zr=chartZoom.x1-chartZoom.x0;const center=chartZoom.x0+cx*zr;const nr=Math.max(0.01,Math.min(1,zr*scale));chartZoom.x0=Math.max(0,center-cx*nr);chartZoom.x1=Math.min(1,chartZoom.x0+nr);lastTouches=[...e.touches];drawLearningCurves()}},{passive:false});
@@ -721,9 +867,9 @@ function drawLearningCurves(){
   const allEntries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0&&d.environment===currentBenchEnv);
   buildMethodToggles(allEntries);
   const entries=allEntries.filter(([_,d])=>!hiddenMethods.has(d.method));
-  if(!entries.length){ctx.fillStyle='#71717a';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText(`No data for ${currentBenchEnv}`,w/2,h/2);return}
+  if(!entries.length){ctx.fillStyle='#5c5c6a';ctx.font='13px -apple-system,sans-serif';ctx.textAlign='center';ctx.fillText(`No data for ${currentBenchEnv}`,w/2,h/2);return}
 
-  const pad={top:28,right:20,bottom:36,left:56};
+  const pad={top:28,right:24,bottom:40,left:60};
   const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
   const allPts=entries.flatMap(([_,d])=>d.points);
   const fullMaxGen=Math.max(...allEntries.flatMap(([_,d])=>d.points).map(p=>p.gen),1);
@@ -737,7 +883,7 @@ function drawLearningCurves(){
   const toX=g=>pad.left+((g-visMinGen)/(visMaxGen-visMinGen||1))*pw;
   const toY=v=>pad.top+ph-((v-minV)/range)*ph;
 
-  drawGrid(ctx,pad,w,h,minV,maxV,visMaxGen,'Generation',currentMetric==='best_ever'?'Best Score':'Mean');
+  drawGrid(ctx,pad,w,h,minV,maxV,visMaxGen,'Generation',currentMetric==='best_ever'?'Best Score':'Mean Score');
   drawSolvedLine(ctx,pad,w,h,minV,maxV,bench.threshold);
 
   ctx.save();ctx.beginPath();ctx.rect(pad.left,pad.top,pw,ph);ctx.clip();
@@ -748,20 +894,24 @@ function drawLearningCurves(){
     const color=colorMap.get(d.method)||COLORS[0];
     const pts=d.points.filter(p=>p.gen>=visMinGen&&p.gen<=visMaxGen);
     if(!pts.length)continue;
-    // Area
-    ctx.fillStyle=color+'0a';ctx.beginPath();ctx.moveTo(toX(pts[0].gen),toY(minV));
+    // Gradient area fill
+    const grad=ctx.createLinearGradient(0,pad.top,0,pad.top+ph);
+    grad.addColorStop(0,color+'18');grad.addColorStop(1,color+'02');
+    ctx.fillStyle=grad;ctx.beginPath();ctx.moveTo(toX(pts[0].gen),toY(minV));
     pts.forEach(p=>ctx.lineTo(toX(p.gen),toY(p[currentMetric]||0)));
     ctx.lineTo(toX(pts[pts.length-1].gen),toY(minV));ctx.closePath();ctx.fill();
     // Line
-    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.beginPath();
     pts.forEach((p,i)=>{const x=toX(p.gen),y=toY(p[currentMetric]||0);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});ctx.stroke();
-    // Label
+    // Endpoint dot + label
     const last=pts[pts.length-1];
-    ctx.fillStyle=color;ctx.font='bold 10px sans-serif';ctx.textAlign='left';
-    ctx.fillText((last[currentMetric]||0).toFixed(1),toX(last.gen)+4,toY(last[currentMetric]||0)+3);
+    const lx=toX(last.gen),ly=toY(last[currentMetric]||0);
+    ctx.fillStyle=color;ctx.beginPath();ctx.arc(lx,ly,3.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=color;ctx.font='bold 10px -apple-system,sans-serif';ctx.textAlign='left';
+    ctx.fillText((last[currentMetric]||0).toFixed(1),lx+6,ly+3);
   }
   ctx.restore();
-  document.getElementById('chart1-info').textContent=`${currentBenchEnv} · ${entries.reduce((s,[_,d])=>s+d.points.length,0)} pts`;
+  document.getElementById('chart1-info').textContent=`${entries.reduce((s,[_,d])=>s+d.points.length,0)} points`;
 }
 
 function drawComparison(){
@@ -769,37 +919,49 @@ function drawComparison(){
   const methods={};
   for(const d of Object.values(allJobData)){if(!d.points.length)continue;const name=(METHOD_NAMES[d.method]||d.method)+'\n'+d.environment;const best=Math.max(...d.points.map(p=>p.best_ever));if(!methods[name]||best>methods[name].best)methods[name]={best,mean:d.points[d.points.length-1].mean}}
   const names=Object.keys(methods);
-  if(!names.length){ctx.fillStyle='#71717a';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No data',w/2,h/2);return}
-  const pad={top:24,right:20,bottom:50,left:50};const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
+  if(!names.length){ctx.fillStyle='#5c5c6a';ctx.font='13px -apple-system,sans-serif';ctx.textAlign='center';ctx.fillText('No data',w/2,h/2);return}
+  const pad={top:24,right:20,bottom:56,left:56};const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
   const vals=[...Object.values(methods).map(m=>m.best),...Object.values(methods).map(m=>m.mean)];
-  const maxV=Math.max(Math.max(...vals),300),minV=Math.min(Math.min(...vals),-300);const range=maxV-minV||1;
+  const maxV=Math.max(Math.max(...vals),300)*1.1,minV=Math.min(Math.min(...vals),-300)*1.1;const range=maxV-minV||1;
   const toY=v=>pad.top+ph-((v-minV)/range)*ph;
-  ctx.strokeStyle='#27272a';ctx.lineWidth=.5;for(let i=0;i<=5;i++){const y=pad.top+(ph/5)*i;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();ctx.fillStyle='#52525b';ctx.font='9px sans-serif';ctx.textAlign='right';ctx.fillText((maxV-(range/5)*i).toFixed(0),pad.left-5,y+3)}
-  const barW=Math.min(40,pw/(names.length*3)),gap=pw/names.length;
-  names.forEach((name,i)=>{const x=pad.left+gap*i+gap/2;const m=methods[name];const yBest=toY(m.best),yZero=toY(0);ctx.fillStyle='#8b5cf6cc';ctx.fillRect(x-barW-1,Math.min(yBest,yZero),barW,Math.abs(yBest-yZero));ctx.fillStyle='#22c55ecc';const yMean=toY(m.mean);ctx.fillRect(x+1,Math.min(yMean,yZero),barW,Math.abs(yMean-yZero));ctx.fillStyle='#fafafa';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText(m.best.toFixed(0),x-barW/2,yBest-4);ctx.save();ctx.translate(x,h-pad.bottom+6);ctx.rotate(-Math.PI/6);ctx.fillStyle='#a1a1aa';ctx.font='8px sans-serif';ctx.textAlign='right';ctx.fillText(name.replace('\n',' · '),0,0);ctx.restore()});
+  ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=.5;for(let i=0;i<=5;i++){const y=pad.top+(ph/5)*i;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();ctx.fillStyle='#5c5c6a';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText((maxV-(range/5)*i).toFixed(0),pad.left-8,y+3)}
+  const barW=Math.min(32,pw/(names.length*3)),gap=pw/names.length;
+  names.forEach((name,i)=>{const x=pad.left+gap*i+gap/2;const m=methods[name];const yBest=toY(m.best),yZero=toY(0);
+    const grad1=ctx.createLinearGradient(0,Math.min(yBest,yZero),0,Math.max(yBest,yZero));
+    grad1.addColorStop(0,'#7c6aef');grad1.addColorStop(1,'#7c6aef88');
+    ctx.fillStyle=grad1;ctx.beginPath();ctx.roundRect(x-barW-1,Math.min(yBest,yZero),barW,Math.abs(yBest-yZero),[3,3,0,0]);ctx.fill();
+    const yMean=toY(m.mean);
+    const grad2=ctx.createLinearGradient(0,Math.min(yMean,yZero),0,Math.max(yMean,yZero));
+    grad2.addColorStop(0,'#34d399');grad2.addColorStop(1,'#34d39988');
+    ctx.fillStyle=grad2;ctx.beginPath();ctx.roundRect(x+1,Math.min(yMean,yZero),barW,Math.abs(yMean-yZero),[3,3,0,0]);ctx.fill();
+    ctx.fillStyle='var(--text)';ctx.font='bold 9px -apple-system,sans-serif';ctx.textAlign='center';ctx.fillText(m.best.toFixed(0),x-barW/2,yBest-6);
+    ctx.save();ctx.translate(x,h-pad.bottom+8);ctx.rotate(-Math.PI/6);ctx.fillStyle='#9898a4';ctx.font='8px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(name.replace('\n',' · '),0,0);ctx.restore()});
 }
 
 function drawSigma(){
   const{ctx,w,h}=setupCanvas('sigma-canvas');
   const entries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0&&d.points[0].sigma>0);
-  if(!entries.length){ctx.fillStyle='#71717a';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No sigma data',w/2,h/2);return}
-  const pad={top:24,right:20,bottom:36,left:50};const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
+  if(!entries.length){ctx.fillStyle='#5c5c6a';ctx.font='13px -apple-system,sans-serif';ctx.textAlign='center';ctx.fillText('No sigma data',w/2,h/2);return}
+  const pad={top:24,right:20,bottom:40,left:56};const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
   const allPts=entries.flatMap(([_,d])=>d.points);const maxGen=Math.max(...allPts.map(p=>p.gen),1),maxS=Math.max(...allPts.map(p=>p.sigma),1)*1.1;
   const toX=g=>pad.left+(g/maxGen)*pw,toY=s=>pad.top+ph-(s/maxS)*ph;
   drawGrid(ctx,pad,w,h,0,maxS,maxGen,'Generation','σ');
-  let ci=0;for(const[_,d]of entries){const color=COLORS[ci%COLORS.length];ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.sigma)):ctx.lineTo(toX(p.gen),toY(p.sigma))});ctx.stroke();const last=d.points[d.points.length-1];ctx.fillStyle=color;ctx.font='9px sans-serif';ctx.textAlign='left';ctx.fillText((METHOD_NAMES[d.method]||d.method),toX(last.gen)+4,toY(last.sigma));ci++}
+  let ci=0;for(const[_,d]of entries){const color=COLORS[ci%COLORS.length];ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.lineJoin='round';ctx.beginPath();d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.sigma)):ctx.lineTo(toX(p.gen),toY(p.sigma))});ctx.stroke();const last=d.points[d.points.length-1];ctx.fillStyle=color;ctx.font='9px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText((METHOD_NAMES[d.method]||d.method)+' ('+last.sigma.toFixed(3)+')',toX(last.gen)+6,toY(last.sigma));ci++}
 }
 
 function drawDistribution(){
   const{ctx,w,h}=setupCanvas('dist-canvas');
   const entries=Object.entries(allJobData).filter(([_,d])=>d.points.length>0);
-  if(!entries.length){ctx.fillStyle='#71717a';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No data',w/2,h/2);return}
-  const pad={top:24,right:20,bottom:36,left:56};const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
+  if(!entries.length){ctx.fillStyle='#5c5c6a';ctx.font='13px -apple-system,sans-serif';ctx.textAlign='center';ctx.fillText('No data',w/2,h/2);return}
+  const pad={top:24,right:20,bottom:40,left:60};const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
   const allPts=entries.flatMap(([_,d])=>d.points);const maxGen=Math.max(...allPts.map(p=>p.gen),1);
   const allVals=[...allPts.map(p=>p.best_ever),...allPts.map(p=>p.mean)];const maxV=Math.max(...allVals)*1.1,minV=Math.min(...allVals)*1.1;const range=maxV-minV||1;
   const toX=g=>pad.left+(g/maxGen)*pw,toY=v=>pad.top+ph-((v-minV)/range)*ph;
   drawGrid(ctx,pad,w,h,minV,maxV,maxGen,'Generation','Score');
-  let ci=0;for(const[_,d]of entries){const color=COLORS[ci%COLORS.length];ctx.fillStyle=color+'15';ctx.beginPath();d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.best_ever)):ctx.lineTo(toX(p.gen),toY(p.best_ever))});for(let i=d.points.length-1;i>=0;i--)ctx.lineTo(toX(d.points[i].gen),toY(d.points[i].mean));ctx.closePath();ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.best_ever)):ctx.lineTo(toX(p.gen),toY(p.best_ever))});ctx.stroke();ci++}
+  let ci=0;for(const[_,d]of entries){const color=COLORS[ci%COLORS.length];
+    const grad=ctx.createLinearGradient(0,pad.top,0,pad.top+ph);
+    grad.addColorStop(0,color+'20');grad.addColorStop(1,color+'04');
+    ctx.fillStyle=grad;ctx.beginPath();d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.best_ever)):ctx.lineTo(toX(p.gen),toY(p.best_ever))});for(let i=d.points.length-1;i>=0;i--)ctx.lineTo(toX(d.points[i].gen),toY(d.points[i].mean));ctx.closePath();ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.lineJoin='round';ctx.beginPath();d.points.forEach((p,i)=>{i===0?ctx.moveTo(toX(p.gen),toY(p.best_ever)):ctx.lineTo(toX(p.gen),toY(p.best_ever))});ctx.stroke();ci++}
 }
 
 // ═══════ METHOD PARAMS ═══════
@@ -823,8 +985,8 @@ function updateMethodParams(){
   const fields=[...(METHOD_PARAMS._common||[]),...(METHOD_PARAMS[method]||[])];
   el.innerHTML=fields.map(f=>{
     const id=`param-${f.key}`;
-    if(f.type==='select'){const opts=(f.options||[]).map(o=>`<option value="${o}"${o===f.default?' selected':''}>${o}</option>`).join('');return`<label>${esc(f.label)}<select id="${id}">${opts}</select></label>`}
-    return`<label>${esc(f.label)}<input type="number" id="${id}" value="${f.default}" step="${f.step||1}"></label>`;
+    if(f.type==='select'){const opts=(f.options||[]).map(o=>`<option value="${o}"${o===f.default?' selected':''}>${o}</option>`).join('');return`<div class="form-group"><label>${esc(f.label)}</label><select id="${id}" class="form-select">${opts}</select></div>`}
+    return`<div class="form-group"><label>${esc(f.label)}</label><input type="number" id="${id}" class="form-input" value="${f.default}" step="${f.step||1}"></div>`;
   }).join('');
 }
 setTimeout(updateMethodParams,0);
@@ -835,10 +997,10 @@ async function submitJob(){
   const method=document.getElementById('method-select').value;
   const fields=[...(METHOD_PARAMS._common||[]),...(METHOD_PARAMS[method]||[])];
   const params={};
-  for(const f of fields){const el=document.getElementById(`param-${f.key}`);if(!el)continue;let v=el.value;if(f.type==='number')v=parseFloat(v);if(v!==''&&v!==null)params[f.key]=v}
-  try{const r=await fetch('/api/jobs/submit',{method:'POST',headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},body:JSON.stringify({method,environment,max_evals:params.max_evals||100000,params})});if(r.ok){addLog(`📤 <b>${esc(method)}</b> on ${esc(environment)}`);refresh()}else addLog('❌ Submit failed: HTTP '+r.status)}catch(e){addLog('❌ '+e)}
+  for(const f of fields){const el=document.getElementById(`param-${f.key}`);if(!el)continue;let v=el.value;if(f.type==='number')v=parseFloat(v);if(v!==''&&v!==null&&!isNaN(v))params[f.key]=v}
+  try{const r=await fetch('/api/jobs/submit',{method:'POST',headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},body:JSON.stringify({method,environment,max_evals:params.max_evals||100000,params})});if(r.ok){addLog(`📤 <b>${esc(method)}</b> on ${esc(environment)}`);refresh()}else{const t=await r.text();addLog('❌ Submit failed: '+t)}}catch(e){addLog('❌ '+e)}
 }
-async function cancelJob(id){if(!confirm('Cancel?'))return;try{await fetch(`/api/jobs/cancel/${id}`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});addLog('🚫 Cancelled '+id.slice(0,8));refresh()}catch(e){}}
+async function cancelJob(id){if(!confirm('Cancel job '+id.slice(0,8)+'?'))return;try{await fetch(`/api/jobs/cancel/${id}`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});addLog('🚫 Cancelled '+id.slice(0,8));refresh()}catch(e){}}
 async function toggleWorker(id){try{await fetch(`/api/workers/${id}/enable`,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});refresh()}catch(e){}}
 
 // ═══════ EXPORT ═══════
@@ -851,11 +1013,11 @@ function dl(c,t,n){const a=document.createElement('a');a.href=URL.createObjectUR
 async function renderNetwork(){
   const el=document.getElementById('network-body');
   try{const r=await fetch('/api/network',{headers:{'Authorization':'Bearer '+TOKEN}});if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();
-    if(d.mode==='centralized'){el.innerHTML='<div class="empty"><div style="font-size:2.5rem;margin-bottom:12px">🏗️</div><h3>Centralized Mode</h3><p style="color:var(--text3);margin-top:4px">Start with <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">--gossip</code> to enable P2P</p></div>';return}
-    let h=`<div class="stats-row"><div class="stat-card"><div class="val" style="color:var(--accent)">${d.peer_count}</div><div class="lbl">Peers</div></div><div class="stat-card"><div class="val" style="color:var(--green)">${d.gpu_nodes}</div><div class="lbl">GPU Nodes</div></div><div class="stat-card"><div class="val" style="color:var(--cyan)">${d.total_cpu_cores}</div><div class="lbl">CPU Cores</div></div></div>`;
-    if(d.peers?.length){h+='<div class="table-scroll"><table class="leaderboard"><tr><th>Node</th><th>Address</th><th>GPU</th><th>CPU</th><th>Last Seen</th></tr>';for(const p of d.peers){const c=p.capabilities||{};h+=`<tr><td style="color:var(--accent)">${esc(p.node_id.slice(0,12))}…</td><td>${esc(p.address)}</td><td>${c.gpu?'🟢 '+esc(c.gpu):'—'}</td><td>${c.cpu_cores||'?'}</td><td>${timeSince(p.last_seen)}</td></tr>`}h+='</table></div>'}
+    if(d.mode==='centralized'){el.innerHTML='<div class="empty"><div class="empty-icon">🏗️</div><div style="font-weight:600;margin-bottom:4px">Centralized Mode</div><div style="color:var(--text3);font-size:.8rem">Start with <code style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-family:var(--mono)">--gossip</code> to enable P2P networking</div></div>';return}
+    let h=`<div class="stats-row"><div class="stat-card"><div class="stat-val" style="color:var(--accent)">${d.peer_count}</div><div class="stat-label">Peers</div></div><div class="stat-card"><div class="stat-val" style="color:var(--green)">${d.gpu_nodes}</div><div class="stat-label">GPU Nodes</div></div><div class="stat-card"><div class="stat-val" style="color:var(--cyan)">${d.total_cpu_cores}</div><div class="stat-label">CPU Cores</div></div></div>`;
+    if(d.peers?.length){h+='<div class="table-wrap"><table class="table"><thead><tr><th>Node</th><th>Address</th><th>GPU</th><th>CPU</th><th>Last Seen</th></tr></thead><tbody>';for(const p of d.peers){const c=p.capabilities||{};h+=`<tr><td style="color:var(--accent);font-family:var(--mono);font-size:.75rem">${esc(p.node_id.slice(0,12))}…</td><td>${esc(p.address)}</td><td>${c.gpu?'🟢 '+esc(c.gpu):'—'}</td><td>${c.cpu_cores||'?'}</td><td>${timeSince(p.last_seen)}</td></tr>`}h+='</tbody></table></div>'}
     setHtml(el,h);
-  }catch(e){el.innerHTML=`<div class="empty">Network unavailable</div>`}
+  }catch(e){el.innerHTML='<div class="empty"><div class="empty-icon">🌐</div>Network unavailable</div>'}
 }
 
 window.addEventListener('resize',()=>{if(document.getElementById('tab-benchmarks').classList.contains('active'))drawLearningCurves();if(document.getElementById('tab-charts').classList.contains('active'))drawAllCharts()});
